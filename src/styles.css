@@ -267,8 +267,8 @@ h2 {
   --cell-bg: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%);
 }
 .tone-orchid {
-  --tone-fill: #e8d0a0;
-  --cell-bg: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%);
+  --tone-fill: #dcd8d2;
+  --cell-bg: radial-gradient(circle at 35% 28%, #fefefe, #e0dbd6 85%);
 }
 
 /* Tray piece cells still need explicit background from tone class */
@@ -276,14 +276,14 @@ h2 {
 .piece-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
 .piece-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
 .piece-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
-.piece-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%); }
+.piece-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fefefe, #e0dbd6 85%); }
 
 /* Preview cells on board */
 .board-preview-cell.tone-coral { background: radial-gradient(circle at 35% 28%, #ffeef5, #ff9dc4 85%); }
 .board-preview-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
 .board-preview-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
 .board-preview-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
-.board-preview-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%); }
+.board-preview-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fefefe, #e0dbd6 85%); }
 
 .board-cell.is-game-fill::before {
   animation: cellFillIn 180ms ease-out forwards;
