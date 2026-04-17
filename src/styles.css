@@ -58,8 +58,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(rgba(110, 170, 220, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(110, 170, 220, 0.1) 1px, transparent 1px);
+    linear-gradient(rgba(160, 120, 255, 0.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(160, 120, 255, 0.13) 1px, transparent 1px);
   background-size: 2rem 2rem;
 }
 
@@ -191,9 +191,9 @@ h2 {
   aspect-ratio: 1;
   padding: 0.55rem;
   border-radius: 0.6rem;
-  background: linear-gradient(145deg, rgba(185, 215, 245, 0.95), rgba(170, 200, 238, 0.92));
+  background: linear-gradient(145deg, rgba(225, 210, 255, 0.96), rgba(205, 185, 252, 0.93));
   border: 3px solid var(--accent2);
-  box-shadow: 5px 5px 0 var(--accent2), var(--shadow), inset 0 2px 8px rgba(40, 80, 150, 0.12);
+  box-shadow: 5px 5px 0 var(--accent2), var(--shadow), inset 0 2px 8px rgba(80, 40, 150, 0.12);
   touch-action: none;
 }
 
@@ -203,12 +203,12 @@ h2 {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 0.15rem;
-  background: rgba(80, 130, 190, 0.18);
-  border: 1px solid rgba(60, 110, 170, 0.22);
+  background: rgba(130, 80, 200, 0.15);
+  border: 1px solid rgba(110, 60, 180, 0.2);
   box-shadow:
-    inset 0 2px 4px rgba(20, 50, 110, 0.22),
-    inset 0 1px 2px rgba(20, 50, 110, 0.12),
-    inset 1px 0 2px rgba(20, 50, 110, 0.08);
+    inset 0 2px 4px rgba(60, 20, 120, 0.22),
+    inset 0 1px 2px rgba(60, 20, 120, 0.12),
+    inset 1px 0 2px rgba(60, 20, 120, 0.08);
   transition:
     transform 140ms ease,
     background-color 140ms ease,
@@ -230,9 +230,9 @@ h2 {
   background: rgba(80, 130, 190, 0.18);
   border-radius: 0.15rem;
   box-shadow:
-    inset 0 2px 4px rgba(20, 50, 110, 0.22),
-    inset 0 1px 2px rgba(20, 50, 110, 0.12),
-    inset 1px 0 2px rgba(20, 50, 110, 0.08);
+    inset 0 2px 4px rgba(60, 20, 120, 0.22),
+    inset 0 1px 2px rgba(60, 20, 120, 0.12),
+    inset 1px 0 2px rgba(60, 20, 120, 0.08);
 }
 
 /* Rounded bubble sits on top of the square well as a pseudo-element */
@@ -267,8 +267,8 @@ h2 {
   --cell-bg: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%);
 }
 .tone-orchid {
-  --tone-fill: #c8a0ff;
-  --cell-bg: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%);
+  --tone-fill: #e8d0a0;
+  --cell-bg: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%);
 }
 
 /* Tray piece cells still need explicit background from tone class */
@@ -276,14 +276,14 @@ h2 {
 .piece-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
 .piece-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
 .piece-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
-.piece-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%); }
+.piece-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%); }
 
 /* Preview cells on board */
 .board-preview-cell.tone-coral { background: radial-gradient(circle at 35% 28%, #ffeef5, #ff9dc4 85%); }
 .board-preview-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
 .board-preview-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
 .board-preview-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
-.board-preview-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%); }
+.board-preview-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #fffdf0, #e8c87a 85%); }
 
 .board-cell.is-game-fill::before {
   animation: cellFillIn 180ms ease-out forwards;
@@ -478,11 +478,16 @@ h2 {
 }
 
 /* Sound toggle */
+.sound-icon-button svg {
+  display: block;
+}
+
 .sound-icon-button {
   width: 2.2rem;
   height: 2.2rem;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
   border: 2px solid var(--line);
   background: var(--panel);
