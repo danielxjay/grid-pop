@@ -1,0 +1,980 @@
+:root {
+  color-scheme: light;
+  --bg-top: #dfc8ff;
+  --bg-bottom: #c0dcff;
+  --panel: rgba(255, 255, 255, 0.82);
+  --line: rgba(110, 185, 220, 0.7);
+  --text: #38106a;
+  --muted: #7a52a0;
+  --accent: #e060b0;
+  --accent2: #48bedd;
+  --gold: #f0c840;
+  --shadow: 0 6px 20px rgba(80, 40, 160, 0.16);
+  --board-size: min(32rem, calc(100dvh - 14rem), calc(100vw - 24rem));
+  --board-gap: 0.2rem;
+  font-family: "Press Start 2P", monospace;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 150, 210, 0.28) 0%, transparent 42%),
+    radial-gradient(circle at 88% 18%, rgba(120, 200, 255, 0.28) 0%, transparent 38%),
+    linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  width: 100%;
+}
+
+body {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body.is-dragging {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Retro pixel grid */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(110, 170, 220, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 170, 220, 0.1) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.app-shell {
+  width: min(1200px, calc(100% - 2rem));
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0.75rem 0 1.5rem;
+  min-height: 100dvh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  overflow: visible;
+}
+
+.hero {
+  position: relative;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  text-align: center;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-family: "Press Start 2P", monospace;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+}
+
+h1 {
+  font-size: clamp(1rem, 5vw, 2rem);
+  margin-top: 0;
+  color: #fff;
+  text-shadow: 3px 3px 0 var(--accent);
+}
+
+h2 {
+  font-size: clamp(0.75rem, 2vw, 1.1rem);
+}
+
+.section-label {
+  margin: 0;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: "Press Start 2P", monospace;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(9rem, 10.5rem) minmax(0, var(--board-size)) minmax(9rem, 10.5rem);
+  gap: 1.1rem;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+}
+
+.score-rail,
+.playfield,
+.sidebar {
+  min-width: 0;
+  min-height: 0;
+}
+
+.score-rail,
+.sidebar {
+  display: grid;
+  align-items: center;
+}
+
+.playfield {
+  display: grid;
+  place-items: center;
+}
+
+/* Score panel */
+.score-panel {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 0.6rem;
+  box-shadow: 4px 4px 0 var(--line), var(--shadow);
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 0.85rem;
+  padding: 1rem 0.85rem;
+  width: 100%;
+  max-width: 10.5rem;
+}
+
+.score-stat {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+/* Board container — holds the board + start overlay */
+.board-container {
+  position: relative;
+  width: min(100%, var(--board-size));
+  margin: 0 auto;
+}
+
+/* The board itself */
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--board-gap);
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0.55rem;
+  border-radius: 0.6rem;
+  background: linear-gradient(145deg, rgba(185, 215, 245, 0.95), rgba(170, 200, 238, 0.92));
+  border: 3px solid var(--accent2);
+  box-shadow: 5px 5px 0 var(--accent2), var(--shadow), inset 0 2px 8px rgba(40, 80, 150, 0.12);
+  touch-action: none;
+}
+
+.board-cell {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0.15rem;
+  background: rgba(80, 130, 190, 0.18);
+  border: 1px solid rgba(60, 110, 170, 0.22);
+  box-shadow:
+    inset 0 2px 4px rgba(20, 50, 110, 0.22),
+    inset 0 1px 2px rgba(20, 50, 110, 0.12),
+    inset 1px 0 2px rgba(20, 50, 110, 0.08);
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 160ms ease;
+}
+
+/* Piece cells in tray — bubble look */
+.piece-cell.is-solid {
+  border-radius: 28%;
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    2px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.board-cell.is-filled {
+  /* Cell stays square — well shadow remains visible in the corners around the bubble */
+  background: rgba(80, 130, 190, 0.18);
+  border-radius: 0.15rem;
+  box-shadow:
+    inset 0 2px 4px rgba(20, 50, 110, 0.22),
+    inset 0 1px 2px rgba(20, 50, 110, 0.12),
+    inset 1px 0 2px rgba(20, 50, 110, 0.08);
+}
+
+/* Rounded bubble sits on top of the square well as a pseudo-element */
+.board-cell.is-filled::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 28%;
+  background: var(--cell-bg);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    0 2px 5px rgba(20, 50, 120, 0.22);
+  pointer-events: none;
+}
+
+/* Per-tone colours */
+.tone-coral {
+  --tone-fill: #ffb0cc;
+  --cell-bg: radial-gradient(circle at 35% 28%, #ffeef5, #ff9dc4 85%);
+}
+.tone-gold {
+  --tone-fill: #ffe480;
+  --cell-bg: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%);
+}
+.tone-mint {
+  --tone-fill: #90e8d0;
+  --cell-bg: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%);
+}
+.tone-sky {
+  --tone-fill: #60dcf0;
+  --cell-bg: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%);
+}
+.tone-orchid {
+  --tone-fill: #c8a0ff;
+  --cell-bg: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%);
+}
+
+/* Tray piece cells still need explicit background from tone class */
+.piece-cell.tone-coral { background: radial-gradient(circle at 35% 28%, #ffeef5, #ff9dc4 85%); }
+.piece-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
+.piece-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
+.piece-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
+.piece-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%); }
+
+/* Preview cells on board */
+.board-preview-cell.tone-coral { background: radial-gradient(circle at 35% 28%, #ffeef5, #ff9dc4 85%); }
+.board-preview-cell.tone-gold  { background: radial-gradient(circle at 35% 28%, #fffbe8, #ffe080 85%); }
+.board-preview-cell.tone-mint  { background: radial-gradient(circle at 35% 28%, #eafff7, #7adec8 85%); }
+.board-preview-cell.tone-sky   { background: radial-gradient(circle at 35% 28%, #e8fbff, #50d8f0 85%); }
+.board-preview-cell.tone-orchid { background: radial-gradient(circle at 35% 28%, #f5eeff, #c09eff 85%); }
+
+.board-cell.is-game-fill::before {
+  animation: cellFillIn 180ms ease-out forwards;
+}
+
+@keyframes cellFillIn {
+  0% {
+    transform: scale(0);
+  }
+
+  65% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.board-cell.was-cleared {
+  /* No animation on the cell — the well stays visible and static */
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Bubble body + ring — combined on ::before so the well underneath stays put */
+.board-cell.was-cleared::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 28%;
+  background: var(--tone-fill, rgba(200, 200, 200, 0.8));
+  border: 0 solid color-mix(in srgb, var(--tone-fill) 82%, white 18%);
+  pointer-events: none;
+  animation: bubblePop var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) both;
+}
+
+/* Brief splatter flash that flicks off one side of the pop */
+.board-cell.was-cleared::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 999px;
+  background: transparent;
+  pointer-events: none;
+  transform-origin: center center;
+  animation: bubbleSplash var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) both;
+}
+
+/* Bubble swells, ruptures, then the membrane recoils almost instantly */
+@keyframes bubblePop {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    border-radius: 28%;
+    background: var(--tone-fill, rgba(200, 200, 200, 0.8));
+    border-width: 0px;
+  }
+  18% {
+    transform: scale(1.08);
+    opacity: 1;
+    border-radius: 34%;
+    background: var(--tone-fill, rgba(200, 200, 200, 0.8));
+    border-width: 0px;
+  }
+  24% {
+    transform: scale(1.15);
+    opacity: 1;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--tone-fill) 88%, white 12%);
+    border-width: 0px;
+  }
+  29% {
+    transform: scale(0.84);
+    opacity: 0.98;
+    border-radius: 52%;
+    background: transparent;
+    border-width: 1.25px;
+  }
+  35% {
+    transform: scale(1.16);
+    opacity: 0.34;
+    border-radius: 50%;
+    background: transparent;
+    border-width: 0.55px;
+  }
+  46% {
+    transform: scale(1.28);
+    opacity: 0.05;
+    border-radius: 50%;
+    background: transparent;
+    border-width: 0.22px;
+  }
+  100% {
+    transform: scale(1.34);
+    opacity: 0;
+    background: transparent;
+    border-width: 0;
+  }
+}
+
+/* Tiny soapy flecks kick out during the snap-away phase */
+@keyframes bubbleSplash {
+  0%, 30% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--splash-rotation, 0deg)) scale(0.1);
+    box-shadow:
+      0 0 0 0 rgba(255, 255, 255, 0),
+      0 0 0 0 rgba(255, 255, 255, 0),
+      0 0 0 0 rgba(255, 255, 255, 0),
+      0 0 0 0 rgba(255, 255, 255, 0),
+      0 0 0 0 rgba(255, 255, 255, 0);
+  }
+  36% {
+    opacity: 1;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--splash-rotation, 0deg))
+      scale(calc(var(--splash-scale-x, 1) * 1.12), calc(var(--splash-scale-y, 1) * 1.12));
+    box-shadow:
+      0 -8px 0 0.8px color-mix(in srgb, var(--tone-fill) 80%, white 20%),
+      9px -5px 0 0.55px color-mix(in srgb, var(--tone-fill) 74%, white 26%),
+      -8px -4px 0 0.5px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
+      4px -11px 0 0.35px color-mix(in srgb, var(--tone-fill) 78%, white 22%),
+      -3px -12px 0 0.25px color-mix(in srgb, var(--tone-fill) 70%, white 30%);
+  }
+  44% {
+    opacity: 0.46;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--splash-rotation, 0deg))
+      scale(calc(var(--splash-scale-x, 1) * 1.32), calc(var(--splash-scale-y, 1) * 1.24));
+    box-shadow:
+      0 -15px 0 0.35px color-mix(in srgb, var(--tone-fill) 76%, white 24%),
+      13px -8px 0 0.2px color-mix(in srgb, var(--tone-fill) 70%, white 30%),
+      -11px -7px 0 0.15px color-mix(in srgb, var(--tone-fill) 68%, white 32%),
+      6px -17px 0 0.05px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
+      -5px -18px 0 0 color-mix(in srgb, var(--tone-fill) 66%, white 34%);
+  }
+  55% {
+    opacity: 0.12;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--splash-rotation, 0deg))
+      scale(calc(var(--splash-scale-x, 1) * 1.42), calc(var(--splash-scale-y, 1) * 1.32));
+    box-shadow:
+      0 -17px 0 0 color-mix(in srgb, var(--tone-fill) 68%, white 32%),
+      15px -9px 0 -0.05px color-mix(in srgb, var(--tone-fill) 62%, white 38%),
+      -13px -8px 0 -0.1px color-mix(in srgb, var(--tone-fill) 60%, white 40%),
+      7px -19px 0 -0.15px color-mix(in srgb, var(--tone-fill) 64%, white 36%),
+      -6px -20px 0 -0.2px color-mix(in srgb, var(--tone-fill) 58%, white 42%);
+  }
+  100% {
+    opacity: 0;
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--splash-rotation, 0deg))
+      scale(calc(var(--splash-scale-x, 1) * 1.48), calc(var(--splash-scale-y, 1) * 1.38));
+    box-shadow:
+      0 -19px 0 -0.35px rgba(255, 255, 255, 0),
+      17px -10px 0 -0.45px rgba(255, 255, 255, 0),
+      -15px -9px 0 -0.5px rgba(255, 255, 255, 0),
+      8px -21px 0 -0.55px rgba(255, 255, 255, 0),
+      -7px -22px 0 -0.6px rgba(255, 255, 255, 0);
+  }
+}
+
+.board-cell.will-clear {
+  z-index: 1;
+}
+
+.board-cell.will-clear::before {
+  animation: willClearBreath 600ms ease-in-out infinite alternate;
+  will-change: transform, filter;
+}
+
+@keyframes willClearBreath {
+  from {
+    filter: brightness(1) saturate(1);
+    transform: scale(1);
+  }
+
+  to {
+    filter: brightness(1.25) saturate(1.4);
+    transform: scale(1.06);
+    border-radius: 50%;
+  }
+}
+
+/* Sound toggle */
+.sound-icon-button {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease, color 140ms ease;
+}
+
+.hero-sound-button {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.sound-icon-button:hover,
+.sound-icon-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--accent2);
+}
+
+.hero-sound-button:hover,
+.hero-sound-button:focus-visible {
+  transform: translateY(calc(-50% - 1px));
+}
+
+.sound-icon-button.is-active {
+  background: rgba(72, 190, 221, 0.15);
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+
+.score-value {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: clamp(0.75rem, 3vw, 1.35rem);
+  font-family: "Press Start 2P", monospace;
+  color: var(--text);
+}
+
+/* Sidebar / Tray */
+.sidebar {
+  overflow: visible;
+}
+
+.tray {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.piece-button {
+  display: grid;
+  place-items: center;
+  min-height: 5.5rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.4rem;
+  border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 3px 3px 0 var(--line);
+  cursor: grab;
+  overflow: hidden;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+  touch-action: none;
+}
+
+.piece-button:hover,
+.piece-button:focus-visible,
+.piece-button.is-selected {
+  transform: translate(-2px, -2px);
+  border-color: var(--accent);
+  box-shadow: 4px 4px 0 var(--accent);
+}
+
+.piece-button.is-empty {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.piece-button[disabled] {
+  pointer-events: none;
+}
+
+.piece-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--piece-cell));
+  grid-template-rows: repeat(var(--rows), var(--piece-cell));
+  gap: var(--piece-gap, 0.08rem);
+  max-width: 100%;
+  transform-origin: center;
+}
+
+.piece-cell {
+  width: var(--piece-cell);
+  height: var(--piece-cell);
+  border-radius: 0.1rem;
+  opacity: 0;
+}
+
+.piece-cell.is-solid {
+  opacity: 1;
+}
+
+.piece-grid .piece-cell::before,
+.piece-grid .piece-cell::after {
+  content: none;
+}
+
+/* Drag ghost */
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 999;
+  pointer-events: none;
+  will-change: transform;
+  filter: drop-shadow(0 8px 16px rgba(80, 40, 160, 0.32));
+}
+
+/* Start overlay — absolute over the board-container */
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  border-radius: 0.6rem;
+  background: rgba(40, 10, 80, 0.48);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+.start-button {
+  padding: 1rem 1.4rem;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(0.65rem, 2.5vw, 0.9rem);
+  font-weight: 400;
+  cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 5px 5px 0 rgba(30, 0, 50, 0.45);
+  text-shadow: 2px 2px 0 rgba(120, 0, 60, 0.45);
+  pointer-events: auto;
+  letter-spacing: 0.04em;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.start-button:hover,
+.start-button:focus-visible {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 rgba(30, 0, 50, 0.45);
+}
+
+.start-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 3px 3px 0 rgba(30, 0, 50, 0.45);
+}
+
+/* Game over overlay */
+.game-over-overlay {
+  animation: overlayFadeIn 380ms ease forwards;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.game-over-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+.new-best-banner {
+  margin: 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(0.42rem, 1.8vw, 0.62rem);
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  animation: newBestGlow 700ms ease-in-out infinite alternate;
+}
+
+@keyframes newBestGlow {
+  from {
+    color: var(--gold);
+    text-shadow: 0 0 6px rgba(255, 200, 60, 0.5);
+    transform: scale(1);
+  }
+
+  to {
+    color: #fff;
+    text-shadow:
+      0 0 14px rgba(255, 200, 60, 0.95),
+      0 0 30px rgba(255, 140, 0, 0.45);
+    transform: scale(1.06);
+  }
+}
+
+.game-over-score {
+  margin: 0;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(1.1rem, 6vw, 1.9rem);
+  color: #fff;
+  text-shadow: 3px 3px 0 rgba(50, 0, 70, 0.4);
+  letter-spacing: 0.04em;
+}
+
+.game-over-overlay.is-new-best .game-over-score {
+  color: var(--gold);
+  text-shadow:
+    3px 3px 0 rgba(150, 80, 0, 0.4),
+    0 0 20px rgba(255, 200, 60, 0.55);
+  animation: scorePop 420ms 100ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes scorePop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 980px) {
+  :root {
+    --board-size: min(calc(100dvh - 22rem), calc(100vw - 2rem), 28rem);
+  }
+
+  body {
+    overflow-y: hidden;
+  }
+
+  .app-shell {
+    width: min(100%, calc(100% - 1rem));
+    padding: 0.9rem 0 1rem;
+    height: 100dvh;
+    min-height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.9rem;
+    align-items: start;
+    min-height: auto;
+  }
+
+  .hero {
+    display: block;
+  }
+
+  .score-rail,
+  .playfield,
+  .sidebar {
+    min-height: auto;
+  }
+
+  .score-rail,
+  .sidebar {
+    display: block;
+  }
+
+  .sidebar {
+    overflow: visible;
+  }
+
+  .score-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 0;
+    column-gap: 0.45rem;
+    max-width: none;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .tray {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .board {
+    width: min(100%, var(--board-size));
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 700px) {
+  :root {
+    --board-gap: 0.15rem;
+    --board-size: clamp(14rem, calc(100dvh - 20rem), calc(100vw - 2rem));
+  }
+
+  body {
+    overflow-y: hidden;
+  }
+
+  .app-shell {
+    width: calc(100% - 0.75rem);
+    padding: 0.375rem 0 0.6rem;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .hero {
+    gap: 0.4rem;
+    padding: 0.15rem 0 0;
+  }
+
+  h1 {
+    font-size: clamp(0.85rem, 6vw, 1.4rem);
+    margin-top: 0.1rem;
+  }
+
+  .game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.65rem;
+    align-content: start;
+  }
+
+  .score-rail,
+  .playfield,
+  .sidebar {
+    min-height: auto;
+  }
+
+  .sidebar {
+    gap: 0;
+  }
+
+  .score-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 0;
+    column-gap: 0.35rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.5rem;
+    box-shadow: 3px 3px 0 var(--line), var(--shadow);
+  }
+
+  .sound-icon-button {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .hero-sound-button {
+    transform: translateY(-50%);
+  }
+
+  .section-label {
+    font-size: 0.42rem;
+  }
+
+  .board {
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+    border-width: 2px;
+    box-shadow: 3px 3px 0 var(--accent2), var(--shadow), inset 0 2px 6px rgba(40, 80, 150, 0.12);
+  }
+
+  .start-overlay {
+    border-radius: 0.5rem;
+  }
+
+  .board-cell {
+    border-radius: 0.1rem;
+  }
+
+  .score-value {
+    margin-top: 0.18rem;
+    font-size: clamp(0.6rem, 4vw, 0.95rem);
+  }
+
+  .tray {
+    gap: 0.4rem;
+  }
+
+  .piece-button {
+    min-height: 4rem;
+    padding: 0.4rem;
+    border-radius: 0.35rem;
+    box-shadow: 2px 2px 0 var(--line);
+  }
+
+  .piece-button .piece-grid {
+    transform: scale(0.82);
+    transform-origin: center;
+  }
+
+  .start-button {
+    font-size: clamp(0.55rem, 3.5vw, 0.8rem);
+    padding: 0.85rem 1.1rem;
+  }
+}
+
+@media (max-width: 980px) and (min-width: 640px) and (orientation: landscape) {
+  :root {
+    --board-size: min(calc(100dvh - 8rem), calc(100vw - 20rem), 30rem);
+  }
+
+  .app-shell {
+    width: min(100%, calc(100% - 1rem));
+    padding: 0.5rem 0 0.75rem;
+    height: 100dvh;
+    min-height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.55rem;
+    overflow: hidden;
+  }
+
+  .hero {
+    display: block;
+    padding-top: 0.1rem;
+  }
+
+  h1 {
+    font-size: clamp(0.9rem, 3.2vw, 1.35rem);
+  }
+
+  .game-layout {
+    grid-template-columns: minmax(7.75rem, 9rem) minmax(0, var(--board-size)) minmax(7.75rem, 9rem);
+    grid-template-rows: none;
+    gap: 0.9rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .score-rail,
+  .sidebar {
+    display: grid;
+    align-items: center;
+    min-height: 0;
+  }
+
+  .score-panel {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.55rem;
+    column-gap: 0;
+    max-width: 9rem;
+    padding: 0.65rem 0.55rem;
+  }
+
+  .score-value {
+    margin-top: 0.14rem;
+    font-size: clamp(0.56rem, 2vw, 0.9rem);
+  }
+
+  .section-label {
+    font-size: 0.38rem;
+  }
+
+  .tray {
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+
+  .piece-button {
+    min-height: 4.1rem;
+    padding: 0.4rem;
+    box-shadow: 2px 2px 0 var(--line);
+  }
+
+  .piece-button .piece-grid {
+    transform: scale(0.84);
+    transform-origin: center;
+  }
+
+  .board {
+    width: min(100%, var(--board-size));
+    margin: 0 auto;
+  }
+}
