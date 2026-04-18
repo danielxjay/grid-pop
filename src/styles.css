@@ -42,7 +42,7 @@ body,
 
 body {
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
 }
 
@@ -79,6 +79,8 @@ button {
 }
 
 .app-shell {
+  position: relative;
+  z-index: 1;
   width: min(1200px, calc(100% - 2rem));
   max-width: 100%;
   margin: 0 auto;
@@ -902,6 +904,49 @@ h2 {
   .start-button {
     font-size: clamp(0.55rem, 3.5vw, 0.8rem);
     padding: 0.85rem 1.1rem;
+  }
+}
+
+/* Landscape block overlay — shown on phones in landscape */
+.landscape-block {
+  display: none;
+}
+
+@media (orientation: landscape) and (pointer: coarse) {
+  .landscape-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background:
+      radial-gradient(circle at 12% 12%, rgba(255, 150, 210, 0.28) 0%, transparent 42%),
+      radial-gradient(circle at 88% 18%, rgba(120, 200, 255, 0.28) 0%, transparent 38%),
+      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    color: #fff;
+  }
+
+  .landscape-block-icon {
+    opacity: 0.9;
+    filter: drop-shadow(2px 2px 0 var(--accent));
+  }
+
+  .landscape-block-text {
+    margin: 0;
+    font-family: "Press Start 2P", monospace;
+    font-size: clamp(0.7rem, 3.5vw, 1rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    color: #fff;
+    text-shadow: 2px 2px 0 var(--accent);
+  }
+
+  .app-shell {
+    display: none;
   }
 }
 
