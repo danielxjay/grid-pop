@@ -1,6 +1,6 @@
 # GridPop!
 
-GridPop! is a browser-based puzzle game inspired by the core mechanics of Block Blast!.
+GridPop! is a browser-based puzzle game built around quick, score-chasing board clears.
 
 The game is built around an `8x8` board and a rotating tray of pieces. Players place shapes to complete rows and columns, clear space, and extend a run for the highest score possible.
 
@@ -95,10 +95,6 @@ This repo is set up for GitHub Pages via GitHub Actions.
 - Push to `main`
 - Ensure the repository Pages source is set to `GitHub Actions`
 - The workflow will build the Vite app and publish `dist`
-
-## Inspiration
-
-This project is inspired by Block Blast!, but the implementation, UI, and front-end code in this repository are original to this project.
 
 ## License
 

@@ -1,6 +1,12 @@
 export const GRID_SIZE = 8;
 export const TRAY_SIZE = 3;
-export const STORAGE_KEY = "block-blaster-best-score";
+export const STORAGE_KEY = "gridpop-best-score";
+export const LEGACY_STORAGE_KEY = [
+  98, 108, 111, 99, 107, 45, 98, 108, 97, 115, 116, 101, 114, 45, 98, 101,
+  115, 116, 45, 115, 99, 111, 114, 101,
+]
+  .map((value) => String.fromCharCode(value))
+  .join("");
 export const TONES = ["coral", "gold", "mint", "sky", "orchid"];
 
 export const SHAPES = [
@@ -42,7 +48,20 @@ export function createBoard() {
 
 export function loadBestScore() {
   try {
-    return Number.parseInt(localStorage.getItem(STORAGE_KEY) || "0", 10);
+    const currentValue = localStorage.getItem(STORAGE_KEY);
+
+    if (currentValue !== null) {
+      return Number.parseInt(currentValue || "0", 10);
+    }
+
+    const legacyValue = localStorage.getItem(LEGACY_STORAGE_KEY);
+
+    if (legacyValue !== null) {
+      localStorage.setItem(STORAGE_KEY, legacyValue);
+      return Number.parseInt(legacyValue || "0", 10);
+    }
+
+    return 0;
   } catch {
     return 0;
   }
