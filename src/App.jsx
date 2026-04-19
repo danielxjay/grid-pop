@@ -940,6 +940,23 @@ export default function App() {
     setGlobalRuns(nextRuns);
   });
 
+  const autoSubmitGuestRun = useEffectEvent((score) => {
+    if (!session || activeVerifiedRun || !hasSupabaseConfig) {
+      return;
+    }
+
+    setRunSubmitting(true);
+
+    supabase.functions
+      .invoke("merge-local-scores", {
+        body: { scores: [{ score, createdAt: new Date().toISOString() }] },
+      })
+      .then(({ error }) => {
+        setRunSubmitting(false);
+        if (!error) loadAccountRuns();
+      });
+  });
+
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !leaderboardOpen || leaderboardTab !== "global") {
       return;
@@ -1122,6 +1139,7 @@ export default function App() {
     }
 
     setLocalRuns(recordRunScore(game.score));
+    autoSubmitGuestRun(game.score);
 
     setDrag(null);
     setGame((current) => {
@@ -1626,6 +1644,7 @@ export default function App() {
       return;
     }
 
+    setActiveVerifiedRun(null);
     setAuthMessage("Signed out.");
   }
 
