@@ -592,7 +592,7 @@ function Tray({ tray, selectedPieceId, gameOver, started, onSelectPiece, onStart
   return (
     <div className="tray" aria-label="Available shapes">
       {Array.from({ length: TRAY_SIZE }, (_, index) => {
-        const piece = tray[index];
+        const piece = started ? tray[index] : null;
 
         if (!piece) {
           return (
