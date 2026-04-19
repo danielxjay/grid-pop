@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap');
+    </style>
+  </defs>
+  <rect width="64" height="64" rx="10" fill="#dfc8ff"/>
+  <!-- gold shadow -->
+  <text x="34" y="47" text-anchor="middle" font-family="'Press Start 2P', monospace" font-size="28" fill="#ffe480">GP!</text>
+  <!-- pink text -->
+  <text x="32" y="44" text-anchor="middle" font-family="'Press Start 2P', monospace" font-size="28" fill="#ff3ca0">GP!</text>
+</svg>
