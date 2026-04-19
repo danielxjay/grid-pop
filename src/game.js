@@ -1,13 +1,82 @@
 export const GRID_SIZE = 8;
 export const TRAY_SIZE = 3;
 export const STORAGE_KEY = "gridpop-best-score";
+export const RUN_HISTORY_STORAGE_KEY = "gridpop-run-history";
 export const LEGACY_STORAGE_KEY = [
   98, 108, 111, 99, 107, 45, 98, 108, 97, 115, 116, 101, 114, 45, 98, 101,
   115, 116, 45, 115, 99, 111, 114, 101,
 ]
   .map((value) => String.fromCharCode(value))
   .join("");
+export const MAX_LOCAL_RUNS = 50;
 export const TONES = ["coral", "gold", "mint", "sky", "orchid"];
+const DEFAULT_SEED = "gridpop-default-seed";
+
+function hashSeed(seed) {
+  const source = String(seed || DEFAULT_SEED);
+  let hash = 2166136261;
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0 || 1;
+}
+
+function nextRandomValue(rngState) {
+  let state = (rngState + 0x6d2b79f5) >>> 0;
+  let value = Math.imul(state ^ (state >>> 15), state | 1);
+  value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+
+  return {
+    rngState: state,
+    value: ((value ^ (value >>> 14)) >>> 0) / 4294967296,
+  };
+}
+
+export function createGameSeed() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createRunId(score) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${score}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeRunEntry(entry) {
+  const score = Number.parseInt(String(entry?.score ?? 0), 10);
+  const createdAt = typeof entry?.createdAt === "string" ? entry.createdAt : "";
+
+  if (!Number.isFinite(score) || score < 0 || !createdAt) {
+    return null;
+  }
+
+  return {
+    id:
+      typeof entry?.id === "string" && entry.id
+        ? entry.id
+        : `${createdAt}-${score}`,
+    score,
+    createdAt,
+    synced: Boolean(entry?.synced),
+  };
+}
+
+function saveRunHistory(history) {
+  try {
+    localStorage.setItem(RUN_HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // Ignore storage failures in restricted contexts.
+  }
+}
 
 export const SHAPES = [
   { name: "single", cells: [[0, 0]] },
@@ -75,14 +144,82 @@ export function saveBestScore(score) {
   }
 }
 
-export function createGameState(bestScore = loadBestScore()) {
+export function loadRunHistory() {
+  try {
+    const rawValue = localStorage.getItem(RUN_HISTORY_STORAGE_KEY);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const normalized = parsed
+      .map(normalizeRunEntry)
+      .filter(Boolean)
+      .slice(0, MAX_LOCAL_RUNS);
+
+    if (JSON.stringify(parsed.slice(0, normalized.length)) !== JSON.stringify(normalized)) {
+      saveRunHistory(normalized);
+    }
+
+    return normalized;
+  } catch {
+    return [];
+  }
+}
+
+export function recordRunScore(score) {
+  const nextEntry = {
+    id: createRunId(score),
+    score: Number.parseInt(String(score ?? 0), 10),
+    createdAt: new Date().toISOString(),
+    synced: false,
+  };
+
+  if (!Number.isFinite(nextEntry.score) || nextEntry.score < 0) {
+    return loadRunHistory();
+  }
+
+  try {
+    const nextHistory = [nextEntry, ...loadRunHistory()].slice(0, MAX_LOCAL_RUNS);
+    saveRunHistory(nextHistory);
+    return nextHistory;
+  } catch {
+    return loadRunHistory();
+  }
+}
+
+export function markRunsAsSynced(runIds) {
+  if (!Array.isArray(runIds) || runIds.length === 0) {
+    return loadRunHistory();
+  }
+
+  const targetIds = new Set(runIds);
+  const nextHistory = loadRunHistory().map((entry) =>
+    targetIds.has(entry.id) ? { ...entry, synced: true } : entry
+  );
+
+  saveRunHistory(nextHistory);
+  return nextHistory;
+}
+
+export function createGameState(bestScore = loadBestScore(), options = {}) {
   const board = createBoard();
-  const { tray, nextPieceId } = buildTray(board, 1);
+  const seed = typeof options.seed === "string" && options.seed ? options.seed : createGameSeed();
+  const initialRngState = hashSeed(seed);
+  const { tray, nextPieceId, rngState } = buildTray(board, 1, initialRngState);
 
   return {
     board,
     tray,
     nextPieceId,
+    seed,
+    rngState,
     score: 0,
     bestScore,
     combo: 0,
@@ -176,11 +313,13 @@ export function applyPlacement(game, pieceId, row, col) {
 
   let tray = game.tray.map((entry) => (entry?.id === pieceId ? null : entry));
   let nextPieceId = game.nextPieceId;
+  let rngState = game.rngState;
 
   if (tray.every((entry) => entry === null)) {
-    const nextTrayState = buildTray(board, nextPieceId);
+    const nextTrayState = buildTray(board, nextPieceId, game.rngState);
     tray = nextTrayState.tray;
     nextPieceId = nextTrayState.nextPieceId;
+    rngState = nextTrayState.rngState;
   }
 
   const gameOver = !tray.some((entry) => entry && hasAnyPlacement(board, entry));
@@ -190,6 +329,7 @@ export function applyPlacement(game, pieceId, row, col) {
     board,
     tray,
     nextPieceId,
+    rngState,
     score,
     bestScore,
     combo,
@@ -246,14 +386,16 @@ export function toIndex(row, col) {
   return row * GRID_SIZE + col;
 }
 
-function buildTray(board, nextPieceId) {
+function buildTray(board, nextPieceId, rngState) {
   let tray = [];
   let currentPieceId = nextPieceId;
+  let currentRngState = rngState;
 
   for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-    const pieceState = createRandomPiece(currentPieceId);
+    const pieceState = createRandomPiece(currentPieceId, currentRngState);
     tray.push(pieceState.piece);
     currentPieceId = pieceState.nextPieceId;
+    currentRngState = pieceState.rngState;
   }
 
   if (hasPotentialMove(board)) {
@@ -264,9 +406,10 @@ function buildTray(board, nextPieceId) {
       currentPieceId = nextPieceId;
 
       for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-        const pieceState = createRandomPiece(currentPieceId);
+        const pieceState = createRandomPiece(currentPieceId, currentRngState);
         tray.push(pieceState.piece);
         currentPieceId = pieceState.nextPieceId;
+        currentRngState = pieceState.rngState;
       }
 
       attempts += 1;
@@ -276,12 +419,15 @@ function buildTray(board, nextPieceId) {
   return {
     tray,
     nextPieceId: currentPieceId,
+    rngState: currentRngState,
   };
 }
 
-function createRandomPiece(nextPieceId) {
-  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-  const tone = TONES[Math.floor(Math.random() * TONES.length)];
+function createRandomPiece(nextPieceId, rngState) {
+  const shapePick = nextRandomValue(rngState);
+  const tonePick = nextRandomValue(shapePick.rngState);
+  const shape = SHAPES[Math.floor(shapePick.value * SHAPES.length) % SHAPES.length];
+  const tone = TONES[Math.floor(tonePick.value * TONES.length) % TONES.length];
 
   return {
     piece: {
@@ -291,6 +437,7 @@ function createRandomPiece(nextPieceId) {
       bounds: getShapeBounds(shape),
     },
     nextPieceId: nextPieceId + 1,
+    rngState: tonePick.rngState,
   };
 }
 
@@ -384,4 +531,52 @@ function matchesPreview(previousPreview, nextPreview) {
     previousPreview.col === nextPreview.col &&
     previousPreview.valid === nextPreview.valid
   );
+}
+
+export function replayRun(seed, moves) {
+  if (!Array.isArray(moves)) {
+    return {
+      valid: false,
+      error: "Moves payload must be an array.",
+    };
+  }
+
+  let game = createGameState(0, { seed });
+
+  for (const move of moves) {
+    const pieceId = Number.parseInt(String(move?.pieceId ?? ""), 10);
+    const row = Number.parseInt(String(move?.row ?? ""), 10);
+    const col = Number.parseInt(String(move?.col ?? ""), 10);
+
+    if (![pieceId, row, col].every(Number.isInteger)) {
+      return {
+        valid: false,
+        error: "Move payload is malformed.",
+      };
+    }
+
+    const nextGame = applyPlacement(game, pieceId, row, col);
+
+    if (nextGame === game) {
+      return {
+        valid: false,
+        error: "Run contains an invalid placement.",
+      };
+    }
+
+    game = nextGame;
+  }
+
+  if (!game.gameOver) {
+    return {
+      valid: false,
+      error: "Run is not complete.",
+    };
+  }
+
+  return {
+    valid: true,
+    score: game.score,
+    game,
+  };
 }

@@ -1,6 +1,10 @@
 import { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import {
   GRID_SIZE,
+  loadRunHistory,
+  markRunsAsSynced,
+  recordRunScore,
   TRAY_SIZE,
   applyPlacement,
   buildPreview,
@@ -26,6 +30,74 @@ import {
   setSoundEnabled,
   unlockAndTestSound,
 } from "./sound.js";
+import { hasSupabaseConfig, supabase } from "./supabase.js";
+
+const OTP_LENGTH = 6;
+const PROFILE_NAME_LIMIT = 22;
+const EMAIL_LENGTH_LIMIT = 320;
+const GLOBAL_LEADERBOARD_ENABLED = true;
+const GLOBAL_LEADERBOARD_LIMIT = 10;
+const CLIENT_VERSION = "gridpop-web-1";
+const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
+const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
+
+function normalizeEmail(value) {
+  return value
+    .normalize("NFKC")
+    .replace(CONTROL_CHARS_PATTERN, "")
+    .trim()
+    .toLowerCase()
+    .slice(0, EMAIL_LENGTH_LIMIT);
+}
+
+function normalizeOtp(value) {
+  return value.replace(/\D/g, "").slice(0, OTP_LENGTH);
+}
+
+function normalizeProfileName(value) {
+  return value
+    .normalize("NFKC")
+    .replace(CONTROL_CHARS_PATTERN, "")
+    .replace(ZERO_WIDTH_PATTERN, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, PROFILE_NAME_LIMIT);
+}
+
+function formatRunDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm} at ${hh}:${min}`;
+}
+
+async function getFunctionErrorMessage(error, fallback) {
+  if (!error) {
+    return fallback;
+  }
+
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json();
+
+      if (typeof payload?.error === "string" && payload.error.trim()) {
+        return payload.error.trim();
+      }
+    } catch {
+      // Fall through to the generic message below.
+    }
+  }
+
+  if (error instanceof FunctionsRelayError || error instanceof FunctionsFetchError) {
+    return error.message || fallback;
+  }
+
+  return typeof error.message === "string" && error.message.trim() ? error.message.trim() : fallback;
+}
 
 function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOverride = null }) {
   const { width, height } = piece.bounds;
@@ -91,6 +163,15 @@ function SpeakerIcon({ on }) {
   );
 }
 
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="10" cy="7.2" r="2.3" />
+      <path d="M5.8 14.5c1.1-1.8 2.7-2.7 4.2-2.7s3.1 0.9 4.2 2.7" />
+    </svg>
+  );
+}
+
 function ScorePanel({ score, bestScore, combo }) {
   return (
     <section className="score-panel">
@@ -106,6 +187,417 @@ function ScorePanel({ score, bestScore, combo }) {
         <p className="section-label">Combo</p>
         <strong className="score-value">x{Math.max(1, combo + 1)}</strong>
       </div>
+    </section>
+  );
+}
+
+function MiniBoard({ grid }) {
+  const cols = grid[0].length;
+  return (
+    <div className="mini-board" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {grid.flat().map((tone, i) => (
+        <div key={i} className={`mini-cell${tone ? ` mini-cell--${tone}` : ""}`} />
+      ))}
+    </div>
+  );
+}
+
+function HowToPlayModal({ onClose }) {
+  const placeGrid = [
+    [null,    null,     null,     null   ],
+    ["sky",   null,     null,     null   ],
+    ["sky",   "coral",  null,     null   ],
+    ["sky",   "coral",  "coral",  null   ],
+  ];
+
+  const clearGrid = [
+    [null,    "mint",   null,     "sky"  ],
+    ["coral", null,     "sky",    null   ],
+    [null,    "gold",   null,     "orchid"],
+    ["gold",  "gold",   "gold",   "gold" ],
+  ];
+
+  return (
+    <div
+      className="how-to-play-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="How to Play"
+      onClick={onClose}
+    >
+      <div className="how-to-play-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close how to play">
+          Close
+        </button>
+        <section className="how-to-play-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>How to Play</h2>
+          <div className="how-to-play-steps">
+            <div className="how-to-play-step">
+              <MiniBoard grid={placeGrid} />
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Drop</strong>
+                <p>Drag a shape from the tray onto the grid. Each individual piece of a shape scores points.</p>
+                <p className="how-to-play-pts">10 pts per piece</p>
+              </div>
+            </div>
+            <div className="how-to-play-step">
+              <MiniBoard grid={clearGrid} />
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Pop</strong>
+                <p>Fill every cell in a row or column and the whole line pops. The more lines you pop at once, the bigger the score.</p>
+                <p className="how-to-play-pts">120 pts per line popped</p>
+              </div>
+            </div>
+            <div className="how-to-play-step">
+              <div className="how-to-play-combo-badges" aria-hidden="true">
+                <span className="how-to-play-badge">×1</span>
+                <span className="how-to-play-badge">×2</span>
+                <span className="how-to-play-badge how-to-play-badge--hot">×3</span>
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Combo</strong>
+                <p>Clear lines on back-to-back placements to grow your combo multiplier.</p>
+                <p className="how-to-play-pts">Each clear in a row adds ×1</p>
+              </div>
+            </div>
+          </div>
+          <p className="how-to-play-footer">
+            The game ends when no piece in the tray can fit on the grid.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function PlayerHandle({ displayName }) {
+  if (!displayName) {
+    return null;
+  }
+
+  return (
+    <p className="player-handle" title={displayName}>
+      <span className="player-handle-sparkle" aria-hidden="true">✨</span>
+      <span className="player-handle-name">{displayName}</span>
+      <span className="player-handle-sparkle" aria-hidden="true">✨</span>
+    </p>
+  );
+}
+
+function ProfileTrigger({ active, onClick }) {
+  return (
+    <button
+      className={`profile-trigger${active ? " is-active" : ""}`}
+      type="button"
+      onClick={onClick}
+      aria-label={active ? "Close profile panel" : "Open profile panel"}
+    >
+      <UserIcon />
+      <span>Profile</span>
+    </button>
+  );
+}
+
+function ScoreboardTrigger({ onClick }) {
+  return (
+    <button className="scoreboard-trigger" type="button" onClick={onClick}>
+      Scoreboard
+    </button>
+  );
+}
+
+function LeaderboardModal({
+  activeTab,
+  globalEnabled,
+  globalError,
+  globalLoading,
+  globalRuns,
+  personalError,
+  personalLabel,
+  personalLoading,
+  personalRuns,
+  signedIn,
+  onClose,
+  onTabChange,
+  open,
+}) {
+  if (!open) {
+    return null;
+  }
+
+  const bestPersonalRun = personalRuns.reduce(
+    (best, run) => (best === null || run.score > best.score ? run : best),
+    null
+  );
+
+  return (
+    <div
+      className="leaderboard-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Scoreboard"
+      onClick={onClose}
+    >
+      <div className="leaderboard-modal-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close scoreboard">
+          Close
+        </button>
+        <section className="leaderboard-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>Scoreboard</h2>
+
+        <div className="leaderboard-tabs" role="tablist" aria-label="Scoreboard sections">
+          <button
+            className={`leaderboard-tab${activeTab === "personal" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "personal"}
+            onClick={() => onTabChange("personal")}
+          >
+            {personalLabel}
+          </button>
+          {globalEnabled ? (
+            <button
+              className={`leaderboard-tab${activeTab === "global" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "global"}
+              onClick={() => onTabChange("global")}
+            >
+              Global
+            </button>
+          ) : null}
+        </div>
+
+        {!globalEnabled || activeTab === "personal" ? (
+          <div className="leaderboard-panel">
+            <div className="leaderboard-best">
+              <p className="section-label">Best Run</p>
+              {bestPersonalRun ? (
+                <>
+                  <strong className="leaderboard-best-score">{bestPersonalRun.score}</strong>
+                  <span className="leaderboard-meta">{formatRunDate(bestPersonalRun.createdAt)}</span>
+                </>
+              ) : (
+                <p className="leaderboard-empty">
+                  {personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet."}
+                </p>
+              )}
+            </div>
+
+            <div className="leaderboard-list-wrap">
+              <p className="section-label">Recent Runs</p>
+              {personalLoading ? <p className="leaderboard-empty">Loading {personalLabel.toLowerCase()}...</p> : null}
+              {!personalLoading && personalError ? <p className="leaderboard-empty">{personalError}</p> : null}
+              {!personalLoading && !personalError && personalRuns.length > 0 ? (
+                <ol className="leaderboard-list leaderboard-list-local">
+                  {personalRuns.map((run, index) => (
+                    <li key={`${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row">
+                      <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
+                      <strong className="leaderboard-score">{run.score}</strong>
+                      <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              {!personalLoading && !personalError && personalRuns.length === 0 ? (
+                <p className="leaderboard-empty">
+                  {personalLabel === "My Runs"
+                    ? "Finish a signed-in run and it will show up here."
+                    : "Finish a run and it will show up here."}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="leaderboard-panel">
+            <div className="leaderboard-list-wrap">
+              <p className="section-label">Top 10 All Time</p>
+              {!signedIn ? (
+                <p className="leaderboard-disclaimer">
+                  Global leaderboard scores require sign-in before the run begins.
+                </p>
+              ) : null}
+              {globalLoading ? <p className="leaderboard-empty">Loading global runs...</p> : null}
+              {!globalLoading && globalError ? <p className="leaderboard-empty">{globalError}</p> : null}
+              {!globalLoading && !globalError && globalRuns.length === 0 ? (
+                <p className="leaderboard-empty">No global runs yet.</p>
+              ) : null}
+              {!globalLoading && !globalError && globalRuns.length > 0 ? (
+                <ol className="leaderboard-list">
+                  {globalRuns.map((run, index) => (
+                    <li key={`${run.id}-${run.createdAt}-${index}`} className="leaderboard-row">
+                      <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
+                      <strong className="leaderboard-score">{run.score}</strong>
+                      <span className="leaderboard-name">{run.displayName}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </div>
+          </div>
+        )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function AuthPanel({
+  authCode,
+  authEmail,
+  authError,
+  authMessage,
+  authPending,
+  authReady,
+  displayNameDraft,
+  editingProfile,
+  hasConfig,
+  mergeCount,
+  mergeMessage,
+  mergePending,
+  onCodeChange,
+  onCancelEditProfile,
+  onDisplayNameChange,
+  onEditProfile,
+  onMergeLocalScores,
+  onRequestCode,
+  onResetOtp,
+  onSaveProfile,
+  onSignOut,
+  onVerifyCode,
+  otpSentTo,
+  profile,
+  profilePending,
+  session,
+}) {
+  return (
+    <section className="auth-panel" aria-label="Player account">
+      <p className="section-label">Your Profile</p>
+      {!hasConfig ? (
+        <p className="auth-copy">Supabase is not configured yet.</p>
+      ) : null}
+      {hasConfig && !authReady ? (
+        <p className="auth-copy">Connecting to player services...</p>
+      ) : null}
+      {hasConfig && authReady && !session && !otpSentTo ? (
+        <form className="auth-form" onSubmit={onRequestCode}>
+          <p className="auth-copy">Sign in to create your player profile.</p>
+          <label className="auth-field">
+            <span className="auth-label">Email</span>
+            <input
+              className="auth-input"
+              type="email"
+              value={authEmail}
+              onChange={(event) => onDisplayNameChange("email", event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              maxLength={EMAIL_LENGTH_LIMIT}
+              required
+            />
+          </label>
+          <button className="auth-button" type="submit" disabled={authPending}>
+            {authPending ? "Sending..." : "Send Code"}
+          </button>
+        </form>
+      ) : null}
+      {hasConfig && authReady && !session && otpSentTo ? (
+        <form className="auth-form" onSubmit={onVerifyCode}>
+          <p className="auth-copy">Enter the {OTP_LENGTH}-digit code sent to {otpSentTo}.</p>
+          <label className="auth-field">
+            <span className="auth-label">Code</span>
+            <input
+              className="auth-input auth-code-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={authCode}
+              onChange={(event) => onCodeChange(normalizeOtp(event.target.value))}
+              placeholder={"0".repeat(OTP_LENGTH)}
+              maxLength={OTP_LENGTH}
+              required
+            />
+          </label>
+          <div className="auth-actions">
+            <button className="auth-button" type="submit" disabled={authPending || authCode.length !== OTP_LENGTH}>
+              {authPending ? "Checking..." : "Verify Code"}
+            </button>
+            <button className="auth-secondary-button" type="button" onClick={onResetOtp} disabled={authPending}>
+              Change Email
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {hasConfig && authReady && session ? (
+        <div className="auth-form">
+          <div className="auth-identity">
+            <strong>{profile?.display_name ?? "Choose a display name"}</strong>
+            <span>{session.user.email}</span>
+          </div>
+          {profile?.display_name && !editingProfile ? (
+            <>
+              <div className="auth-actions">
+                <button className="auth-secondary-button" type="button" onClick={onEditProfile} disabled={profilePending}>
+                  Edit Name
+                </button>
+                <button className="auth-secondary-button" type="button" onClick={onSignOut} disabled={profilePending}>
+                  Sign Out
+                </button>
+              </div>
+              {mergeCount > 0 ? (
+                <div className="auth-merge">
+                  <p className="auth-copy">You have {mergeCount} local {mergeCount === 1 ? "score" : "scores"} from before you signed in.</p>
+                  <button className="auth-secondary-button" type="button" onClick={onMergeLocalScores} disabled={mergePending}>
+                    {mergePending ? "Merging..." : "Merge into account"}
+                  </button>
+                </div>
+              ) : null}
+              {mergeMessage ? <p className="auth-status">{mergeMessage}</p> : null}
+            </>
+          ) : (
+            <>
+              <p className="auth-copy">
+                {profile?.display_name
+                  ? "Update your public display name."
+                  : "Set a public display name for your player profile."}
+              </p>
+              <form className="auth-form auth-form-inline" onSubmit={onSaveProfile}>
+                <label className="auth-field">
+                  <span className="auth-label">Display Name</span>
+                  <input
+                    className="auth-input"
+                    type="text"
+                    value={displayNameDraft}
+                    onChange={(event) => onDisplayNameChange("profile", event.target.value)}
+                    placeholder="Grid wizard"
+                    maxLength={PROFILE_NAME_LIMIT}
+                    required
+                  />
+                </label>
+                <button className="auth-button" type="submit" disabled={profilePending}>
+                  {profilePending ? "Saving..." : "Save Name"}
+                </button>
+                {profile?.display_name ? (
+                  <button
+                    className="auth-secondary-button"
+                    type="button"
+                    onClick={onCancelEditProfile}
+                    disabled={profilePending}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+              </form>
+              <button className="auth-secondary-button" type="button" onClick={onSignOut} disabled={profilePending}>
+                Sign Out
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+      {authMessage ? <p className="auth-status">{authMessage}</p> : null}
+      {authError ? <p className="auth-error">{authError}</p> : null}
     </section>
   );
 }
@@ -320,6 +812,39 @@ export default function App() {
   const [gameOverPhase, setGameOverPhase] = useState(null); // null | 'filling' | 'overlay'
   const [fillCells, setFillCells] = useState([]);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [authReady, setAuthReady] = useState(() => !hasSupabaseConfig);
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authCode, setAuthCode] = useState("");
+  const [otpSentTo, setOtpSentTo] = useState("");
+  const [authPending, setAuthPending] = useState(false);
+  const [profilePending, setProfilePending] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [localRuns, setLocalRuns] = useState(() => loadRunHistory());
+  const [accountRuns, setAccountRuns] = useState([]);
+  const [accountRunsLoading, setAccountRunsLoading] = useState(false);
+  const [accountRunsError, setAccountRunsError] = useState("");
+  const [globalRuns, setGlobalRuns] = useState([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState("");
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState("personal");
+  const [showDesktopAuthPanel, setShowDesktopAuthPanel] = useState(false);
+  const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
+  const [startPending, setStartPending] = useState(false);
+  const [runSubmitting, setRunSubmitting] = useState(false);
+  const [runSubmissionError, setRunSubmissionError] = useState("");
+  const [mergePending, setMergePending] = useState(false);
+  const [mergeMessage, setMergeMessage] = useState("");
+  const accountRunsFetchInFlightRef = useRef(false);
+  const globalFetchInFlightRef = useRef(false);
+  const runSubmissionInFlightRef = useRef(false);
   const boardRef = useRef(null);
   const dragGhostRef = useRef(null);
   const dragPointerRef = useRef({ x: 0, y: 0 });
@@ -342,10 +867,277 @@ export default function App() {
     }
   }, [game.bestScore]);
 
+  const loadAccountRuns = useEffectEvent(async () => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
+      setAccountRuns([]);
+      setAccountRunsError("");
+      return;
+    }
+
+    if (accountRunsFetchInFlightRef.current) {
+      return;
+    }
+
+    accountRunsFetchInFlightRef.current = true;
+    setAccountRunsLoading(true);
+    setAccountRunsError("");
+
+    const { data, error } = await supabase
+      .from("scores")
+      .select("id, score, created_at")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    setAccountRunsLoading(false);
+    accountRunsFetchInFlightRef.current = false;
+
+    if (error) {
+      setAccountRuns([]);
+      setAccountRunsError("Could not load your runs right now.");
+      return;
+    }
+
+    setAccountRuns(
+      (data ?? []).map((run) => ({
+        id: String(run.id),
+        score: run.score,
+        createdAt: run.created_at,
+      }))
+    );
+  });
+
+  const loadGlobalLeaderboard = useEffectEvent(async () => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig) {
+      setGlobalError("Global leaderboard is not configured.");
+      setGlobalRuns([]);
+      return;
+    }
+
+    if (globalFetchInFlightRef.current) {
+      return;
+    }
+
+    globalFetchInFlightRef.current = true;
+    setGlobalLoading(true);
+    setGlobalError("");
+
+    const { data, error } = await supabase
+      .from("scores")
+      .select("id, score, created_at, profiles(display_name)")
+      .order("score", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(GLOBAL_LEADERBOARD_LIMIT);
+
+    setGlobalLoading(false);
+    globalFetchInFlightRef.current = false;
+
+    if (error) {
+      if (error.message?.toLowerCase().includes("scores")) {
+        setGlobalError("Run supabase/scores.sql to enable the global board.");
+      } else {
+        setGlobalError("Could not load the global leaderboard right now.");
+      }
+      setGlobalRuns([]);
+      return;
+    }
+
+    const nextRuns = (data ?? []).map((run) => {
+      const profileRecord = Array.isArray(run.profiles) ? run.profiles[0] : run.profiles;
+
+      return {
+        id: run.id,
+        score: run.score,
+        createdAt: run.created_at,
+        displayName: normalizeProfileName(profileRecord?.display_name ?? "Player"),
+      };
+    });
+
+    setGlobalRuns(nextRuns);
+  });
+
+  useEffect(() => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !leaderboardOpen || leaderboardTab !== "global") {
+      return;
+    }
+
+    loadGlobalLeaderboard();
+  }, [leaderboardOpen, leaderboardTab]);
+
+  useEffect(() => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
+      setAccountRuns([]);
+      setAccountRunsError("");
+      setAccountRunsLoading(false);
+      return;
+    }
+
+    loadAccountRuns();
+  }, [session?.user?.id]);
+
+
+  useEffect(() => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !game.gameOver || !activeVerifiedRun?.id) {
+      return;
+    }
+
+    if (runSubmissionInFlightRef.current) {
+      return;
+    }
+
+    runSubmissionInFlightRef.current = true;
+    setRunSubmitting(true);
+    setRunSubmissionError("");
+
+    supabase.functions
+      .invoke("finish-run", {
+        body: {
+          runId: activeVerifiedRun.id,
+          moves: activeVerifiedRun.moves,
+        },
+      })
+      .then(async ({ error }) => {
+        runSubmissionInFlightRef.current = false;
+        setRunSubmitting(false);
+        setActiveVerifiedRun(null);
+
+        if (error) {
+          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score."));
+          return;
+        }
+
+        loadAccountRuns();
+
+        if (leaderboardOpen && leaderboardTab === "global") {
+          loadGlobalLeaderboard();
+        }
+      });
+  }, [
+    activeVerifiedRun,
+    game.gameOver,
+    leaderboardOpen,
+    leaderboardTab,
+  ]);
+
+  useEffect(() => {
+    if (!leaderboardOpen) {
+      return undefined;
+    }
+
+    function handleWindowKeyDown(event) {
+      if (event.key === "Escape") {
+        setLeaderboardOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [leaderboardOpen]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig) {
+      return undefined;
+    }
+
+    let alive = true;
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!alive) {
+        return;
+      }
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setSession(data.session);
+      }
+
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!alive) {
+        return;
+      }
+
+      setSession(nextSession);
+      setAuthReady(true);
+      setAuthPending(false);
+
+      if (!nextSession) {
+        setProfile(null);
+        setDisplayNameDraft("");
+        setEditingProfile(false);
+        setShowDesktopAuthPanel(false);
+        setAccountRuns([]);
+        setActiveVerifiedRun(null);
+        setAuthCode("");
+        setOtpSentTo("");
+      }
+    });
+
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !session?.user?.id) {
+      setProfile(null);
+      setDisplayNameDraft("");
+      setEditingProfile(false);
+      return;
+    }
+
+    let alive = true;
+
+    async function loadProfile() {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, display_name")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      if (!alive) {
+        return;
+      }
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      const nextProfile = data
+        ? {
+            ...data,
+            display_name: normalizeProfileName(data.display_name ?? ""),
+          }
+        : null;
+
+      setProfile(nextProfile);
+      setDisplayNameDraft(nextProfile?.display_name ?? "");
+      setEditingProfile(false);
+    }
+
+    loadProfile();
+
+    return () => {
+      alive = false;
+    };
+  }, [session?.user?.id]);
+
   useEffect(() => {
     if (!game.gameOver) {
       return;
     }
+
+    setLocalRuns(recordRunScore(game.score));
 
     setDrag(null);
     setGame((current) => {
@@ -404,6 +1196,21 @@ export default function App() {
 
     return () => window.clearTimeout(timer);
   }, [game.cleared]);
+
+  const rankedReady = Boolean(
+    GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
+  );
+
+  function recordVerifiedMove(pieceId, row, col) {
+    setActiveVerifiedRun((current) =>
+      current
+        ? {
+            ...current,
+            moves: [...current.moves, { pieceId, row, col }],
+          }
+        : current
+    );
+  }
 
   const updatePreviewFromPoint = useEffectEvent((clientX, clientY, activeDrag = null) => {
     if (!started || game.gameOver) {
@@ -500,6 +1307,10 @@ export default function App() {
         }, 50);
       }
 
+      if (nextGame !== game) {
+        recordVerifiedMove(pieceId, preview.row, preview.col);
+      }
+
       setGame(nextGame);
       return;
     }
@@ -531,8 +1342,47 @@ export default function App() {
     };
   }, [drag, handleWindowPointerMove, handleWindowPointerUp]);
 
-  function handleStartGame() {
-    prevBestScoreRef.current = game.bestScore;
+  async function beginNextGame() {
+    prevBestScoreRef.current = displayedBestScore;
+    setGameOverPhase(null);
+    setFillCells([]);
+    setIsNewBest(false);
+    setRunSubmitting(false);
+    setRunSubmissionError("");
+    setActiveVerifiedRun(null);
+    setStarted(false);
+    setGame(createGameState(displayedBestScore));
+
+    if (rankedReady) {
+      setStartPending(true);
+
+      const { data, error } = await supabase.functions.invoke("start-run", {
+        body: {
+          clientVersion: CLIENT_VERSION,
+        },
+      });
+
+      setStartPending(false);
+
+      if (!error && data?.runId && data?.seed) {
+        setGame(createGameState(displayedBestScore, { seed: data.seed }));
+        setActiveVerifiedRun({
+          id: data.runId,
+          moves: [],
+        });
+        setStarted(true);
+
+        if (soundEnabled) {
+          unlockAndTestSound();
+        }
+
+        return;
+      }
+
+      setAuthError(await getFunctionErrorMessage(error, "Could not start your run right now. This run will stay local."));
+    }
+
+    setGame(createGameState(displayedBestScore));
     setStarted(true);
 
     if (soundEnabled) {
@@ -540,16 +1390,16 @@ export default function App() {
     }
   }
 
+  function handleStartGame() {
+    beginNextGame();
+  }
+
   function handleRestart() {
     if (fillIntervalRef.current) {
       clearInterval(fillIntervalRef.current);
       fillIntervalRef.current = null;
     }
-    prevBestScoreRef.current = game.bestScore;
-    setGame(createGameState(game.bestScore));
-    setGameOverPhase(null);
-    setFillCells([]);
-    setIsNewBest(false);
+    beginNextGame();
   }
 
   function handleToggleSound() {
@@ -634,9 +1484,249 @@ export default function App() {
           playClearSound();
         }, 50);
       }
+
+      recordVerifiedMove(game.selectedPieceId, row, col);
     }
 
     setGame(nextGame);
+  }
+
+  async function handleRequestCode(event) {
+    event.preventDefault();
+
+    if (!hasSupabaseConfig) {
+      return;
+    }
+
+    const normalizedEmail = normalizeEmail(authEmail);
+
+    if (!normalizedEmail) {
+      setAuthError("Enter an email address first.");
+      return;
+    }
+
+    setAuthPending(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    setAuthPending(false);
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    setAuthEmail(normalizedEmail);
+    setOtpSentTo(normalizedEmail);
+    setAuthCode("");
+    setAuthMessage("Check your inbox for the GridPop! sign-in code.");
+  }
+
+  async function handleVerifyCode(event) {
+    event.preventDefault();
+
+    if (!hasSupabaseConfig) {
+      return;
+    }
+
+    const normalizedCode = normalizeOtp(authCode);
+
+    if (normalizedCode.length !== OTP_LENGTH) {
+      setAuthError(`Enter the full ${OTP_LENGTH}-digit code.`);
+      return;
+    }
+
+    setAuthPending(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: otpSentTo,
+      token: normalizedCode,
+      type: "email",
+    });
+
+    setAuthPending(false);
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    setAuthCode("");
+    setOtpSentTo("");
+    setAuthMessage("");
+  }
+
+  function handleResetOtp() {
+    setOtpSentTo("");
+    setAuthCode("");
+    setAuthMessage("");
+    setAuthError("");
+  }
+
+  async function handleSaveProfile(event) {
+    event.preventDefault();
+
+    if (!hasSupabaseConfig || !session?.user?.id) {
+      return;
+    }
+
+    const nextDisplayName = normalizeProfileName(displayNameDraft);
+
+    if (!nextDisplayName) {
+      setAuthError("Pick a display name first.");
+      return;
+    }
+
+    setProfilePending(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: session.user.id,
+          display_name: nextDisplayName,
+        },
+        { onConflict: "id" }
+      )
+      .select("id, display_name")
+      .single();
+
+    setProfilePending(false);
+
+    if (error) {
+      if (error.code === "23505") {
+        setAuthError("That display name is already taken.");
+        return;
+      }
+
+      setAuthError(error.message);
+      return;
+    }
+
+    const nextProfile = {
+      ...data,
+      display_name: normalizeProfileName(data.display_name ?? ""),
+    };
+
+    setProfile(nextProfile);
+    setDisplayNameDraft(nextProfile.display_name);
+    setEditingProfile(false);
+    setAuthMessage("Display name saved.");
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+  }
+
+  async function handleMergeLocalScores() {
+    const unsynced = localRuns.filter((r) => !r.synced);
+
+    if (!unsynced.length || !hasSupabaseConfig) {
+      return;
+    }
+
+    setMergePending(true);
+    setMergeMessage("");
+
+    const { data, error } = await supabase.functions.invoke("merge-local-scores", {
+      body: {
+        scores: unsynced.map((run) => ({
+          score: run.score,
+          createdAt: run.createdAt,
+        })),
+      },
+    });
+
+    setMergePending(false);
+
+    if (error) {
+      setMergeMessage("Could not merge scores. Try again.");
+      return;
+    }
+
+    const ids = unsynced.map((r) => r.id);
+    setLocalRuns(markRunsAsSynced(ids));
+    loadAccountRuns();
+    setMergeMessage(`${data.merged} score${data.merged === 1 ? "" : "s"} merged.`);
+  }
+
+  async function handleSignOut() {
+    if (!hasSupabaseConfig) {
+      return;
+    }
+
+    setAuthError("");
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+
+    setAuthMessage("Signed out.");
+  }
+
+  function handleAuthFieldChange(field, value) {
+    setAuthError("");
+    setAuthMessage("");
+
+    if (field === "email") {
+      setAuthEmail(normalizeEmail(value));
+      return;
+    }
+
+    setDisplayNameDraft(normalizeProfileName(value));
+  }
+
+  function handleToggleMobileAuthPanel() {
+    setShowMobileAuthPanel((current) => !current);
+    setMergeMessage("");
+  }
+
+  function handleCloseMobileAuthPanel() {
+    setShowMobileAuthPanel(false);
+    setMergeMessage("");
+  }
+
+  function handleToggleDesktopAuthPanel() {
+    setShowDesktopAuthPanel((current) => !current);
+    setMergeMessage("");
+  }
+
+  function handleOpenLeaderboard(tab = "personal") {
+    setLeaderboardTab(tab);
+    setLeaderboardOpen(true);
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+  }
+
+  function handleCloseLeaderboard() {
+    setLeaderboardOpen(false);
+  }
+
+  function handleEditProfile() {
+    setDisplayNameDraft(profile?.display_name ?? "");
+    setEditingProfile(true);
+    setAuthError("");
+    setAuthMessage("");
+  }
+
+  function handleCancelEditProfile() {
+    setDisplayNameDraft(profile?.display_name ?? "");
+    setEditingProfile(false);
+    setAuthError("");
+    setAuthMessage("");
   }
 
   const clearedSet = new Set(game.cleared);
@@ -677,11 +1767,35 @@ export default function App() {
   const dragGhostStyle = {
     transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
   };
+  const accountBestScore = accountRuns.reduce((best, run) => Math.max(best, run.score), 0);
+  const displayedBestScore = session
+    ? Math.max(game.score, accountBestScore)
+    : game.bestScore;
+  const personalRuns = session ? accountRuns : localRuns;
+  const personalLabel = session ? "My Runs" : "This Device";
 
   return (
     <>
       <div className="app-shell">
         <header className="hero">
+          <button
+            className={`sound-icon-button hero-auth-button${
+              showMobileAuthPanel || session ? " is-active" : ""
+            }`}
+            type="button"
+            onClick={handleToggleMobileAuthPanel}
+            aria-label={showMobileAuthPanel ? "Close sign in panel" : "Open sign in panel"}
+          >
+            <UserIcon />
+          </button>
+          <button
+            className="sound-icon-button hero-info-button"
+            type="button"
+            onClick={() => setShowHowToPlay(true)}
+            aria-label="How to play"
+          >
+            <span className="info-icon-letter" aria-hidden="true">i</span>
+          </button>
           <button
             className={`sound-icon-button hero-sound-button${soundEnabled ? " is-active" : ""}`}
             type="button"
@@ -695,14 +1809,58 @@ export default function App() {
 
         <main className="game-layout">
           <aside className="score-rail">
-            <ScorePanel
-              score={game.score}
-              bestScore={game.bestScore}
-              combo={game.combo}
-            />
+            <div className="score-stack">
+              <ScorePanel
+                score={game.score}
+                bestScore={displayedBestScore}
+                combo={game.combo}
+              />
+              <ScoreboardTrigger onClick={() => handleOpenLeaderboard("personal")} />
+            </div>
+            <div className="mobile-player-handle">
+              <PlayerHandle displayName={profile?.display_name ?? null} />
+            </div>
+            <div className="desktop-auth-panel">
+              <ProfileTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
+              {showDesktopAuthPanel ? (
+                <AuthPanel
+                  authCode={authCode}
+                  authEmail={authEmail}
+                  authError={authError}
+                  authMessage={authMessage}
+                  authPending={authPending}
+                  authReady={authReady}
+                  displayNameDraft={displayNameDraft}
+                  editingProfile={editingProfile}
+                  hasConfig={hasSupabaseConfig}
+                  mergeCount={localRuns.filter((r) => !r.synced).length}
+                  mergeMessage={mergeMessage}
+                  mergePending={mergePending}
+                  onCodeChange={setAuthCode}
+                  onCancelEditProfile={handleCancelEditProfile}
+                  onDisplayNameChange={handleAuthFieldChange}
+                  onEditProfile={handleEditProfile}
+                  onMergeLocalScores={handleMergeLocalScores}
+                  onRequestCode={handleRequestCode}
+                  onResetOtp={handleResetOtp}
+                  onSaveProfile={handleSaveProfile}
+                  onSignOut={handleSignOut}
+                  onVerifyCode={handleVerifyCode}
+                  otpSentTo={otpSentTo}
+                  profile={profile}
+                  profilePending={profilePending}
+                  session={session}
+                />
+              ) : null}
+            </div>
           </aside>
 
           <section className="playfield">
+            <div className="playfield-header">
+              <div className="desktop-player-handle">
+                <PlayerHandle displayName={profile?.display_name ?? null} />
+              </div>
+            </div>
             <div className="board-container">
               <Board
                 boardRef={boardRef}
@@ -718,8 +1876,8 @@ export default function App() {
               />
               {!started ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
-                  <button className="start-button" type="button" onClick={handleStartGame}>
-                    Start Game
+                  <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending}>
+                    {startPending ? "Starting..." : "Start Game"}
                   </button>
                 </div>
               ) : null}
@@ -733,9 +1891,11 @@ export default function App() {
                   <div className="game-over-content">
                     {isNewBest && <p className="new-best-banner">✨ New Best! ✨</p>}
                     <p className="game-over-score">{game.score}</p>
-                    <button className="start-button" type="button" onClick={handleRestart}>
-                      Play Again
+                    <p className={`run-submitting-label${runSubmitting ? "" : " run-submitting-label--hidden"}`}>Submitting...</p>
+                    <button className="start-button" type="button" onClick={handleRestart} disabled={startPending}>
+                      {startPending ? "Starting..." : "Play Again"}
                     </button>
+                    {runSubmissionError ? <p className="leaderboard-empty">{runSubmissionError}</p> : null}
                   </div>
                 </div>
               ) : null}
@@ -753,7 +1913,87 @@ export default function App() {
             />
           </aside>
         </main>
+
+        <footer className="site-footer">
+          <span>Made by </span>
+          <a
+            className="site-footer-link"
+            href="https://www.threads.com/@dxniel.jxy"
+            target="_blank"
+            rel="noreferrer"
+          >
+            @dxniel.jxy
+          </a>
+          <span className="site-footer-version">v1.0</span>
+        </footer>
       </div>
+
+      {showMobileAuthPanel ? (
+        <div
+          className="mobile-auth-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Player account"
+          onClick={handleCloseMobileAuthPanel}
+        >
+          <div className="mobile-auth-sheet" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="mobile-auth-close"
+              type="button"
+              onClick={handleCloseMobileAuthPanel}
+              aria-label="Close sign in panel"
+            >
+              Close
+            </button>
+            <AuthPanel
+              authCode={authCode}
+              authEmail={authEmail}
+              authError={authError}
+              authMessage={authMessage}
+              authPending={authPending}
+              authReady={authReady}
+              displayNameDraft={displayNameDraft}
+              editingProfile={editingProfile}
+              hasConfig={hasSupabaseConfig}
+              mergeCount={localRuns.filter((r) => !r.synced).length}
+              mergeMessage={mergeMessage}
+              mergePending={mergePending}
+              onCodeChange={setAuthCode}
+              onCancelEditProfile={handleCancelEditProfile}
+              onDisplayNameChange={handleAuthFieldChange}
+              onEditProfile={handleEditProfile}
+              onMergeLocalScores={handleMergeLocalScores}
+              onRequestCode={handleRequestCode}
+              onResetOtp={handleResetOtp}
+              onSaveProfile={handleSaveProfile}
+              onSignOut={handleSignOut}
+              onVerifyCode={handleVerifyCode}
+              otpSentTo={otpSentTo}
+              profile={profile}
+              profilePending={profilePending}
+              session={session}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {showHowToPlay ? <HowToPlayModal onClose={() => setShowHowToPlay(false)} /> : null}
+
+      <LeaderboardModal
+        activeTab={leaderboardTab}
+        globalEnabled={GLOBAL_LEADERBOARD_ENABLED}
+        globalError={globalError}
+        globalLoading={globalLoading}
+        globalRuns={globalRuns}
+        personalError={session ? accountRunsError : ""}
+        personalLabel={personalLabel}
+        personalLoading={session ? accountRunsLoading : false}
+        personalRuns={personalRuns}
+        signedIn={Boolean(session)}
+        onClose={handleCloseLeaderboard}
+        onTabChange={setLeaderboardTab}
+        open={leaderboardOpen}
+      />
 
       {showDragGhost ? (
         <div ref={dragGhostRef} className="drag-ghost" style={dragGhostStyle}>

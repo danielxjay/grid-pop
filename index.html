@@ -10,6 +10,45 @@
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
       rel="stylesheet"
     />
+    <style>
+      .landscape-block {
+        display: none;
+      }
+
+      @media (orientation: landscape) and (pointer: coarse) {
+        .landscape-block {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2rem;
+          position: fixed;
+          inset: 0;
+          z-index: 99999;
+          background:
+            radial-gradient(circle at 12% 12%, rgba(255, 150, 210, 0.28) 0%, transparent 42%),
+            radial-gradient(circle at 88% 18%, rgba(120, 200, 255, 0.28) 0%, transparent 38%),
+            linear-gradient(160deg, #dfc8ff 0%, #c0dcff 100%);
+          color: #fff;
+        }
+
+        .landscape-block-icon {
+          opacity: 0.9;
+          filter: drop-shadow(2px 2px 0 #e060b0);
+        }
+
+        .landscape-block-text {
+          margin: 0;
+          font-family: "Press Start 2P", monospace;
+          font-size: clamp(0.7rem, 3.5vw, 1rem);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          text-align: center;
+          color: #fff;
+          text-shadow: 2px 2px 0 #e060b0;
+        }
+      }
+    </style>
   </head>
   <body>
     <div class="landscape-block" aria-label="Please rotate your device to portrait">
