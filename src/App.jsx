@@ -3,7 +3,6 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@s
 import {
   GRID_SIZE,
   loadRunHistory,
-  markRunsAsSynced,
   recordRunScore,
   TRAY_SIZE,
   applyPlacement,
@@ -454,14 +453,10 @@ function AuthPanel({
   displayNameDraft,
   editingProfile,
   hasConfig,
-  mergeCount,
-  mergeMessage,
-  mergePending,
   onCodeChange,
   onCancelEditProfile,
   onDisplayNameChange,
   onEditProfile,
-  onMergeLocalScores,
   onRequestCode,
   onResetOtp,
   onSaveProfile,
@@ -545,15 +540,6 @@ function AuthPanel({
                   Sign Out
                 </button>
               </div>
-              {mergeCount > 0 ? (
-                <div className="auth-merge">
-                  <p className="auth-copy">You have {mergeCount} local {mergeCount === 1 ? "score" : "scores"} from before you signed in.</p>
-                  <button className="auth-secondary-button" type="button" onClick={onMergeLocalScores} disabled={mergePending}>
-                    {mergePending ? "Merging..." : "Merge into account"}
-                  </button>
-                </div>
-              ) : null}
-              {mergeMessage ? <p className="auth-status">{mergeMessage}</p> : null}
             </>
           ) : (
             <>
@@ -840,8 +826,6 @@ export default function App() {
   const [startPending, setStartPending] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [runSubmissionError, setRunSubmissionError] = useState("");
-  const [mergePending, setMergePending] = useState(false);
-  const [mergeMessage, setMergeMessage] = useState("");
   const accountRunsFetchInFlightRef = useRef(false);
   const globalFetchInFlightRef = useRef(false);
   const runSubmissionInFlightRef = useRef(false);
@@ -1627,38 +1611,6 @@ export default function App() {
     setShowMobileAuthPanel(false);
   }
 
-  async function handleMergeLocalScores() {
-    const unsynced = localRuns.filter((r) => !r.synced);
-
-    if (!unsynced.length || !hasSupabaseConfig) {
-      return;
-    }
-
-    setMergePending(true);
-    setMergeMessage("");
-
-    const { data, error } = await supabase.functions.invoke("merge-local-scores", {
-      body: {
-        scores: unsynced.map((run) => ({
-          score: run.score,
-          createdAt: run.createdAt,
-        })),
-      },
-    });
-
-    setMergePending(false);
-
-    if (error) {
-      setMergeMessage("Could not merge scores. Try again.");
-      return;
-    }
-
-    const ids = unsynced.map((r) => r.id);
-    setLocalRuns(markRunsAsSynced(ids));
-    loadAccountRuns();
-    setMergeMessage(`${data.merged} score${data.merged === 1 ? "" : "s"} merged.`);
-  }
-
   async function handleSignOut() {
     if (!hasSupabaseConfig) {
       return;
@@ -1691,17 +1643,14 @@ export default function App() {
 
   function handleToggleMobileAuthPanel() {
     setShowMobileAuthPanel((current) => !current);
-    setMergeMessage("");
   }
 
   function handleCloseMobileAuthPanel() {
     setShowMobileAuthPanel(false);
-    setMergeMessage("");
   }
 
   function handleToggleDesktopAuthPanel() {
     setShowDesktopAuthPanel((current) => !current);
-    setMergeMessage("");
   }
 
   function handleOpenLeaderboard(tab = "personal") {
@@ -1833,14 +1782,10 @@ export default function App() {
                   displayNameDraft={displayNameDraft}
                   editingProfile={editingProfile}
                   hasConfig={hasSupabaseConfig}
-                  mergeCount={localRuns.filter((r) => !r.synced).length}
-                  mergeMessage={mergeMessage}
-                  mergePending={mergePending}
                   onCodeChange={setAuthCode}
                   onCancelEditProfile={handleCancelEditProfile}
                   onDisplayNameChange={handleAuthFieldChange}
                   onEditProfile={handleEditProfile}
-                  onMergeLocalScores={handleMergeLocalScores}
                   onRequestCode={handleRequestCode}
                   onResetOtp={handleResetOtp}
                   onSaveProfile={handleSaveProfile}
@@ -1955,14 +1900,10 @@ export default function App() {
               displayNameDraft={displayNameDraft}
               editingProfile={editingProfile}
               hasConfig={hasSupabaseConfig}
-              mergeCount={localRuns.filter((r) => !r.synced).length}
-              mergeMessage={mergeMessage}
-              mergePending={mergePending}
               onCodeChange={setAuthCode}
               onCancelEditProfile={handleCancelEditProfile}
               onDisplayNameChange={handleAuthFieldChange}
               onEditProfile={handleEditProfile}
-              onMergeLocalScores={handleMergeLocalScores}
               onRequestCode={handleRequestCode}
               onResetOtp={handleResetOtp}
               onSaveProfile={handleSaveProfile}

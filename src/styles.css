@@ -599,14 +599,6 @@ h2 {
   gap: 0.5rem;
 }
 
-.auth-merge {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(110, 185, 220, 0.25);
-}
-
 .auth-button,
 .auth-secondary-button {
   min-height: 2.65rem;
