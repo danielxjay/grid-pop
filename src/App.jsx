@@ -369,6 +369,12 @@ function LeaderboardModal({
           ) : null}
         </div>
 
+        {globalEnabled && activeTab === "global" ? (
+          <p className="leaderboard-disclaimer">
+            Only runs started whilst signed in count towards the global board.
+          </p>
+        ) : null}
+
         {!globalEnabled || activeTab === "personal" ? (
           <div className="leaderboard-panel">
             <div className="leaderboard-best">
@@ -411,14 +417,19 @@ function LeaderboardModal({
           </div>
         ) : (
           <div className="leaderboard-panel">
-            <div className="leaderboard-list-wrap">
+            <div className="leaderboard-list-wrap leaderboard-list-wrap--global">
               <p className="section-label">Top 10 All Time</p>
-              {!signedIn ? (
-                <p className="leaderboard-disclaimer">
-                  Global leaderboard scores require sign-in before the run begins.
-                </p>
+              {globalLoading ? (
+                <ol className="leaderboard-list leaderboard-list--loading">
+                  {Array.from({ length: GLOBAL_LEADERBOARD_LIMIT }, (_, i) => (
+                    <li key={i} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
+                      <span className="leaderboard-rank">&nbsp;</span>
+                      <span className="leaderboard-score">&nbsp;</span>
+                      <span className="leaderboard-name">&nbsp;</span>
+                    </li>
+                  ))}
+                </ol>
               ) : null}
-              {globalLoading ? <p className="leaderboard-empty">Loading global runs...</p> : null}
               {!globalLoading && globalError ? <p className="leaderboard-empty">{globalError}</p> : null}
               {!globalLoading && !globalError && globalRuns.length === 0 ? (
                 <p className="leaderboard-empty">No global runs yet.</p>
@@ -426,7 +437,7 @@ function LeaderboardModal({
               {!globalLoading && !globalError && globalRuns.length > 0 ? (
                 <ol className="leaderboard-list">
                   {globalRuns.map((run, index) => (
-                    <li key={`${run.id}-${run.createdAt}-${index}`} className="leaderboard-row">
+                    <li key={`${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--pop" style={{ animationDelay: `${index * 55}ms` }}>
                       <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
                       <strong className="leaderboard-score">{run.score}</strong>
                       <span className="leaderboard-name">{run.displayName}</span>
@@ -909,6 +920,7 @@ export default function App() {
     const { data, error } = await supabase
       .from("scores")
       .select("id, score, created_at, profiles(display_name)")
+      .not("run_id", "is", null)
       .order("score", { ascending: false })
       .order("created_at", { ascending: true })
       .limit(GLOBAL_LEADERBOARD_LIMIT);
@@ -964,6 +976,18 @@ export default function App() {
 
     loadGlobalLeaderboard();
   }, [leaderboardOpen, leaderboardTab]);
+
+  useEffect(() => {
+    if (globalLoading || globalRuns.length === 0 || !soundEnabled) {
+      return;
+    }
+
+    const timers = globalRuns.map((_, index) =>
+      setTimeout(() => playFillCellSound(), index * 55)
+    );
+
+    return () => timers.forEach(clearTimeout);
+  }, [globalLoading]);
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
