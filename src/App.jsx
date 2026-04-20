@@ -39,7 +39,7 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const CLIENT_VERSION = "gridpop-web-1";
+const CLIENT_VERSION = "gridpop-web-1.1";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
 
@@ -2068,6 +2068,8 @@ export default function App() {
   const personalError = session ? accountRunsError : "";
 
   useEffect(() => {
+    const nextPersonalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
+
     if (!leaderboardOpen || leaderboardTab !== "personal") {
       setPersonalVisibleCount(0);
       return;
@@ -2078,8 +2080,8 @@ export default function App() {
       return;
     }
 
-    if (personalError || personalRuns.length === 0) {
-      setPersonalVisibleCount(personalRuns.length);
+    if (personalError || nextPersonalRuns.length === 0) {
+      setPersonalVisibleCount(nextPersonalRuns.length);
       return;
     }
 
@@ -2089,7 +2091,7 @@ export default function App() {
       playFillCellSound();
     }
 
-    const timers = personalRuns.slice(1).map((_, index) =>
+    const timers = nextPersonalRuns.slice(1).map((_, index) =>
       setTimeout(() => {
         if (soundEnabled) {
           playFillCellSound();
@@ -2102,7 +2104,7 @@ export default function App() {
     );
 
     return () => timers.forEach(clearTimeout);
-  }, [leaderboardOpen, leaderboardTab, personalError, personalLoading, personalRuns, soundEnabled]);
+  }, [accountRecentRuns, leaderboardOpen, leaderboardTab, localRuns, personalError, personalLoading, session, soundEnabled]);
 
   return (
     <>
@@ -2252,7 +2254,8 @@ export default function App() {
           >
             @dxniel.jxy
           </a>
-          <span className="site-footer-version">v1.0</span>
+          <span className="site-footer-separator" aria-hidden="true">·</span>
+          <span className="site-footer-version">v1.1</span>
         </footer>
       </div>
 

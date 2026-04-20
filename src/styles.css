@@ -123,8 +123,11 @@ button {
   color: rgba(72, 190, 221, 0.95);
 }
 
+.site-footer-separator {
+  margin-left: -0.02rem;
+}
+
 .site-footer-version {
-  margin-left: 0.5rem;
   color: rgba(56, 16, 106, 0.28);
 }
 
