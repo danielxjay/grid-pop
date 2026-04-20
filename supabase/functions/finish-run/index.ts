@@ -28,6 +28,7 @@ const SHAPES = [
   { name: "step-5", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
 ] as const;
 const MAX_MOVES = 512;
+const RETAINED_MOVE_LOG_RUNS = 5;
 
 type Move = {
   pieceId: number;
@@ -377,6 +378,37 @@ function replayRun(seed: string, moves: Move[]) {
   return { valid: true, score: game.score, bestCombo, bestMoveScore, bestLinesCleared, moveCount: moves.length };
 }
 
+async function pruneOldMoveLogs(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
+  const { data: runs, error: runsError } = await supabaseAdmin
+    .from("runs")
+    .select("id")
+    .eq("user_id", userId)
+    .in("status", ["verified", "rejected"])
+    .not("finished_at", "is", null)
+    .order("finished_at", { ascending: false })
+    .order("started_at", { ascending: false });
+
+  if (runsError) {
+    console.error("Move log retention lookup failed.", runsError);
+    return;
+  }
+
+  const staleRunIds = (runs ?? []).slice(RETAINED_MOVE_LOG_RUNS).map((run) => run.id);
+
+  if (staleRunIds.length === 0) {
+    return;
+  }
+
+  const { error: pruneError } = await supabaseAdmin
+    .from("runs")
+    .update({ moves: [] })
+    .in("id", staleRunIds);
+
+  if (pruneError) {
+    console.error("Move log pruning failed.", pruneError);
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method === "OPTIONS") {
@@ -453,6 +485,8 @@ Deno.serve(async (req) => {
         })
         .eq("id", run.id);
 
+      await pruneOldMoveLogs(supabaseAdmin, authData.user.id);
+
       return json({ error: verification.error ?? "Verification failed." }, { status: 400 });
     }
 
@@ -486,6 +520,8 @@ Deno.serve(async (req) => {
       console.error("Verified score insert failed.", scoreError);
       return json({ error: "Could not record the verified score." }, { status: 500 });
     }
+
+    await pruneOldMoveLogs(supabaseAdmin, authData.user.id);
 
     return json({ score });
   } catch (error) {
