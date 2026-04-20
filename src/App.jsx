@@ -538,6 +538,7 @@ function AuthPanel({
   onVerifyCode,
   otpSentTo,
   profile,
+  profileLoading,
   profilePending,
   session,
 }) {
@@ -604,7 +605,7 @@ function AuthPanel({
             <strong>{profile?.display_name ?? "Choose a display name"}</strong>
             <span>{session.user.email}</span>
           </div>
-          {profile?.display_name && !editingProfile ? (
+          {profileLoading ? null : profile?.display_name && !editingProfile ? (
             <>
               <div className="auth-actions">
                 <button className="auth-secondary-button" type="button" onClick={onEditProfile} disabled={profilePending}>
@@ -875,6 +876,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(() => !hasSupabaseConfig);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authCode, setAuthCode] = useState("");
   const [otpSentTo, setOtpSentTo] = useState("");
@@ -1226,12 +1228,14 @@ export default function App() {
   useEffect(() => {
     if (!hasSupabaseConfig || !session?.user?.id) {
       setProfile(null);
+      setProfileLoading(false);
       setDisplayNameDraft("");
       setEditingProfile(false);
       return;
     }
 
     let alive = true;
+    setProfileLoading(true);
 
     async function loadProfile() {
       const { data, error } = await supabase
@@ -1246,6 +1250,7 @@ export default function App() {
 
       if (error) {
         setAuthError(error.message);
+        setProfileLoading(false);
         return;
       }
 
@@ -1259,6 +1264,7 @@ export default function App() {
       setProfile(nextProfile);
       setDisplayNameDraft(nextProfile?.display_name ?? "");
       setEditingProfile(false);
+      setProfileLoading(false);
     }
 
     loadProfile();
@@ -2019,6 +2025,7 @@ export default function App() {
                   onVerifyCode={handleVerifyCode}
                   otpSentTo={otpSentTo}
                   profile={profile}
+                  profileLoading={profileLoading}
                   profilePending={profilePending}
                   session={session}
                 />
@@ -2137,6 +2144,7 @@ export default function App() {
               onVerifyCode={handleVerifyCode}
               otpSentTo={otpSentTo}
               profile={profile}
+              profileLoading={profileLoading}
               profilePending={profilePending}
               session={session}
             />
