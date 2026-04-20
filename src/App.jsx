@@ -244,8 +244,171 @@ function MiniBoard({ grid }) {
   );
 }
 
+async function buildStatsCardBlob(displayName, stats) {
+  const W = 1080;
+  const PAD = 80;
+  const GAP = 18;
+  const FOOTER_SIZE = 26;
+  const BOTTOM_PAD = 72;
+
+  await document.fonts.ready;
+
+  // Build chunk data up front so we can calculate total height before creating the canvas
+  const hero = stats?.bestScore > 0
+    ? [["Best score", stats.bestScore.toLocaleString()]]
+    : [];
+
+  const activity = [];
+  if (stats?.gamesPlayed > 0) activity.push(["Games played", String(stats.gamesPlayed)]);
+  if (stats?.mostMoves > 0) activity.push(["Most moves in a game", String(stats.mostMoves)]);
+
+  const skills = [];
+  if (stats?.bestCombo > 0) skills.push(["Highest combo", `\u00d7${stats.bestCombo + 1}`]);
+  if (stats?.bestMoveScore > 0) skills.push(["Best single move", stats.bestMoveScore.toLocaleString()]);
+  if (stats?.bestLinesCleared > 0) skills.push(["Most lines in a single move", String(stats.bestLinesCleared)]);
+
+  // Calculate total height
+  const headerH = displayName ? 248 : 180;
+  const heroH = hero.length > 0 ? 165 + GAP : 0;
+  const activityH = activity.length > 0 ? 138 + GAP : 0;
+  const skillsH = skills.length > 0 ? 138 + GAP : 0;
+  const footerH = FOOTER_SIZE + BOTTOM_PAD;
+  const HEIGHT = headerH + heroH + activityH + skillsH + footerH;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = HEIGHT;
+  const ctx = canvas.getContext("2d");
+
+  // Background gradient
+  const bg = ctx.createLinearGradient(0, 0, W * 0.75, HEIGHT);
+  bg.addColorStop(0, "#cfa8ff");
+  bg.addColorStop(1, "#9ecfff");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, HEIGHT);
+
+  // Subtle radial highlight
+  const glowGrad = ctx.createRadialGradient(W * 0.28, HEIGHT * 0.22, 0, W * 0.28, HEIGHT * 0.22, W * 0.65);
+  glowGrad.addColorStop(0, "rgba(255,255,255,0.22)");
+  glowGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, W, HEIGHT);
+
+  // Rainbow stripe at top
+  ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"].forEach((c, i) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(i * (W / 5), 0, W / 5, 22);
+  });
+
+  // GridPop! wordmark — white with pink hard drop shadow
+  ctx.font = `bold 64px "Press Start 2P", monospace`;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#e060b0";
+  ctx.fillText("GridPop!", PAD + 6, 148);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("GridPop!", PAD, 142);
+
+  // Player handle — Press Start 2P, cyan
+  if (displayName) {
+    ctx.font = `bold 26px "Press Start 2P", monospace`;
+    ctx.fillStyle = "#48bedd";
+    ctx.fillText(displayName, PAD, 206);
+  }
+
+  // Helpers
+  function drawTile(tx, ty, tw, th, label, value, valueSz, labelSz, hero = false) {
+    ctx.fillStyle = hero ? "rgba(255,255,255,0.62)" : "rgba(255,255,255,0.45)";
+    ctx.beginPath();
+    ctx.roundRect(tx, ty, tw, th, 18);
+    ctx.fill();
+    if (hero) {
+      ctx.strokeStyle = "rgba(224, 96, 176, 0.4)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+    ctx.font = `bold ${valueSz}px "Press Start 2P", monospace`;
+    ctx.fillStyle = "#38106a";
+    ctx.textAlign = "center";
+    ctx.fillText(value, tx + tw / 2, ty + th * 0.5);
+    // Hero labels use Press Start 2P; secondary tiles use system-ui
+    let sz = labelSz;
+    const labelFont = hero
+      ? `bold ${sz}px "Press Start 2P", monospace`
+      : `400 ${sz}px system-ui, -apple-system, sans-serif`;
+    ctx.font = labelFont;
+    while (ctx.measureText(label).width > tw - 24 && sz > 13) {
+      sz -= 1;
+      ctx.font = hero
+        ? `bold ${sz}px "Press Start 2P", monospace`
+        : `400 ${sz}px system-ui, -apple-system, sans-serif`;
+    }
+    ctx.fillStyle = hero ? "rgba(56, 16, 106, 0.45)" : "rgba(56, 16, 106, 0.58)";
+    ctx.fillText(label, tx + tw / 2, ty + th * 0.82);
+    ctx.textAlign = "left";
+  }
+
+  function drawRow(items, rowY, rowH, valueSz, labelSz, isHero = false) {
+    const rowW = W - PAD * 2;
+    const tileW = (rowW - GAP * (items.length - 1)) / items.length;
+    items.forEach(([label, value], i) => {
+      drawTile(PAD + i * (tileW + GAP), rowY, tileW, rowH, label, value, valueSz, labelSz, isHero);
+    });
+  }
+
+  // Draw chunks
+  let y = headerH;
+  if (hero.length > 0) { drawRow(hero, y, 165, 52, 22, true); y += 165 + GAP; }
+  if (activity.length > 0) { drawRow(activity, y, 138, 40, 24); y += 138 + GAP; }
+  if (skills.length > 0) { drawRow(skills, y, 138, 34, 21); y += 138 + GAP; }
+
+  // URL footer
+  ctx.font = `400 ${FOOTER_SIZE}px "Press Start 2P", monospace`;
+  ctx.fillStyle = "#e060b0";
+  ctx.textAlign = "left";
+  ctx.fillText("play now at gridpop.app", PAD, y + FOOTER_SIZE + 10);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("Canvas export failed")); return; }
+      resolve(blob);
+    }, "image/png");
+  });
+}
+
+const SHARE_CAPTION = "My GridPop! stats";
+
 function StatsModal({ displayName, onClose, stats }) {
   const title = displayName ? `Stats: ${displayName}` : "Stats";
+  const [sharing, setSharing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const canNativeShare = !!navigator.share;
+
+  async function handleShare() {
+    setSharing(true);
+    try {
+      const blob = await buildStatsCardBlob(displayName, stats);
+      const file = new File([blob], "gridpop-stats.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          text: SHARE_CAPTION,
+          files: [file],
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "gridpop-stats.png";
+        a.click();
+        URL.revokeObjectURL(url);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") console.error("Share failed", err);
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <div
@@ -292,6 +455,14 @@ function StatsModal({ displayName, onClose, stats }) {
           ) : (
             <p className="auth-copy">Play some games to see your stats here.</p>
           )}
+          <button
+            className="stats-share-btn"
+            type="button"
+            onClick={handleShare}
+            disabled={sharing}
+          >
+            {sharing ? "Generating\u2026" : saved ? "Saved!" : canNativeShare ? "Share stats" : "Download stats"}
+          </button>
         </section>
       </div>
     </div>
