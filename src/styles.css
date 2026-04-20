@@ -683,6 +683,12 @@ h2 {
   gap: 0.5rem;
 }
 
+.auth-actions-divider {
+  border: none;
+  border-top: 1px solid rgba(160, 100, 230, 0.2);
+  margin: 0.1rem 0;
+}
+
 .auth-button,
 .auth-secondary-button {
   min-height: 2.65rem;
@@ -708,6 +714,18 @@ h2 {
   box-shadow: 3px 3px 0 rgba(72, 190, 221, 0.2);
   font-size: 0.54rem;
   letter-spacing: 0.03em;
+}
+
+.auth-secondary-button--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.auth-secondary-button--icon svg {
+  flex: 0 0 auto;
+  color: currentColor;
 }
 
 .auth-button:hover,
@@ -1220,6 +1238,43 @@ h2 {
   padding-top: 0.75rem;
   letter-spacing: 0.02em;
   line-height: 1.7;
+}
+
+.stats-modal .stats-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(160, 100, 230, 0.2);
+}
+
+.stats-modal .stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.stats-modal .stats-row + .stats-row {
+  border-top: 1px solid rgba(160, 100, 230, 0.15);
+}
+
+.stats-modal .stats-row dt {
+  font-size: 0.5rem;
+  color: rgba(56, 16, 106, 0.65);
+  letter-spacing: 0.02em;
+}
+
+.stats-modal .stats-row dd {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
 }
 
 /* Mini board illustrations */

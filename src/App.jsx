@@ -186,6 +186,34 @@ function CrownIcon() {
   );
 }
 
+function ChartIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true">
+      <rect x="1.5" y="11" width="4" height="7" rx="0.6" />
+      <rect x="8" y="6.5" width="4" height="11.5" rx="0.6" />
+      <rect x="14.5" y="2" width="4" height="16" rx="0.6" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13.5 3.5l3 3L6 17H3v-3L13.5 3.5z" />
+    </svg>
+  );
+}
+
+function SignOutIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" />
+      <path d="M13 13.5l3.5-3.5L13 6.5" />
+      <line x1="16.5" y1="10" x2="7.5" y2="10" />
+    </svg>
+  );
+}
+
 function ScorePanel({ score, bestScore, combo }) {
   return (
     <section className="score-panel">
@@ -212,6 +240,60 @@ function MiniBoard({ grid }) {
       {grid.flat().map((tone, i) => (
         <div key={i} className={`mini-cell${tone ? ` mini-cell--${tone}` : ""}`} />
       ))}
+    </div>
+  );
+}
+
+function StatsModal({ displayName, onClose, stats }) {
+  const title = displayName ? `Stats: ${displayName}` : "Stats";
+
+  return (
+    <div
+      className="how-to-play-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onClose}
+    >
+      <div className="how-to-play-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close stats">
+          Close
+        </button>
+        <section className="how-to-play-modal stats-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>{title}</h2>
+          {stats ? (
+            <dl className="stats-list">
+              <div className="stats-row">
+                <dt>Best score</dt>
+                <dd>{stats.bestScore.toLocaleString()}</dd>
+              </div>
+              <div className="stats-row">
+                <dt>Games played</dt>
+                <dd>{stats.gamesPlayed}</dd>
+              </div>
+              <div className="stats-row">
+                <dt>Most moves in a game</dt>
+                <dd>{stats.mostMoves > 0 ? stats.mostMoves : "\u2014"}</dd>
+              </div>
+              <div className="stats-row">
+                <dt>Highest combo</dt>
+                <dd>{stats.bestCombo > 0 ? `\u00d7${stats.bestCombo + 1}` : "\u2014"}</dd>
+              </div>
+              <div className="stats-row">
+                <dt>Best single move</dt>
+                <dd>{stats.bestMoveScore > 0 ? stats.bestMoveScore.toLocaleString() : "\u2014"}</dd>
+              </div>
+              <div className="stats-row">
+                <dt>Most lines in a single move</dt>
+                <dd>{stats.bestLinesCleared > 0 ? stats.bestLinesCleared : "\u2014"}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="auth-copy">Play some games to see your stats here.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -534,6 +616,7 @@ function AuthPanel({
   onRequestCode,
   onResetOtp,
   onSaveProfile,
+  onShowStats,
   onSignOut,
   onVerifyCode,
   otpSentTo,
@@ -608,11 +691,18 @@ function AuthPanel({
           {profileLoading ? null : profile?.display_name && !editingProfile ? (
             <>
               <div className="auth-actions">
-                <button className="auth-secondary-button" type="button" onClick={onEditProfile} disabled={profilePending}>
-                  Edit Name
+                <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onShowStats}>
+                  <ChartIcon />
+                  <span>Stats</span>
                 </button>
-                <button className="auth-secondary-button" type="button" onClick={onSignOut} disabled={profilePending}>
-                  Sign Out
+                <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onEditProfile} disabled={profilePending}>
+                  <PencilIcon />
+                  <span>Edit Name</span>
+                </button>
+                <hr className="auth-actions-divider" />
+                <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onSignOut} disabled={profilePending}>
+                  <SignOutIcon />
+                  <span>Sign Out</span>
                 </button>
               </div>
             </>
@@ -891,6 +981,7 @@ export default function App() {
   const [accountTopRuns, setAccountTopRuns] = useState([]);
   const [accountRunsLoading, setAccountRunsLoading] = useState(false);
   const [accountRunsError, setAccountRunsError] = useState("");
+  const [accountStats, setAccountStats] = useState(null);
   const [personalVisibleCount, setPersonalVisibleCount] = useState(0);
   const [globalRuns, setGlobalRuns] = useState([]);
   const [globalVisibleCount, setGlobalVisibleCount] = useState(0);
@@ -901,11 +992,13 @@ export default function App() {
   const [showDesktopAuthPanel, setShowDesktopAuthPanel] = useState(false);
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
   const [startPending, setStartPending] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [runSubmissionError, setRunSubmissionError] = useState("");
   const accountRunsFetchInFlightRef = useRef(false);
+  const accountRunsReadyRef = useRef(false);
   const globalFetchInFlightRef = useRef(false);
   const runSubmissionInFlightRef = useRef(false);
   const boardRef = useRef(null);
@@ -915,6 +1008,7 @@ export default function App() {
   const previewSoundRef = useRef({ key: null, at: 0 });
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
+
 
   useEffect(() => {
     document.body.classList.toggle("is-dragging", drag !== null);
@@ -934,6 +1028,7 @@ export default function App() {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
+      setAccountStats(null);
       setAccountRunsError("");
       return;
     }
@@ -946,7 +1041,7 @@ export default function App() {
     setAccountRunsLoading(true);
     setAccountRunsError("");
 
-    const [recentResult, topResult] = await Promise.all([
+    const [recentResult, topResult, countResult] = await Promise.all([
       supabase
         .from("scores")
         .select("id, score, created_at")
@@ -960,6 +1055,11 @@ export default function App() {
         .order("score", { ascending: false })
         .order("created_at", { ascending: true })
         .limit(PERSONAL_TOP_RUN_LIMIT),
+      supabase
+        .from("scores")
+        .select("best_combo, best_move_score, best_lines_cleared, move_count", { count: "exact" })
+        .eq("user_id", session.user.id)
+        .not("run_id", "is", null),
     ]);
 
     setAccountRunsLoading(false);
@@ -968,6 +1068,7 @@ export default function App() {
     if (recentResult.error || topResult.error) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
+      setAccountStats(null);
       setAccountRunsError("Could not load your runs right now.");
       return;
     }
@@ -986,6 +1087,20 @@ export default function App() {
         createdAt: run.created_at,
       }))
     );
+    const statsRows = countResult.data ?? [];
+    const bestCombo = statsRows.reduce((max, r) => Math.max(max, r.best_combo ?? 0), 0);
+    const bestMoveScore = statsRows.reduce((max, r) => Math.max(max, r.best_move_score ?? 0), 0);
+    const bestLinesCleared = statsRows.reduce((max, r) => Math.max(max, r.best_lines_cleared ?? 0), 0);
+    const mostMoves = statsRows.reduce((max, r) => Math.max(max, r.move_count ?? 0), 0);
+    setAccountStats({
+      gamesPlayed: countResult.count ?? 0,
+      bestScore: topResult.data?.[0]?.score ?? 0,
+      bestCombo,
+      bestMoveScore,
+      bestLinesCleared,
+      mostMoves,
+    });
+    accountRunsReadyRef.current = true;
   });
 
   const loadGlobalLeaderboard = useEffectEvent(async () => {
@@ -1104,6 +1219,7 @@ export default function App() {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
+      setAccountStats(null);
       setAccountRunsError("");
       setAccountRunsLoading(false);
       return;
@@ -1213,6 +1329,8 @@ export default function App() {
         setShowDesktopAuthPanel(false);
         setAccountRecentRuns([]);
         setAccountTopRuns([]);
+        setAccountStats(null);
+        accountRunsReadyRef.current = false;
         setActiveVerifiedRun(null);
         setAuthCode("");
         setOtpSentTo("");
@@ -1279,7 +1397,12 @@ export default function App() {
       return;
     }
 
-    setLocalRuns(recordRunScore(game.score));
+    setLocalRuns(recordRunScore(game.score, {
+      bestCombo: game.bestCombo,
+      bestMoveScore: game.bestMoveScore,
+      bestLinesCleared: game.bestLinesCleared,
+      moveCount: game.moveCount,
+    }));
     autoSubmitGuestRun(game.score);
 
     setDrag(null);
@@ -1343,6 +1466,15 @@ export default function App() {
   const rankedReady = Boolean(
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
+
+  const aggregateStats = accountStats ? {
+    gamesPlayed: accountStats.gamesPlayed,
+    bestScore: accountStats.bestScore,
+    bestCombo: accountStats.bestCombo,
+    bestMoveScore: accountStats.bestMoveScore,
+    bestLinesCleared: accountStats.bestLinesCleared,
+    mostMoves: accountStats.mostMoves,
+  } : null;
 
   function recordVerifiedMove(pieceId, row, col) {
     setActiveVerifiedRun((current) =>
@@ -1801,19 +1933,29 @@ export default function App() {
     setDisplayNameDraft(normalizeProfileName(value));
   }
 
+  function resetProfilePanelState() {
+    setEditingProfile(false);
+    setAuthError("");
+    setAuthMessage("");
+  }
+
   function handleToggleMobileAuthPanel() {
+    resetProfilePanelState();
     setShowMobileAuthPanel((current) => !current);
   }
 
   function handleCloseMobileAuthPanel() {
+    resetProfilePanelState();
     setShowMobileAuthPanel(false);
   }
 
   function handleToggleDesktopAuthPanel() {
+    resetProfilePanelState();
     setShowDesktopAuthPanel((current) => !current);
   }
 
   function handleOpenLeaderboard(tab = "personal") {
+    resetProfilePanelState();
     if (tab === "global" && soundEnabled) {
       primeSound();
     }
@@ -1851,6 +1993,13 @@ export default function App() {
 
   function handleCloseLeaderboard() {
     setLeaderboardOpen(false);
+  }
+
+  function handleShowStats() {
+    resetProfilePanelState();
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+    setShowStats(true);
   }
 
   function handleEditProfile() {
@@ -2021,6 +2170,7 @@ export default function App() {
                   onRequestCode={handleRequestCode}
                   onResetOtp={handleResetOtp}
                   onSaveProfile={handleSaveProfile}
+                  onShowStats={handleShowStats}
                   onSignOut={handleSignOut}
                   onVerifyCode={handleVerifyCode}
                   otpSentTo={otpSentTo}
@@ -2054,7 +2204,7 @@ export default function App() {
               />
               {!started ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
-                  <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending}>
+                  <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
                     {startPending ? "Starting..." : "Start Game"}
                   </button>
                 </div>
@@ -2070,7 +2220,7 @@ export default function App() {
                     {isNewBest && <p className="new-best-banner">✨ New Best! ✨</p>}
                     <p className="game-over-score">{game.score}</p>
                     <p className={`run-submitting-label${runSubmitting ? "" : " run-submitting-label--hidden"}`}>Submitting...</p>
-                    <button className="start-button" type="button" onClick={handleRestart} disabled={startPending}>
+                    <button className="start-button" type="button" onClick={handleRestart} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
                       {startPending ? "Starting..." : "Play Again"}
                     </button>
                     {runSubmissionError ? <p className="leaderboard-empty">{runSubmissionError}</p> : null}
@@ -2140,6 +2290,7 @@ export default function App() {
               onRequestCode={handleRequestCode}
               onResetOtp={handleResetOtp}
               onSaveProfile={handleSaveProfile}
+              onShowStats={handleShowStats}
               onSignOut={handleSignOut}
               onVerifyCode={handleVerifyCode}
               otpSentTo={otpSentTo}
@@ -2153,6 +2304,13 @@ export default function App() {
       ) : null}
 
       {showHowToPlay ? <HowToPlayModal onClose={() => setShowHowToPlay(false)} /> : null}
+      {showStats ? (
+        <StatsModal
+          displayName={profile?.display_name ?? ""}
+          onClose={() => setShowStats(false)}
+          stats={aggregateStats}
+        />
+      ) : null}
 
       <LeaderboardModal
         activeTab={leaderboardTab}

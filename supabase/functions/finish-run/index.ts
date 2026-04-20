@@ -338,6 +338,9 @@ function applyPlacement(game: GameState, pieceId: number, row: number, col: numb
 
 function replayRun(seed: string, moves: Move[]) {
   let game = createGameState(seed);
+  let bestCombo = 0;
+  let bestMoveScore = 0;
+  let bestLinesCleared = 0;
 
   for (const move of moves) {
     const pieceId = Number.parseInt(String(move?.pieceId ?? ""), 10);
@@ -348,12 +351,22 @@ function replayRun(seed: string, moves: Move[]) {
       return { valid: false, error: "Move payload is malformed." };
     }
 
+    const piece = findPiece(game.tray, pieceId);
+    if (piece && canPlace(game.board, piece, row, col)) {
+      const testBoard = [...game.board];
+      for (const [dx, dy] of piece.shape.cells) testBoard[toIndex(row + dy, col + dx)] = { tone: piece.tone, groupId: piece.id };
+      bestLinesCleared = Math.max(bestLinesCleared, countLines(findClears(testBoard)));
+    }
+
+    const scoreBefore = game.score;
     const nextGame = applyPlacement(game, pieceId, row, col);
 
     if (nextGame === game) {
       return { valid: false, error: "Run contains an invalid placement." };
     }
 
+    bestMoveScore = Math.max(bestMoveScore, nextGame.score - scoreBefore);
+    bestCombo = Math.max(bestCombo, nextGame.combo);
     game = nextGame;
   }
 
@@ -361,7 +374,7 @@ function replayRun(seed: string, moves: Move[]) {
     return { valid: false, error: "Run is not complete." };
   }
 
-  return { valid: true, score: game.score };
+  return { valid: true, score: game.score, bestCombo, bestMoveScore, bestLinesCleared, moveCount: moves.length };
 }
 
 Deno.serve(async (req) => {
@@ -463,6 +476,10 @@ Deno.serve(async (req) => {
       user_id: authData.user.id,
       run_id: run.id,
       score,
+      best_combo: verification.bestCombo,
+      best_move_score: verification.bestMoveScore,
+      best_lines_cleared: verification.bestLinesCleared,
+      move_count: verification.moveCount,
     });
 
     if (scoreError) {

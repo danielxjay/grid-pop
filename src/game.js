@@ -59,6 +59,11 @@ function normalizeRunEntry(entry) {
     return null;
   }
 
+  const bestCombo = Number.isFinite(Number(entry?.bestCombo)) ? Math.max(0, Number(entry.bestCombo)) : 0;
+  const bestMoveScore = Number.isFinite(Number(entry?.bestMoveScore)) ? Math.max(0, Number(entry.bestMoveScore)) : 0;
+  const bestLinesCleared = Number.isFinite(Number(entry?.bestLinesCleared)) ? Math.max(0, Number(entry.bestLinesCleared)) : 0;
+  const moveCount = Number.isFinite(Number(entry?.moveCount)) ? Math.max(0, Number(entry.moveCount)) : 0;
+
   return {
     id:
       typeof entry?.id === "string" && entry.id
@@ -67,6 +72,10 @@ function normalizeRunEntry(entry) {
     score,
     createdAt,
     synced: Boolean(entry?.synced),
+    bestCombo,
+    bestMoveScore,
+    bestLinesCleared,
+    moveCount,
   };
 }
 
@@ -173,12 +182,16 @@ export function loadRunHistory() {
   }
 }
 
-export function recordRunScore(score) {
+export function recordRunScore(score, stats = {}) {
   const nextEntry = {
     id: createRunId(score),
     score: Number.parseInt(String(score ?? 0), 10),
     createdAt: new Date().toISOString(),
     synced: false,
+    bestCombo: Number.isFinite(stats.bestCombo) ? Math.max(0, stats.bestCombo) : 0,
+    bestMoveScore: Number.isFinite(stats.bestMoveScore) ? Math.max(0, stats.bestMoveScore) : 0,
+    bestLinesCleared: Number.isFinite(stats.bestLinesCleared) ? Math.max(0, stats.bestLinesCleared) : 0,
+    moveCount: Number.isFinite(stats.moveCount) ? Math.max(0, stats.moveCount) : 0,
   };
 
   if (!Number.isFinite(nextEntry.score) || nextEntry.score < 0) {
@@ -223,6 +236,10 @@ export function createGameState(bestScore = loadBestScore(), options = {}) {
     score: 0,
     bestScore,
     combo: 0,
+    bestCombo: 0,
+    bestMoveScore: 0,
+    bestLinesCleared: 0,
+    moveCount: 0,
     selectedPieceId: null,
     preview: null,
     gameOver: false,
@@ -307,9 +324,13 @@ export function applyPlacement(game, pieceId, row, col) {
 
   const linesCleared = countLines(clearedIndices);
   const comboMultiplier = Math.max(1, combo + 1);
-  const score =
-    game.score + blocksPlaced * 10 + linesCleared * 120 * comboMultiplier;
+  const moveScore = blocksPlaced * 10 + linesCleared * 120 * comboMultiplier;
+  const score = game.score + moveScore;
   const bestScore = Math.max(score, game.bestScore);
+  const bestCombo = Math.max(game.bestCombo, combo);
+  const bestMoveScore = Math.max(game.bestMoveScore, moveScore);
+  const bestLinesCleared = Math.max(game.bestLinesCleared, linesCleared);
+  const moveCount = game.moveCount + 1;
 
   let tray = game.tray.map((entry) => (entry?.id === pieceId ? null : entry));
   let nextPieceId = game.nextPieceId;
@@ -333,6 +354,10 @@ export function applyPlacement(game, pieceId, row, col) {
     score,
     bestScore,
     combo,
+    bestCombo,
+    bestMoveScore,
+    bestLinesCleared,
+    moveCount,
     selectedPieceId: null,
     preview: null,
     gameOver,
