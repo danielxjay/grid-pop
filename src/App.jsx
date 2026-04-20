@@ -36,6 +36,9 @@ const PROFILE_NAME_LIMIT = 22;
 const EMAIL_LENGTH_LIMIT = 320;
 const GLOBAL_LEADERBOARD_ENABLED = true;
 const GLOBAL_LEADERBOARD_LIMIT = 10;
+const PERSONAL_RECENT_RUN_LIMIT = 10;
+const PERSONAL_TOP_RUN_LIMIT = 3;
+const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
@@ -167,6 +170,18 @@ function UserIcon() {
     <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="10" cy="7.2" r="2.3" />
       <path d="M5.8 14.5c1.1-1.8 2.7-2.7 4.2-2.7s3.1 0.9 4.2 2.7" />
+    </svg>
+  );
+}
+
+function CrownIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <path d="M2 16.5 L2 14 L1.5 7.5 L7 12 L10 4.5 L13 12 L18.5 7.5 L18 14 L18 16.5 Z" fill="#f5c518" />
+      <rect x="1.5" y="14" width="17" height="2.8" rx="0.5" fill="#f5c518" />
+      <circle cx="1.5" cy="7.5" r="1.2" fill="#f5c518" />
+      <circle cx="10" cy="4.5" r="1.2" fill="#f5c518" />
+      <circle cx="18.5" cy="7.5" r="1.2" fill="#f5c518" />
     </svg>
   );
 }
@@ -312,10 +327,13 @@ function LeaderboardModal({
   globalError,
   globalLoading,
   globalRuns,
+  globalVisibleCount,
   personalError,
   personalLabel,
   personalLoading,
   personalRuns,
+  personalTopRuns,
+  personalVisibleCount,
   signedIn,
   onClose,
   onTabChange,
@@ -325,10 +343,9 @@ function LeaderboardModal({
     return null;
   }
 
-  const bestPersonalRun = personalRuns.reduce(
-    (best, run) => (best === null || run.score > best.score ? run : best),
-    null
-  );
+  const bestPersonalRun = personalTopRuns[0] ?? null;
+  const globalTopRun = globalRuns[0] ?? null;
+  const globalRemainingRuns = globalRuns.slice(1);
 
   return (
     <div
@@ -364,7 +381,7 @@ function LeaderboardModal({
               aria-selected={activeTab === "global"}
               onClick={() => onTabChange("global")}
             >
-              Global
+              Global Top 10
             </button>
           ) : null}
         </div>
@@ -376,14 +393,26 @@ function LeaderboardModal({
         ) : null}
 
         {!globalEnabled || activeTab === "personal" ? (
-          <div className="leaderboard-panel">
-            <div className="leaderboard-best">
-              <p className="section-label">Best Run</p>
+          <div key="personal-panel" className="leaderboard-panel">
+            <div className="leaderboard-list-wrap">
+              <p className="section-label">Best Runs</p>
               {bestPersonalRun ? (
-                <>
-                  <strong className="leaderboard-best-score">{bestPersonalRun.score}</strong>
-                  <span className="leaderboard-meta">{formatRunDate(bestPersonalRun.createdAt)}</span>
-                </>
+                <div className="leaderboard-podium" role="list" aria-label={`${personalLabel} best runs`}>
+                  {personalTopRuns.map((run, index) => (
+                    <div
+                      key={`${run.id ?? run.createdAt}-${run.score}-top-${index}`}
+                      className={`leaderboard-podium-card${index === 0 ? " is-best" : ""}`}
+                      role="listitem"
+                    >
+                      <span className="leaderboard-podium-rank">
+                        {index + 1}
+                        {index === 0 ? "st" : index === 1 ? "nd" : "rd"}
+                      </span>
+                      <strong className="leaderboard-podium-score">{run.score}</strong>
+                      <span className="leaderboard-meta">{formatRunDate(run.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <p className="leaderboard-empty">
                   {personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet."}
@@ -397,13 +426,21 @@ function LeaderboardModal({
               {!personalLoading && personalError ? <p className="leaderboard-empty">{personalError}</p> : null}
               {!personalLoading && !personalError && personalRuns.length > 0 ? (
                 <ol className="leaderboard-list leaderboard-list-local">
-                  {personalRuns.map((run, index) => (
-                    <li key={`${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row">
-                      <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
-                      <strong className="leaderboard-score">{run.score}</strong>
-                      <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
-                    </li>
-                  ))}
+                  {personalRuns.map((run, index) =>
+                    index < personalVisibleCount ? (
+                      <li key={`personal-visible-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--pop">
+                        <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
+                        <strong className="leaderboard-score">{run.score}</strong>
+                        <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
+                      </li>
+                    ) : (
+                      <li key={`personal-ghost-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
+                        <span className="leaderboard-rank">&nbsp;</span>
+                        <span className="leaderboard-score">&nbsp;</span>
+                        <span className="leaderboard-meta leaderboard-date">&nbsp;</span>
+                      </li>
+                    )
+                  )}
                 </ol>
               ) : null}
               {!personalLoading && !personalError && personalRuns.length === 0 ? (
@@ -416,12 +453,33 @@ function LeaderboardModal({
             </div>
           </div>
         ) : (
-          <div className="leaderboard-panel">
-            <div className="leaderboard-list-wrap leaderboard-list-wrap--global">
-              <p className="section-label">Top 10 All Time</p>
+          <div key="global-panel" className="leaderboard-panel">
+            <div className="leaderboard-best leaderboard-best--global">
               {globalLoading ? (
-                <ol className="leaderboard-list leaderboard-list--loading">
-                  {Array.from({ length: GLOBAL_LEADERBOARD_LIMIT }, (_, i) => (
+                <div className="leaderboard-hero leaderboard-hero--skeleton" aria-hidden="true">
+                  <span className="leaderboard-hero-rank">&nbsp;</span>
+                  <strong className="leaderboard-hero-score">&nbsp;</strong>
+                  <span className="leaderboard-hero-name">&nbsp;</span>
+                </div>
+              ) : null}
+              {!globalLoading && globalTopRun ? (
+                <div className="leaderboard-hero">
+                  <span className="leaderboard-hero-rank" aria-label="First place">
+                    <CrownIcon />
+                  </span>
+                  <strong className="leaderboard-best-score">{globalTopRun.score}</strong>
+                  <span className="leaderboard-hero-name">{globalTopRun.displayName}</span>
+                </div>
+              ) : null}
+              {!globalLoading && !globalError && !globalTopRun ? (
+                <p className="leaderboard-empty">No global runs yet.</p>
+              ) : null}
+            </div>
+
+            <div className="leaderboard-list-wrap leaderboard-list-wrap--global">
+              {globalLoading ? (
+                <ol className="leaderboard-list leaderboard-list-global leaderboard-list--loading">
+                  {Array.from({ length: Math.max(0, GLOBAL_LEADERBOARD_LIMIT - 1) }, (_, i) => (
                     <li key={i} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
                       <span className="leaderboard-rank">&nbsp;</span>
                       <span className="leaderboard-score">&nbsp;</span>
@@ -431,18 +489,23 @@ function LeaderboardModal({
                 </ol>
               ) : null}
               {!globalLoading && globalError ? <p className="leaderboard-empty">{globalError}</p> : null}
-              {!globalLoading && !globalError && globalRuns.length === 0 ? (
-                <p className="leaderboard-empty">No global runs yet.</p>
-              ) : null}
-              {!globalLoading && !globalError && globalRuns.length > 0 ? (
-                <ol className="leaderboard-list">
-                  {globalRuns.map((run, index) => (
-                    <li key={`${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--pop" style={{ animationDelay: `${index * 55}ms` }}>
-                      <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
-                      <strong className="leaderboard-score">{run.score}</strong>
-                      <span className="leaderboard-name">{run.displayName}</span>
-                    </li>
-                  ))}
+              {!globalLoading && !globalError && globalRemainingRuns.length > 0 ? (
+                <ol className="leaderboard-list leaderboard-list-global">
+                  {globalRemainingRuns.map((run, index) =>
+                    index + 2 <= globalVisibleCount ? (
+                      <li key={`visible-${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--pop">
+                        <span className="leaderboard-rank">{String(index + 2).padStart(2, "0")}</span>
+                        <strong className="leaderboard-score">{run.score}</strong>
+                        <span className="leaderboard-name">{run.displayName}</span>
+                      </li>
+                    ) : (
+                      <li key={`ghost-${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
+                        <span className="leaderboard-rank">&nbsp;</span>
+                        <span className="leaderboard-score">&nbsp;</span>
+                        <span className="leaderboard-name">&nbsp;</span>
+                      </li>
+                    )
+                  )}
                 </ol>
               ) : null}
             </div>
@@ -822,10 +885,13 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [localRuns, setLocalRuns] = useState(() => loadRunHistory());
-  const [accountRuns, setAccountRuns] = useState([]);
+  const [accountRecentRuns, setAccountRecentRuns] = useState([]);
+  const [accountTopRuns, setAccountTopRuns] = useState([]);
   const [accountRunsLoading, setAccountRunsLoading] = useState(false);
   const [accountRunsError, setAccountRunsError] = useState("");
+  const [personalVisibleCount, setPersonalVisibleCount] = useState(0);
   const [globalRuns, setGlobalRuns] = useState([]);
+  const [globalVisibleCount, setGlobalVisibleCount] = useState(0);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState("");
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -864,7 +930,8 @@ export default function App() {
 
   const loadAccountRuns = useEffectEvent(async () => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
-      setAccountRuns([]);
+      setAccountRecentRuns([]);
+      setAccountTopRuns([]);
       setAccountRunsError("");
       return;
     }
@@ -877,24 +944,41 @@ export default function App() {
     setAccountRunsLoading(true);
     setAccountRunsError("");
 
-    const { data, error } = await supabase
-      .from("scores")
-      .select("id, score, created_at")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
+    const [recentResult, topResult] = await Promise.all([
+      supabase
+        .from("scores")
+        .select("id, score, created_at")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(PERSONAL_RECENT_RUN_LIMIT),
+      supabase
+        .from("scores")
+        .select("id, score, created_at")
+        .eq("user_id", session.user.id)
+        .order("score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(PERSONAL_TOP_RUN_LIMIT),
+    ]);
 
     setAccountRunsLoading(false);
     accountRunsFetchInFlightRef.current = false;
 
-    if (error) {
-      setAccountRuns([]);
+    if (recentResult.error || topResult.error) {
+      setAccountRecentRuns([]);
+      setAccountTopRuns([]);
       setAccountRunsError("Could not load your runs right now.");
       return;
     }
 
-    setAccountRuns(
-      (data ?? []).map((run) => ({
+    setAccountRecentRuns(
+      (recentResult.data ?? []).map((run) => ({
+        id: String(run.id),
+        score: run.score,
+        createdAt: run.created_at,
+      }))
+    );
+    setAccountTopRuns(
+      (topResult.data ?? []).map((run) => ({
         id: String(run.id),
         score: run.score,
         createdAt: run.created_at,
@@ -978,20 +1062,46 @@ export default function App() {
   }, [leaderboardOpen, leaderboardTab]);
 
   useEffect(() => {
-    if (globalLoading || globalRuns.length === 0 || !soundEnabled) {
+    if (!leaderboardOpen || leaderboardTab !== "global") {
+      setGlobalVisibleCount(0);
       return;
     }
 
-    const timers = globalRuns.map((_, index) =>
-      setTimeout(() => playFillCellSound(), index * 55)
+    if (globalLoading) {
+      setGlobalVisibleCount(0);
+      return;
+    }
+
+    if (globalError || globalRuns.length === 0) {
+      setGlobalVisibleCount(globalRuns.length);
+      return;
+    }
+
+    setGlobalVisibleCount(1);
+
+    if (soundEnabled) {
+      playFillCellSound();
+    }
+
+    const timers = globalRuns.slice(1).map((_, index) =>
+      setTimeout(() => {
+        if (soundEnabled) {
+          playFillCellSound();
+        }
+
+        startTransition(() => {
+          setGlobalVisibleCount(index + 2);
+        });
+      }, (index + 1) * LEADERBOARD_CASCADE_STAGGER_MS)
     );
 
     return () => timers.forEach(clearTimeout);
-  }, [globalLoading]);
+  }, [globalError, globalLoading, globalRuns, leaderboardOpen, leaderboardTab, soundEnabled]);
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
-      setAccountRuns([]);
+      setAccountRecentRuns([]);
+      setAccountTopRuns([]);
       setAccountRunsError("");
       setAccountRunsLoading(false);
       return;
@@ -1099,7 +1209,8 @@ export default function App() {
         setDisplayNameDraft("");
         setEditingProfile(false);
         setShowDesktopAuthPanel(false);
-        setAccountRuns([]);
+        setAccountRecentRuns([]);
+        setAccountTopRuns([]);
         setActiveVerifiedRun(null);
         setAuthCode("");
         setOtpSentTo("");
@@ -1697,10 +1808,39 @@ export default function App() {
   }
 
   function handleOpenLeaderboard(tab = "personal") {
+    if (tab === "global" && soundEnabled) {
+      primeSound();
+    }
+    if (tab === "personal") {
+      setPersonalVisibleCount(0);
+    }
+    if (tab === "global") {
+      setGlobalVisibleCount(0);
+    }
     setLeaderboardTab(tab);
     setLeaderboardOpen(true);
     setShowDesktopAuthPanel(false);
     setShowMobileAuthPanel(false);
+  }
+
+  function handleLeaderboardTabChange(nextTab) {
+    if (nextTab === leaderboardTab) {
+      return;
+    }
+
+    if (soundEnabled) {
+      primeSound();
+      playPickupSound();
+    }
+
+    if (nextTab === "personal") {
+      setPersonalVisibleCount(0);
+    }
+    if (nextTab === "global") {
+      setGlobalVisibleCount(0);
+    }
+
+    setLeaderboardTab(nextTab);
   }
 
   function handleCloseLeaderboard() {
@@ -1759,12 +1899,55 @@ export default function App() {
   const dragGhostStyle = {
     transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
   };
-  const accountBestScore = accountRuns.reduce((best, run) => Math.max(best, run.score), 0);
+  const accountBestScore = accountTopRuns[0]?.score ?? 0;
+  const localTopRuns = [...localRuns]
+    .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+    .slice(0, PERSONAL_TOP_RUN_LIMIT);
   const displayedBestScore = session
     ? Math.max(game.score, accountBestScore)
     : game.bestScore;
-  const personalRuns = session ? accountRuns : localRuns;
+  const personalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
+  const personalTopRuns = session ? accountTopRuns : localTopRuns;
   const personalLabel = session ? "My Runs" : "This Device";
+  const personalLoading = session ? accountRunsLoading : false;
+  const personalError = session ? accountRunsError : "";
+
+  useEffect(() => {
+    if (!leaderboardOpen || leaderboardTab !== "personal") {
+      setPersonalVisibleCount(0);
+      return;
+    }
+
+    if (personalLoading) {
+      setPersonalVisibleCount(0);
+      return;
+    }
+
+    if (personalError || personalRuns.length === 0) {
+      setPersonalVisibleCount(personalRuns.length);
+      return;
+    }
+
+    setPersonalVisibleCount(1);
+
+    if (soundEnabled) {
+      playFillCellSound();
+    }
+
+    const timers = personalRuns.slice(1).map((_, index) =>
+      setTimeout(() => {
+        if (soundEnabled) {
+          playFillCellSound();
+        }
+
+        startTransition(() => {
+          setPersonalVisibleCount(index + 2);
+        });
+      }, (index + 1) * LEADERBOARD_CASCADE_STAGGER_MS)
+    );
+
+    return () => timers.forEach(clearTimeout);
+  }, [leaderboardOpen, leaderboardTab, personalError, personalLoading, personalRuns, soundEnabled]);
 
   return (
     <>
@@ -1969,13 +2152,16 @@ export default function App() {
         globalError={globalError}
         globalLoading={globalLoading}
         globalRuns={globalRuns}
-        personalError={session ? accountRunsError : ""}
+        globalVisibleCount={globalVisibleCount}
+        personalError={personalError}
         personalLabel={personalLabel}
-        personalLoading={session ? accountRunsLoading : false}
+        personalLoading={personalLoading}
         personalRuns={personalRuns}
+        personalTopRuns={personalTopRuns}
+        personalVisibleCount={personalVisibleCount}
         signedIn={Boolean(session)}
         onClose={handleCloseLeaderboard}
-        onTabChange={setLeaderboardTab}
+        onTabChange={handleLeaderboardTabChange}
         open={leaderboardOpen}
       />
 
