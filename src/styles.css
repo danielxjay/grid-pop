@@ -1326,6 +1326,26 @@ h2 {
   box-shadow: 4px 4px 0 rgba(30, 0, 50, 0.3);
 }
 
+/* Poxel intro row */
+.how-to-play-poxel-intro {
+  font-size: 0.78rem;
+  opacity: 0.7;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.how-to-play-poxel-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 1.25rem;
+}
+
+.how-to-play-poxel {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
 /* Mini board illustrations */
 .mini-board {
   flex: 0 0 auto;
@@ -2392,6 +2412,96 @@ h2 {
   --tone-orchid: #383838;
   --tone-orchid-hi: #585858;
   --tone-orchid-lo: #282828;
+}
+
+/* Summit — conditional: currently in global top 10 */
+[data-theme="summit"] {
+  color-scheme: light;
+
+  --bg-top: #f2f8ff;
+  --bg-bottom: #ddeeff;
+  --bg-bloom-a: rgba(100, 180, 240, 0.20);
+  --bg-bloom-b: rgba(180, 220, 255, 0.15);
+  --panel: rgba(240, 250, 255, 0.92);
+  --line: rgba(40, 110, 180, 0.18);
+  --text: #0d2545;
+  --muted: #4a7aaa;
+  --accent: #2288cc;
+  --accent2: #55aadd;
+  --gold: #2288cc;
+  --shadow: 0 6px 20px rgba(20, 80, 150, 0.12);
+  --board-bg: linear-gradient(145deg, rgba(90, 165, 225, 0.85), rgba(55, 135, 205, 0.90));
+  --board-cell-bg: rgba(255, 255, 255, 0.18);
+  --board-cell-border: rgba(255, 255, 255, 0.30);
+  --board-cell-tint: #1a5a9a;
+  --board-filled-bg: rgba(255, 255, 255, 0.12);
+  --modal-bg: linear-gradient(150deg, #f5faff 0%, #e5f2ff 100%);
+  --overlay-bg: rgba(10, 40, 90, 0.45);
+
+  --tone-coral: #5aaae0;
+  --tone-coral-hi: #9ccef4;
+  --tone-coral-lo: #3388cc;
+
+  --tone-gold: #2277bb;
+  --tone-gold-hi: #66aadd;
+  --tone-gold-lo: #1155aa;
+
+  --tone-mint: #88c8f0;
+  --tone-mint-hi: #c4e8f8;
+  --tone-mint-lo: #66aacc;
+
+  --tone-sky: #3399cc;
+  --tone-sky-hi: #77bbdd;
+  --tone-sky-lo: #1177aa;
+
+  --tone-orchid: #aad8f0;
+  --tone-orchid-hi: #cceeff;
+  --tone-orchid-lo: #88bbcc;
+}
+
+/* Crown — conditional: currently holding #1 globally */
+[data-theme="crown"] {
+  color-scheme: light;
+
+  --bg-top: #fef9ed;
+  --bg-bottom: #f8edcc;
+  --bg-bloom-a: rgba(210, 160, 20, 0.18);
+  --bg-bloom-b: rgba(230, 180, 40, 0.12);
+  --panel: rgba(255, 251, 235, 0.90);
+  --line: rgba(160, 110, 10, 0.22);
+  --text: #3d2800;
+  --muted: #8a6520;
+  --accent: #c8880a;
+  --accent2: #e8a820;
+  --gold: #c8880a;
+  --shadow: 0 6px 20px rgba(100, 70, 0, 0.16);
+  --board-bg: linear-gradient(145deg, rgba(210, 160, 30, 0.88), rgba(185, 135, 10, 0.92));
+  --board-cell-bg: rgba(120, 80, 0, 0.08);
+  --board-cell-border: rgba(150, 100, 0, 0.18);
+  --board-cell-tint: #7a5000;
+  --board-filled-bg: rgba(140, 95, 0, 0.18);
+  --modal-bg: linear-gradient(150deg, #fdf6e3 0%, #f8edcc 100%);
+  --overlay-bg: rgba(60, 35, 0, 0.50);
+
+  --tone-coral: #d4a017;
+  --tone-coral-hi: #f0cc66;
+  --tone-coral-lo: #aa7800;
+
+  --tone-gold: #e8880a;
+  --tone-gold-hi: #ffcc66;
+  --tone-gold-lo: #c06800;
+
+  --tone-mint: #c87800;
+  --tone-mint-hi: #eeaa44;
+  --tone-mint-lo: #9a5800;
+
+  --tone-sky: #f0c030;
+  --tone-sky-hi: #ffe080;
+  --tone-sky-lo: #cca020;
+
+  --tone-orchid: #b87010;
+  --tone-orchid-hi: #e0a844;
+  --tone-orchid-lo: #8a5800;
 }
 
 /* ============================================================

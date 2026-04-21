@@ -111,6 +111,32 @@ const THEMES = [
     tonesLo: ["#0055cc", "#7090b0", "#00cc66", "#00bbdd", "#7700cc"],
   },
   {
+    key: "summit", name: "Summit", condition: "top10",
+    grid: [
+      [1, 0, 2, 0, 3, 0, 4, 0],
+      [1, 2, 2, 0, 3, 3, 0, 4],
+      [0, 2, 0, 3, 0, 3, 4, 4],
+    ],
+    board: "linear-gradient(145deg,rgba(90,165,225,0.85),rgba(55,135,205,0.90))",
+    cell: "rgba(255,255,255,0.18)", cellBorder: "rgba(255,255,255,0.30)",
+    tones:   ["#5aaae0", "#2277bb", "#88c8f0", "#3399cc", "#aad8f0"],
+    tonesHi: ["#9ccef4", "#66aadd", "#c4e8f8", "#77bbdd", "#cceeff"],
+    tonesLo: ["#3388cc", "#1155aa", "#66aacc", "#1177aa", "#88bbcc"],
+  },
+  {
+    key: "crown", name: "Crown", condition: "rank1",
+    grid: [
+      [0, 1, 0, 2, 0, 1, 0, 2],
+      [1, 1, 2, 2, 0, 1, 3, 2],
+      [0, 0, 2, 0, 3, 3, 3, 0],
+    ],
+    board: "linear-gradient(145deg,rgba(210,160,30,0.88),rgba(185,135,10,0.92))",
+    cell: "rgba(120,80,0,0.08)", cellBorder: "rgba(150,100,0,0.18)",
+    tones:   ["#d4a017", "#e8880a", "#c87800", "#f0c030", "#b87010"],
+    tonesHi: ["#f0cc66", "#ffcc66", "#eeaa44", "#ffe080", "#e0a844"],
+    tonesLo: ["#aa7800", "#c06800", "#9a5800", "#cca020", "#8a5800"],
+  },
+  {
     key: "greige", name: "Greige", unlock: "Score under 500",
     grid: [
       [0, 0, 0, 1, 0, 0, 0, 0],
@@ -125,13 +151,18 @@ const THEMES = [
   },
 ];
 
-function getUnlockedThemes(stats, profile) {
+function getUnlockedThemes(stats, profile, globalRuns = [], userId = null) {
   const unlocked = new Set(["classic", "classic-dark"]);
   if (stats?.gamesPlayed >= 50) unlocked.add("gen-y");
   if (stats?.bestLinesCleared >= 4) unlocked.add("dmg");
   if (profile?.has_shared_stats) unlocked.add("broadcast");
   if (stats?.bestScore >= 20000) unlocked.add("y2k");
   if (stats?.hasLowScore) unlocked.add("greige");
+  // Conditional themes — only available while the live condition is met
+  if (userId && globalRuns.length > 0) {
+    if (globalRuns.some((r) => r.userId === userId)) unlocked.add("summit");
+    if (globalRuns[0]?.userId === userId) unlocked.add("crown");
+  }
   return unlocked;
 }
 
@@ -644,16 +675,16 @@ function HowToPlayModal({ onClose }) {
               <MiniBoard grid={placeGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Drop</strong>
-                <p>Drag a shape from the tray onto the grid. Each individual piece of a shape scores points.</p>
-                <p className="how-to-play-pts">10 pts per piece</p>
+                <p>Drag a shape from the tray onto the grid. Each coloured square is a poxel and every poxel you place scores points.</p>
+                <p className="how-to-play-pts">10 pts per poxel</p>
               </div>
             </div>
             <div className="how-to-play-step">
               <MiniBoard grid={clearGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Pop</strong>
-                <p>Fill every cell in a row or column and the whole line pops. The more lines you pop at once, the bigger the score.</p>
-                <p className="how-to-play-pts">120 pts per line popped</p>
+                <p>Fill a full row or column of poxels and the whole line pops. Pop multiple lines in one move for a bonus.</p>
+                <p className="how-to-play-pts">120 pts per line, more for multiples</p>
               </div>
             </div>
             <div className="how-to-play-step">
@@ -979,7 +1010,9 @@ function ThemeModal({ activeTheme, unlockedThemes, onSelect, onClose }) {
                   )}
                   <div className="theme-card-label">
                     <span className="theme-card-name">{theme.name}{isActive ? " ✓" : ""}</span>
-                    <span className="theme-card-hint">{theme.free ? "Free" : theme.unlock}</span>
+                    <span className="theme-card-hint">
+                      {theme.free ? "Free" : theme.condition === "rank1" ? "Hold the #1 spot" : theme.condition === "top10" ? "Hold a top 10 spot" : theme.unlock}
+                    </span>
                   </div>
                 </button>
               );
@@ -1531,7 +1564,7 @@ export default function App() {
 
     const { data, error } = await supabase
       .from("scores")
-      .select("id, score, created_at, profiles(display_name)")
+      .select("id, user_id, score, created_at, profiles(display_name)")
       .not("run_id", "is", null)
       .order("score", { ascending: false })
       .order("created_at", { ascending: true })
@@ -1555,6 +1588,7 @@ export default function App() {
 
       return {
         id: run.id,
+        userId: run.user_id,
         score: run.score,
         createdAt: run.created_at,
         displayName: normalizeProfileName(profileRecord?.display_name ?? "Player"),
@@ -1883,7 +1917,29 @@ export default function App() {
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
 
-  const unlockedThemes = getUnlockedThemes(accountStats, profile);
+  const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id);
+
+  // Auto-revoke conditional themes when fresh global data shows the condition is no longer met
+  useEffect(() => {
+    if (!globalRuns.length) return;
+    const activeThemeObj = THEMES.find((t) => t.key === activeTheme);
+    if (!activeThemeObj?.condition) return;
+    const userId = session?.user?.id;
+    const stillAvailable = userId && (
+      activeThemeObj.condition === "top10"
+        ? globalRuns.some((r) => r.userId === userId)
+        : activeThemeObj.condition === "rank1"
+          ? globalRuns[0]?.userId === userId
+          : false
+    );
+    if (!stillAvailable) {
+      setActiveTheme("classic");
+      localStorage.setItem("gridpop-theme", "classic");
+      if (hasSupabaseConfig && userId) {
+        supabase.from("profiles").update({ theme: "classic" }).eq("id", userId);
+      }
+    }
+  }, [globalRuns]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const aggregateStats = accountStats ? {
     gamesPlayed: accountStats.gamesPlayed,
