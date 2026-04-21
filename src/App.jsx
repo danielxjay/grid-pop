@@ -368,7 +368,7 @@ function MiniBoard({ grid }) {
   );
 }
 
-async function buildStatsCardBlob(displayName, stats) {
+async function buildStatsCardBlob(displayName, stats, theme) {
   const W = 1080;
   const PAD = 80;
   const GAP = 18;
@@ -376,6 +376,15 @@ async function buildStatsCardBlob(displayName, stats) {
   const BOTTOM_PAD = 72;
 
   await document.fonts.ready;
+
+  // Resolve theme-aware colors from live CSS vars + theme data
+  const style = getComputedStyle(document.documentElement);
+  const bgTop = style.getPropertyValue('--bg-top').trim() || '#cfa8ff';
+  const bgBottom = style.getPropertyValue('--bg-bottom').trim() || '#9ecfff';
+  const textColor = style.getPropertyValue('--text').trim() || '#38106a';
+  const panelColor = style.getPropertyValue('--panel').trim() || 'rgba(255,255,255,0.82)';
+  const tones = theme?.tones ?? ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"];
+  const accent = tones[0];
 
   // Build chunk data up front so we can calculate total height before creating the canvas
   const hero = stats?.bestScore > 0
@@ -406,8 +415,8 @@ async function buildStatsCardBlob(displayName, stats) {
 
   // Background gradient
   const bg = ctx.createLinearGradient(0, 0, W * 0.75, HEIGHT);
-  bg.addColorStop(0, "#cfa8ff");
-  bg.addColorStop(1, "#9ecfff");
+  bg.addColorStop(0, bgTop);
+  bg.addColorStop(1, bgBottom);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, HEIGHT);
 
@@ -418,40 +427,44 @@ async function buildStatsCardBlob(displayName, stats) {
   ctx.fillStyle = glowGrad;
   ctx.fillRect(0, 0, W, HEIGHT);
 
-  // Rainbow stripe at top
-  ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"].forEach((c, i) => {
+  // Tone stripe at top
+  tones.forEach((c, i) => {
     ctx.fillStyle = c;
     ctx.fillRect(i * (W / 5), 0, W / 5, 22);
   });
 
-  // GridPop! wordmark — white with pink hard drop shadow
+  // GridPop! wordmark — white with accent hard drop shadow
   ctx.font = `bold 64px "Press Start 2P", monospace`;
   ctx.textAlign = "left";
-  ctx.fillStyle = "#e060b0";
+  ctx.fillStyle = accent;
   ctx.fillText("GridPop!", PAD + 6, 148);
   ctx.fillStyle = "#ffffff";
   ctx.fillText("GridPop!", PAD, 142);
 
-  // Player handle — Press Start 2P, cyan
+  // Player handle
   if (displayName) {
     ctx.font = `bold 26px "Press Start 2P", monospace`;
-    ctx.fillStyle = "#48bedd";
+    ctx.fillStyle = textColor;
     ctx.fillText(displayName, PAD, 206);
   }
 
   // Helpers
   function drawTile(tx, ty, tw, th, label, value, valueSz, labelSz, hero = false) {
-    ctx.fillStyle = hero ? "rgba(255,255,255,0.62)" : "rgba(255,255,255,0.45)";
+    ctx.globalAlpha = hero ? 1.0 : 0.75;
+    ctx.fillStyle = panelColor;
     ctx.beginPath();
     ctx.roundRect(tx, ty, tw, th, 18);
     ctx.fill();
+    ctx.globalAlpha = 1.0;
     if (hero) {
-      ctx.strokeStyle = "rgba(224, 96, 176, 0.4)";
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = accent;
       ctx.lineWidth = 2.5;
       ctx.stroke();
+      ctx.globalAlpha = 1.0;
     }
     ctx.font = `bold ${valueSz}px "Press Start 2P", monospace`;
-    ctx.fillStyle = "#38106a";
+    ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.fillText(value, tx + tw / 2, ty + th * 0.5);
     // Hero labels use Press Start 2P; secondary tiles use system-ui
@@ -466,8 +479,10 @@ async function buildStatsCardBlob(displayName, stats) {
         ? `bold ${sz}px "Press Start 2P", monospace`
         : `400 ${sz}px system-ui, -apple-system, sans-serif`;
     }
-    ctx.fillStyle = hero ? "rgba(56, 16, 106, 0.45)" : "rgba(56, 16, 106, 0.58)";
+    ctx.globalAlpha = hero ? 0.45 : 0.58;
+    ctx.fillStyle = textColor;
     ctx.fillText(label, tx + tw / 2, ty + th * 0.82);
+    ctx.globalAlpha = 1.0;
     ctx.textAlign = "left";
   }
 
@@ -487,7 +502,7 @@ async function buildStatsCardBlob(displayName, stats) {
 
   // URL footer
   ctx.font = `400 ${FOOTER_SIZE}px "Press Start 2P", monospace`;
-  ctx.fillStyle = "#e060b0";
+  ctx.fillStyle = accent;
   ctx.textAlign = "left";
   ctx.fillText("play now at gridpop.app", PAD, y + FOOTER_SIZE + 10);
 
@@ -501,7 +516,7 @@ async function buildStatsCardBlob(displayName, stats) {
 
 const SHARE_CAPTION = "My GridPop! stats";
 
-function StatsModal({ displayName, onClose, onShare, stats }) {
+function StatsModal({ displayName, onClose, onShare, stats, theme }) {
   const title = displayName ? `Stats: ${displayName}` : "Stats";
   const [sharing, setSharing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -510,7 +525,7 @@ function StatsModal({ displayName, onClose, onShare, stats }) {
   async function handleShare() {
     setSharing(true);
     try {
-      const blob = await buildStatsCardBlob(displayName, stats);
+      const blob = await buildStatsCardBlob(displayName, stats, theme);
       const file = new File([blob], "gridpop-stats.png", { type: "image/png" });
       if (navigator.share && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -2748,6 +2763,7 @@ export default function App() {
           onClose={() => setShowStats(false)}
           onShare={handleStatsShare}
           stats={aggregateStats}
+          theme={THEMES.find(t => t.key === activeTheme) ?? THEMES[0]}
         />
       ) : null}
 
