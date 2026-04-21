@@ -1469,6 +1469,80 @@ h2 {
   pointer-events: none;
 }
 
+/* Mobile (in-flow): expands below the tray using max-height */
+.drag-dismiss-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  margin-top: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: 0.6rem;
+  border: 2px dashed transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  transition:
+    max-height 0.2s ease,
+    opacity 0.2s ease,
+    padding 0.2s ease,
+    margin-top 0.2s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.sidebar.is-drag-active .drag-dismiss-zone {
+  max-height: 5rem;
+  opacity: 1;
+  padding: 1rem 0.75rem;
+  margin-top: 0.5rem;
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+
+.drag-dismiss-zone.is-hovered {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  color: var(--accent);
+}
+
+/* Desktop (absolute): floats below the sidebar, no layout shift */
+@media (min-width: 981px) {
+  .sidebar {
+    position: relative;
+  }
+
+  .drag-dismiss-zone {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    left: 0;
+    right: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 1.5rem 1rem;
+    transform: translateY(-6px);
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease,
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .sidebar.is-drag-active .drag-dismiss-zone {
+    max-height: none;
+    padding: 1.5rem 1rem;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .piece-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--piece-cell));

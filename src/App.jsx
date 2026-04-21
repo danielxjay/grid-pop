@@ -1435,6 +1435,7 @@ export default function App() {
   const runSubmissionInFlightRef = useRef(false);
   const boardRef = useRef(null);
   const dragGhostRef = useRef(null);
+  const dismissZoneRef = useRef(null);
   const dragPointerRef = useRef({ x: 0, y: 0 });
   const pickupSoundPlayedRef = useRef(false);
   const previewSoundRef = useRef({ key: null, at: 0 });
@@ -1661,6 +1662,10 @@ export default function App() {
   }, [globalError, globalLoading, globalRuns, leaderboardOpen, leaderboardTab, soundEnabled]);
 
   useEffect(() => {
+    loadGlobalLeaderboard();
+  }, []);
+
+  useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
@@ -1705,10 +1710,7 @@ export default function App() {
         }
 
         loadAccountRuns();
-
-        if (leaderboardOpen && leaderboardTab === "global") {
-          loadGlobalLeaderboard();
-        }
+        loadGlobalLeaderboard();
       });
   }, [
     activeVerifiedRun,
@@ -1974,6 +1976,22 @@ export default function App() {
       return;
     }
 
+    // If pointer is over the dismiss zone, clear the board preview and bail out early.
+    // This prevents the lifted ghost from accidentally showing a valid board placement
+    // when the player is dragging back toward the tray.
+    const dismissZone = dismissZoneRef.current;
+    if (dismissZone) {
+      const zoneRect = dismissZone.getBoundingClientRect();
+      const isOverZone = clientX >= zoneRect.left && clientX <= zoneRect.right &&
+                         clientY >= zoneRect.top  && clientY <= zoneRect.bottom;
+      dismissZone.classList.toggle("is-hovered", isOverZone);
+      if (isOverZone) {
+        previewSoundRef.current.key = null;
+        startTransition(() => setGame((current) => clearPreview(current)));
+        return;
+      }
+    }
+
     const metrics = getBoardCellMetrics(boardElement);
 
     if (!metrics) {
@@ -2041,6 +2059,7 @@ export default function App() {
 
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
+    dismissZoneRef.current?.classList.remove("is-hovered");
     const pieceId = drag.pieceId;
     const preview = game.preview;
     setDrag(null);
@@ -2064,7 +2083,7 @@ export default function App() {
       return;
     }
 
-    setGame((current) => clearPreview(current));
+    setGame((current) => ({ ...clearPreview(current), selectedPieceId: null }));
   });
 
   useEffect(() => {
@@ -2729,7 +2748,7 @@ export default function App() {
             </div>
           </section>
 
-          <aside className="sidebar">
+          <aside className={`sidebar${drag ? " is-drag-active" : ""}`}>
             <Tray
               tray={game.tray}
               selectedPieceId={game.selectedPieceId}
@@ -2738,6 +2757,13 @@ export default function App() {
               onSelectPiece={handleSelectPiece}
               onStartDrag={handleStartDrag}
             />
+            <div ref={dismissZoneRef} className="drag-dismiss-zone" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+                <path d="M9 14L4 9l5-5"/>
+                <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+              </svg>
+              <span>return to tray</span>
+            </div>
           </aside>
         </main>
 
