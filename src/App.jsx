@@ -31,6 +31,110 @@ import {
 } from "./sound.js";
 import { hasSupabaseConfig, supabase } from "./supabase.js";
 
+const THEMES = [
+  {
+    key: "classic", name: "Classic", free: true,
+    grid: [
+      [1, 1, 0, 2, 0, 0, 3, 3],
+      [0, 1, 0, 2, 2, 0, 0, 3],
+      [4, 0, 0, 0, 2, 5, 0, 3],
+    ],
+    board: "linear-gradient(145deg,rgba(225,210,255,0.96),rgba(205,185,252,0.93))",
+    cell: "rgba(130,80,200,0.15)", cellBorder: "rgba(110,60,180,0.2)",
+    tones:   ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"],
+    tonesHi: ["#ffeef5", "#fffbe8", "#eafff7", "#e8fbff", "#fefefe"],
+    tonesLo: ["#ff9dc4", "#ffe080", "#7adec8", "#50d8f0", "#e0dbd6"],
+  },
+  {
+    key: "classic-dark", name: "Classic Dark", free: true,
+    grid: [
+      [1, 0, 2, 2, 0, 3, 0, 4],
+      [1, 1, 0, 2, 3, 3, 0, 4],
+      [0, 1, 5, 0, 0, 3, 4, 4],
+    ],
+    board: "linear-gradient(145deg,rgba(50,15,90,0.85),rgba(30,8,65,0.92))",
+    cell: "rgba(255,255,255,0.04)", cellBorder: "rgba(180,140,255,0.14)",
+    tones:   ["#ff70a8", "#ffd040", "#40d8b0", "#20c8e8", "#c8b8e8"],
+    tonesHi: ["#ffaace", "#ffe888", "#80eed0", "#70e0f4", "#e0d8f4"],
+    tonesLo: ["#e0508a", "#e0aa20", "#20b890", "#10a8cc", "#a890d0"],
+  },
+  {
+    key: "gen-y", name: "Gen Y", unlock: "Play 50 games",
+    grid: [
+      [0, 1, 0, 0, 0, 2, 0, 0],
+      [0, 1, 1, 0, 0, 2, 0, 3],
+      [0, 0, 1, 0, 0, 2, 3, 3],
+    ],
+    board: "linear-gradient(145deg,rgba(235,220,195,0.95),rgba(218,202,176,0.92))",
+    cell: "rgba(160,120,80,0.1)", cellBorder: "rgba(140,100,60,0.18)",
+    tones:   ["#e8c0a0", "#ddc890", "#b8c8a8", "#c0c4c8", "#e0d8c8"],
+    tonesHi: ["#fff4ed", "#fff8e4", "#f0f5e8", "#f0f2f4", "#faf8f0"],
+    tonesLo: ["#d4a880", "#c8b070", "#9ab88a", "#a8b0b8", "#ccc4b0"],
+  },
+  {
+    key: "dmg", name: "DMG", unlock: "Pop 4+ lines in one move",
+    grid: [
+      [1, 1, 2, 2, 3, 3, 4, 4],
+      [1, 0, 0, 2, 0, 3, 0, 4],
+      [5, 5, 0, 0, 0, 0, 0, 4],
+    ],
+    board: "linear-gradient(145deg,#9bbc0f,#8bac0f)",
+    cell: "rgba(15,56,15,0.06)", cellBorder: "rgba(15,56,15,0.14)",
+    tones:   ["#0f380f", "#1e4e10", "#306230", "#4a7828", "#628c18"],
+    tonesHi: ["#1e520e", "#306230", "#427840", "#5e9030", "#7aa820"],
+    tonesLo: ["#0a2808", "#142e08", "#204820", "#386018", "#4e7010"],
+  },
+  {
+    key: "broadcast", name: "Broadcast", unlock: "Share your stats",
+    grid: [
+      [0, 1, 0, 2, 0, 3, 0, 4],
+      [1, 1, 0, 2, 3, 3, 0, 4],
+      [0, 1, 5, 2, 0, 3, 4, 4],
+    ],
+    board: "linear-gradient(145deg,#111118,#0a0a14)",
+    cell: "rgba(255,255,255,0.04)", cellBorder: "rgba(255,255,255,0.08)",
+    tones:   ["#ff2244", "#ffee00", "#00ff44", "#00eeff", "#e0e0e0"],
+    tonesHi: ["#ff8899", "#ffff88", "#88ffaa", "#88ffff", "#ffffff"],
+    tonesLo: ["#cc0022", "#cccc00", "#00cc33", "#00ccdd", "#c0c0c0"],
+  },
+  {
+    key: "y2k", name: "Y2K", unlock: "Score 20,000+",
+    grid: [
+      [1, 2, 3, 0, 4, 5, 1, 2],
+      [1, 2, 3, 3, 4, 5, 0, 2],
+      [0, 2, 0, 3, 4, 5, 5, 0],
+    ],
+    board: "linear-gradient(145deg,rgba(0,20,60,0.9),rgba(0,10,40,0.95))",
+    cell: "rgba(0,100,200,0.08)", cellBorder: "rgba(0,200,255,0.14)",
+    tones:   ["#0088ff", "#a0b8d0", "#00ff88", "#00eeff", "#9900ff"],
+    tonesHi: ["#66ccff", "#d0e4f0", "#88ffcc", "#88ffff", "#cc88ff"],
+    tonesLo: ["#0055cc", "#7090b0", "#00cc66", "#00bbdd", "#7700cc"],
+  },
+  {
+    key: "greige", name: "Greige", unlock: "Score under 500",
+    grid: [
+      [0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 1, 1, 0, 2, 0],
+      [0, 0, 0, 0, 0, 0, 2, 2],
+    ],
+    board: "linear-gradient(145deg,#d8d7d4,#c8c7c4)",
+    cell: "rgba(60,60,60,0.07)", cellBorder: "rgba(60,60,60,0.14)",
+    tones:   ["#505050", "#888888", "#6c6c6c", "#b0b0b0", "#383838"],
+    tonesHi: ["#707070", "#a8a8a8", "#8c8c8c", "#d0d0d0", "#585858"],
+    tonesLo: ["#383838", "#686868", "#505050", "#909090", "#282828"],
+  },
+];
+
+function getUnlockedThemes(stats, profile) {
+  const unlocked = new Set(["classic", "classic-dark"]);
+  if (stats?.gamesPlayed >= 50) unlocked.add("gen-y");
+  if (stats?.bestLinesCleared >= 4) unlocked.add("dmg");
+  if (profile?.has_shared_stats) unlocked.add("broadcast");
+  if (stats?.bestScore >= 20000) unlocked.add("y2k");
+  if (stats?.hasLowScore) unlocked.add("greige");
+  return unlocked;
+}
+
 const OTP_LENGTH = 6;
 const PROFILE_NAME_LIMIT = 22;
 const EMAIL_LENGTH_LIMIT = 320;
@@ -200,6 +304,26 @@ function PencilIcon() {
   return (
     <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M13.5 3.5l3 3L6 17H3v-3L13.5 3.5z" />
+    </svg>
+  );
+}
+
+function PaletteIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 2.5a7.5 7.5 0 1 0 5.5 12.7c.9-1 .3-2.2-.8-2.2h-1.2a2 2 0 0 1 0-4h.1A7.5 7.5 0 0 0 10 2.5z" />
+      <circle cx="6.5" cy="8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="5.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="13.5" cy="8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+      <rect x="4" y="9" width="12" height="9" rx="2" />
+      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -377,7 +501,7 @@ async function buildStatsCardBlob(displayName, stats) {
 
 const SHARE_CAPTION = "My GridPop! stats";
 
-function StatsModal({ displayName, onClose, stats }) {
+function StatsModal({ displayName, onClose, onShare, stats }) {
   const title = displayName ? `Stats: ${displayName}` : "Stats";
   const [sharing, setSharing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -403,6 +527,7 @@ function StatsModal({ displayName, onClose, stats }) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
       }
+      onShare?.();
     } catch (err) {
       if (err.name !== "AbortError") console.error("Share failed", err);
     } finally {
@@ -770,6 +895,87 @@ function LeaderboardModal({
   );
 }
 
+function ThemePreviewBoard({ board, cell, cellBorder, tones, tonesHi, tonesLo, grid }) {
+  return (
+    <div className="theme-preview-board" style={{ background: board }}>
+      {grid.flat().map((tone, i) =>
+        tone === 0 ? (
+          <div
+            key={i}
+            className="theme-preview-cell theme-preview-cell--empty"
+            style={{ background: cell, borderColor: cellBorder }}
+          />
+        ) : (
+          <div key={i} className="theme-preview-cell theme-preview-cell--filled">
+            <div
+              className="theme-preview-bubble"
+              style={{
+                background: `radial-gradient(circle at 35% 28%, ${tonesHi[tone - 1]}, ${tonesLo[tone - 1]} 85%)`,
+              }}
+            />
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function ThemeModal({ activeTheme, unlockedThemes, onSelect, onClose }) {
+  return (
+    <div
+      className="how-to-play-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Themes"
+      onClick={onClose}
+    >
+      <div className="how-to-play-wrap theme-modal-wrap" onClick={(e) => e.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close themes">
+          Close
+        </button>
+        <section className="how-to-play-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>Themes</h2>
+          <div className="theme-picker">
+            {THEMES.map((theme) => {
+              const isUnlocked = unlockedThemes.has(theme.key);
+              const isActive = activeTheme === theme.key;
+              return (
+                <button
+                  key={theme.key}
+                  className={`theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}`}
+                  type="button"
+                  disabled={!isUnlocked}
+                  onClick={() => isUnlocked && onSelect(theme.key)}
+                >
+                  <ThemePreviewBoard
+                    board={theme.board}
+                    cell={theme.cell}
+                    cellBorder={theme.cellBorder}
+                    tones={theme.tones}
+                    tonesHi={theme.tonesHi}
+                    tonesLo={theme.tonesLo}
+                    grid={theme.grid}
+                  />
+                  {!isUnlocked && (
+                    <div className="theme-card-lock-overlay">
+                      <LockIcon />
+                    </div>
+                  )}
+                  <div className="theme-card-label">
+                    <span className="theme-card-name">{theme.name}{isActive ? " ✓" : ""}</span>
+                    <span className="theme-card-hint">{theme.free ? "Free" : theme.unlock}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function AuthPanel({
   authCode,
   authEmail,
@@ -789,6 +995,7 @@ function AuthPanel({
   onSaveProfile,
   onShowStats,
   onSignOut,
+  onOpenThemes,
   onVerifyCode,
   otpSentTo,
   profile,
@@ -865,6 +1072,10 @@ function AuthPanel({
                 <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onShowStats}>
                   <ChartIcon />
                   <span>Stats</span>
+                </button>
+                <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onOpenThemes}>
+                  <PaletteIcon />
+                  <span>Themes</span>
                 </button>
                 <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onEditProfile} disabled={profilePending}>
                   <PencilIcon />
@@ -1164,6 +1375,8 @@ export default function App() {
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem("gridpop-theme") ?? "classic");
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
   const [startPending, setStartPending] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
@@ -1180,6 +1393,10 @@ export default function App() {
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
 
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", activeTheme);
+  }, [activeTheme]);
 
   useEffect(() => {
     document.body.classList.toggle("is-dragging", drag !== null);
@@ -1212,7 +1429,7 @@ export default function App() {
     setAccountRunsLoading(true);
     setAccountRunsError("");
 
-    const [recentResult, topResult, countResult] = await Promise.all([
+    const [recentResult, topResult, countResult, lowScoreResult] = await Promise.all([
       supabase
         .from("scores")
         .select("id, score, created_at")
@@ -1231,6 +1448,13 @@ export default function App() {
         .select("best_combo, best_move_score, best_lines_cleared, move_count", { count: "exact" })
         .eq("user_id", session.user.id)
         .not("run_id", "is", null),
+      supabase
+        .from("scores")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .not("run_id", "is", null)
+        .lt("score", 500)
+        .limit(1),
     ]);
 
     setAccountRunsLoading(false);
@@ -1270,6 +1494,7 @@ export default function App() {
       bestMoveScore,
       bestLinesCleared,
       mostMoves,
+      hasLowScore: (lowScoreResult.data?.length ?? 0) > 0,
     });
     accountRunsReadyRef.current = true;
   });
@@ -1520,6 +1745,7 @@ export default function App() {
       setProfileLoading(false);
       setDisplayNameDraft("");
       setEditingProfile(false);
+      setActiveTheme("classic");
       return;
     }
 
@@ -1529,7 +1755,7 @@ export default function App() {
     async function loadProfile() {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, display_name")
+        .select("id, display_name, theme, has_shared_stats")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -1554,6 +1780,10 @@ export default function App() {
       setDisplayNameDraft(nextProfile?.display_name ?? "");
       setEditingProfile(false);
       setProfileLoading(false);
+      if (nextProfile?.theme) {
+        setActiveTheme(nextProfile.theme);
+        localStorage.setItem("gridpop-theme", nextProfile.theme);
+      }
     }
 
     loadProfile();
@@ -1637,6 +1867,8 @@ export default function App() {
   const rankedReady = Boolean(
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
+
+  const unlockedThemes = getUnlockedThemes(accountStats, profile);
 
   const aggregateStats = accountStats ? {
     gamesPlayed: accountStats.gamesPlayed,
@@ -2073,6 +2305,28 @@ export default function App() {
     setShowMobileAuthPanel(false);
   }
 
+  async function handleStatsShare() {
+    if (!hasSupabaseConfig || !session?.user?.id || profile?.has_shared_stats) return;
+    setProfile((p) => p ? { ...p, has_shared_stats: true } : p);
+    await supabase
+      .from("profiles")
+      .update({ has_shared_stats: true })
+      .eq("id", session.user.id);
+  }
+
+  async function handleThemeSelect(key) {
+    if (!hasSupabaseConfig || !session?.user?.id) return;
+    setActiveTheme(key);
+    localStorage.setItem("gridpop-theme", key);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ theme: key })
+      .eq("id", session.user.id);
+    if (error) {
+      console.error("Failed to save theme:", error.message);
+    }
+  }
+
   async function handleSignOut() {
     if (!hasSupabaseConfig) {
       return;
@@ -2345,6 +2599,7 @@ export default function App() {
                   onSaveProfile={handleSaveProfile}
                   onShowStats={handleShowStats}
                   onSignOut={handleSignOut}
+                  onOpenThemes={() => setShowThemeModal(true)}
                   onVerifyCode={handleVerifyCode}
                   otpSentTo={otpSentTo}
                   profile={profile}
@@ -2466,6 +2721,7 @@ export default function App() {
               onSaveProfile={handleSaveProfile}
               onShowStats={handleShowStats}
               onSignOut={handleSignOut}
+              onOpenThemes={() => { setShowMobileAuthPanel(false); setShowThemeModal(true); }}
               onVerifyCode={handleVerifyCode}
               otpSentTo={otpSentTo}
               profile={profile}
@@ -2478,10 +2734,19 @@ export default function App() {
       ) : null}
 
       {showHowToPlay ? <HowToPlayModal onClose={() => setShowHowToPlay(false)} /> : null}
+      {showThemeModal ? (
+        <ThemeModal
+          activeTheme={activeTheme}
+          unlockedThemes={unlockedThemes}
+          onSelect={handleThemeSelect}
+          onClose={() => setShowThemeModal(false)}
+        />
+      ) : null}
       {showStats ? (
         <StatsModal
           displayName={profile?.display_name ?? ""}
           onClose={() => setShowStats(false)}
+          onShare={handleStatsShare}
           stats={aggregateStats}
         />
       ) : null}
