@@ -1530,6 +1530,29 @@ export default function App() {
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
 
+  function resetClientSessionState(nextMessage = "") {
+    setSession(null);
+    setProfile(null);
+    setProfileLoading(false);
+    setDisplayNameDraft("");
+    setEditingProfile(false);
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+    setAccountRecentRuns([]);
+    setAccountTopRuns([]);
+    setAccountStats(null);
+    setAccountRunsError("");
+    setAccountRunsLoading(false);
+    accountRunsReadyRef.current = false;
+    setActiveVerifiedRun(null);
+    setAuthCode("");
+    setOtpSentTo("");
+    setStartPending(false);
+    if (nextMessage) {
+      setAuthMessage(nextMessage);
+    }
+  }
+
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", activeTheme);
@@ -1908,17 +1931,7 @@ export default function App() {
       setAuthPending(false);
 
       if (!nextSession) {
-        setProfile(null);
-        setDisplayNameDraft("");
-        setEditingProfile(false);
-        setShowDesktopAuthPanel(false);
-        setAccountRecentRuns([]);
-        setAccountTopRuns([]);
-        setAccountStats(null);
-        accountRunsReadyRef.current = false;
-        setActiveVerifiedRun(null);
-        setAuthCode("");
-        setOtpSentTo("");
+        resetClientSessionState();
       }
     });
 
@@ -2072,7 +2085,7 @@ export default function App() {
     : startAccountPending
       ? "Loading your score history..."
       : startNeedsDisplayName
-        ? "Set a display name to start ranked runs."
+        ? "Set a display name before starting."
         : "";
   const startHandleMessage = !started && !startFailed ? startBlockedMessage : "";
 
@@ -2339,7 +2352,7 @@ export default function App() {
     }
 
     if (session?.user?.id && !profile?.display_name) {
-      setAuthError("Set a display name before starting a ranked run.");
+      setAuthError("Set a display name before starting.");
       handleOpenAuthPrompt();
       return;
     }
@@ -2380,6 +2393,13 @@ export default function App() {
       setActiveVerifiedRun({ id: data.runId, moves: [] });
       setStarted(true);
       if (soundEnabled) unlockAndTestSound();
+      return;
+    }
+
+    if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+      resetClientSessionState();
+      setAuthError("Your session expired. Sign in again.");
+      handleOpenAuthPrompt();
       return;
     }
 
@@ -2662,15 +2682,23 @@ export default function App() {
     setAuthError("");
     setAuthMessage("");
 
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: "local" });
 
     if (error) {
-      setAuthError(error.message);
-      return;
+      const lower = error.message?.toLowerCase() ?? "";
+      const isStaleSessionError =
+        lower.includes("session") ||
+        lower.includes("refresh token") ||
+        lower.includes("jwt") ||
+        lower.includes("unauthorized");
+
+      if (!isStaleSessionError) {
+        setAuthError(error.message);
+        return;
+      }
     }
 
-    setActiveVerifiedRun(null);
-    setAuthMessage("Signed out.");
+    resetClientSessionState("Signed out.");
   }
 
   function handleAuthFieldChange(field, value) {
@@ -2998,7 +3026,7 @@ export default function App() {
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
                   {startFailed ? (
                     <>
-                      <p className="start-failed-msg">Couldn't reach ranked servers.</p>
+                      <p className="start-failed-msg">Couldn't reach GridPop servers.</p>
                       <button className="start-button" type="button" onClick={handleStartGame}>Retry</button>
                       <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
                     </>

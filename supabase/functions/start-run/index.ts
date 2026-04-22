@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     }
 
     if (!profile?.display_name) {
-      return json({ error: "Set a display name before starting a ranked run." }, { status: 400 });
+      return json({ error: "Set a display name before starting." }, { status: 400 });
     }
 
     const body = await req.json().catch(() => ({}));
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
     if (runError || !run) {
       console.error("Run creation failed.", runError);
-      return json({ error: "Could not start a ranked run." }, { status: 500 });
+      return json({ error: "Could not start the game right now." }, { status: 500 });
     }
 
     return json({
