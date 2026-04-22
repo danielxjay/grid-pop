@@ -39,6 +39,17 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         runtimeCaching: [
           {
+            urlPattern: /\/functions\/v1\/finish-run/,
+            handler: "NetworkOnly",
+            method: "POST",
+            options: {
+              backgroundSync: {
+                name: "finish-run-queue",
+                options: { maxRetentionTime: 55 },
+              },
+            },
+          },
+          {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
             options: {

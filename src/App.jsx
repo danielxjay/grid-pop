@@ -177,6 +177,7 @@ const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1.1";
+const PENDING_RUN_KEY = "gridpop-pending-run";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
 
@@ -1740,6 +1741,38 @@ export default function App() {
     loadAccountRuns();
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) return;
+
+    let pending;
+    try {
+      const raw = localStorage.getItem(PENDING_RUN_KEY);
+      pending = raw ? JSON.parse(raw) : null;
+    } catch {
+      return;
+    }
+
+    if (!pending?.runId || !Array.isArray(pending.moves)) return;
+
+    if (Date.now() - pending.savedAt > 24 * 60 * 60 * 1000) {
+      try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
+      return;
+    }
+
+    supabase.functions
+      .invoke("finish-run", { body: { runId: pending.runId, moves: pending.moves } })
+      .then(({ error }) => {
+        if (!error) {
+          try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
+          loadAccountRuns();
+          loadGlobalLeaderboard();
+          return;
+        }
+        if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+          try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
+        }
+      });
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !game.gameOver || !activeVerifiedRun?.id) {
@@ -1753,6 +1786,14 @@ export default function App() {
     runSubmissionInFlightRef.current = true;
     setRunSubmitting(true);
     setRunSubmissionError("");
+
+    try {
+      localStorage.setItem(PENDING_RUN_KEY, JSON.stringify({
+        runId: activeVerifiedRun.id,
+        moves: activeVerifiedRun.moves,
+        savedAt: Date.now(),
+      }));
+    } catch {}
 
     supabase.functions
       .invoke("finish-run", {
@@ -1770,6 +1811,7 @@ export default function App() {
           return;
         }
 
+        try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
         setActiveVerifiedRun(null);
         loadAccountRuns();
         loadGlobalLeaderboard();
