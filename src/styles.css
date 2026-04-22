@@ -2882,13 +2882,13 @@ h2 {
   html,
   body,
   #root {
-    height: auto;
+    height: var(--vvh, 100dvh);
     min-height: var(--vvh, 100dvh);
+    overflow: hidden;
   }
 
   body {
-    overflow-x: clip;
-    overflow-y: auto;
+    overscroll-behavior: none;
   }
 
   .app-shell {
@@ -2897,12 +2897,13 @@ h2 {
     max-width: 100%;
     margin: 0 auto;
     min-height: calc(var(--vvh, 100dvh) - var(--vv-top, 0px) - var(--vv-bottom, 0px));
-    height: auto;
+    height: calc(var(--vvh, 100dvh) - var(--vv-top, 0px) - var(--vv-bottom, 0px));
+    box-sizing: border-box;
     padding:
       calc(0.75rem + max(env(safe-area-inset-top), var(--vv-top, 0px)))
       0
       calc(1.5rem + max(env(safe-area-inset-bottom), var(--vv-bottom, 0px)));
     background: transparent;
-    overflow: visible;
+    overflow: hidden;
   }
 }
