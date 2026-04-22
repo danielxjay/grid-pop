@@ -1692,6 +1692,44 @@ h2 {
   visibility: hidden;
 }
 
+.run-submission-retry {
+  cursor: pointer;
+  background: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+}
+
+.start-failed-msg {
+  margin: 0 0 0.75rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.start-local-button {
+  cursor: pointer;
+  background: none;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.6rem 1.2rem;
+  margin-top: 0.5rem;
+}
+
+.start-local-button:active {
+  opacity: 0.75;
+}
+
 .game-over-overlay.is-new-best .game-over-score {
   color: var(--gold);
   text-shadow:

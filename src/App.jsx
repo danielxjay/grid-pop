@@ -1424,11 +1424,13 @@ export default function App() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem("gridpop-theme") ?? "classic");
+  const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
   const [startPending, setStartPending] = useState(false);
+  const [startFailed, setStartFailed] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [runSubmissionError, setRunSubmissionError] = useState("");
+  const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const accountRunsFetchInFlightRef = useRef(false);
   const accountRunsReadyRef = useRef(false);
   const globalFetchInFlightRef = useRef(false);
@@ -1610,9 +1612,13 @@ export default function App() {
       .invoke("merge-local-scores", {
         body: { scores: [{ score, createdAt: new Date().toISOString() }] },
       })
-      .then(({ error }) => {
+      .then(async ({ error }) => {
         setRunSubmitting(false);
-        if (!error) loadAccountRuns();
+        if (error) {
+          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not save your score. Please check your connection."));
+          return;
+        }
+        loadAccountRuns();
       });
   });
 
@@ -1702,13 +1708,13 @@ export default function App() {
       .then(async ({ error }) => {
         runSubmissionInFlightRef.current = false;
         setRunSubmitting(false);
-        setActiveVerifiedRun(null);
 
         if (error) {
-          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score."));
+          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
           return;
         }
 
+        setActiveVerifiedRun(null);
         loadAccountRuns();
         loadGlobalLeaderboard();
       });
@@ -1717,6 +1723,7 @@ export default function App() {
     game.gameOver,
     leaderboardOpen,
     leaderboardTab,
+    finishRunAttempt,
   ]);
 
   useEffect(() => {
@@ -1855,7 +1862,9 @@ export default function App() {
       bestLinesCleared: game.bestLinesCleared,
       moveCount: game.moveCount,
     }));
-    autoSubmitGuestRun(game.score);
+    if (!activeVerifiedRun) {
+      autoSubmitGuestRun(game.score);
+    }
 
     setDrag(null);
     setGame((current) => {
@@ -1936,7 +1945,7 @@ export default function App() {
     );
     if (!stillAvailable) {
       setActiveTheme("classic");
-      localStorage.setItem("gridpop-theme", "classic");
+      try { localStorage.setItem("gridpop-theme", "classic"); } catch {}
       if (hasSupabaseConfig && userId) {
         supabase.from("profiles").update({ theme: "classic" }).eq("id", userId);
       }
@@ -2110,6 +2119,13 @@ export default function App() {
     };
   }, [drag, handleWindowPointerMove, handleWindowPointerUp]);
 
+  function startLocalGame() {
+    setStartFailed(false);
+    setGame(createGameState(displayedBestScore));
+    setStarted(true);
+    if (soundEnabled) unlockAndTestSound();
+  }
+
   async function beginNextGame() {
     prevBestScoreRef.current = displayedBestScore;
     setGameOverPhase(null);
@@ -2117,45 +2133,40 @@ export default function App() {
     setIsNewBest(false);
     setRunSubmitting(false);
     setRunSubmissionError("");
+    setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
+    setStartFailed(false);
     setStarted(false);
     setGame(createGameState(displayedBestScore));
 
-    if (rankedReady) {
-      setStartPending(true);
-
-      const { data, error } = await supabase.functions.invoke("start-run", {
-        body: {
-          clientVersion: CLIENT_VERSION,
-        },
-      });
-
-      setStartPending(false);
-
-      if (!error && data?.runId && data?.seed) {
-        setGame(createGameState(displayedBestScore, { seed: data.seed }));
-        setActiveVerifiedRun({
-          id: data.runId,
-          moves: [],
-        });
-        setStarted(true);
-
-        if (soundEnabled) {
-          unlockAndTestSound();
-        }
-
-        return;
-      }
-
-      setAuthError(await getFunctionErrorMessage(error, "Could not start your run right now. This run will stay local."));
+    if (!rankedReady) {
+      startLocalGame();
+      return;
     }
 
-    setGame(createGameState(displayedBestScore));
-    setStarted(true);
+    setStartPending(true);
 
-    if (soundEnabled) {
-      unlockAndTestSound();
+    let data, error;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      ({ data, error } = await supabase.functions.invoke("start-run", {
+        body: { clientVersion: CLIENT_VERSION },
+      }));
+      if (!error && data?.runId && data?.seed) break;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
     }
+
+    setStartPending(false);
+
+    if (!error && data?.runId && data?.seed) {
+      setGame(createGameState(displayedBestScore, { seed: data.seed }));
+      setActiveVerifiedRun({ id: data.runId, moves: [] });
+      setStarted(true);
+      if (soundEnabled) unlockAndTestSound();
+      return;
+    }
+
+    setStartFailed(true);
   }
 
   function handleStartGame() {
@@ -2407,13 +2418,13 @@ export default function App() {
   async function handleThemeSelect(key) {
     if (!hasSupabaseConfig || !session?.user?.id) return;
     setActiveTheme(key);
-    localStorage.setItem("gridpop-theme", key);
+    try { localStorage.setItem("gridpop-theme", key); } catch {}
     const { error } = await supabase
       .from("profiles")
       .update({ theme: key })
       .eq("id", session.user.id);
     if (error) {
-      console.error("Failed to save theme:", error.message);
+      setAuthError("Theme saved locally but could not sync to your account.");
     }
   }
 
@@ -2722,9 +2733,17 @@ export default function App() {
               />
               {!started ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
-                  <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
-                    {startPending ? "Starting..." : "Start Game"}
-                  </button>
+                  {startFailed ? (
+                    <>
+                      <p className="start-failed-msg">Couldn't reach ranked servers.</p>
+                      <button className="start-button" type="button" onClick={handleStartGame}>Retry</button>
+                      <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
+                    </>
+                  ) : (
+                    <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
+                      {startPending ? "Starting..." : "Start Game"}
+                    </button>
+                  )}
                 </div>
               ) : null}
               {gameOverPhase === 'overlay' ? (
@@ -2741,7 +2760,19 @@ export default function App() {
                     <button className="start-button" type="button" onClick={handleRestart} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
                       {startPending ? "Starting..." : "Play Again"}
                     </button>
-                    {runSubmissionError ? <p className="leaderboard-empty">{runSubmissionError}</p> : null}
+                    {runSubmissionError ? (
+                      <button
+                        className="leaderboard-empty run-submission-retry"
+                        type="button"
+                        onClick={() => {
+                          runSubmissionInFlightRef.current = false;
+                          setRunSubmissionError("");
+                          setFinishRunAttempt((n) => n + 1);
+                        }}
+                      >
+                        {runSubmissionError}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
