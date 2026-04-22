@@ -1442,6 +1442,23 @@ function getSnappedPlacement(metrics, piece, clientX, clientY) {
   };
 }
 
+function matchesPreview(left, right) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.pieceId === right.pieceId &&
+    left.row === right.row &&
+    left.col === right.col &&
+    left.valid === right.valid
+  );
+}
+
 export default function App() {
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
   const [drag, setDrag] = useState(null);
@@ -1500,11 +1517,19 @@ export default function App() {
   const previewSoundRef = useRef({ key: null, at: 0 });
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
+  const dragBoardMetricsRef = useRef(null);
+  const livePreviewRef = useRef(game.preview);
+  const queuedPreviewRef = useRef(null);
+  const previewFrameRef = useRef(0);
 
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", activeTheme);
   }, [activeTheme]);
+
+  useEffect(() => {
+    livePreviewRef.current = game.preview;
+  }, [game.preview]);
 
   useEffect(() => {
     document.body.classList.toggle("is-dragging", drag !== null);
@@ -2074,7 +2099,7 @@ export default function App() {
     );
   }
 
-  const updatePreviewFromPoint = useEffectEvent((clientX, clientY, activeDrag = null) => {
+  const runPreviewAtPoint = useEffectEvent((clientX, clientY, activeDrag = null) => {
     if (!started || game.gameOver) {
       return;
     }
@@ -2098,12 +2123,15 @@ export default function App() {
       dismissZone.classList.toggle("is-hovered", isOverZone);
       if (isOverZone) {
         previewSoundRef.current.key = null;
-        startTransition(() => setGame((current) => clearPreview(current)));
+        if (livePreviewRef.current !== null) {
+          livePreviewRef.current = null;
+          startTransition(() => setGame((current) => clearPreview(current)));
+        }
         return;
       }
     }
 
-    const metrics = getBoardCellMetrics(boardElement);
+    const metrics = activeDrag ? (dragBoardMetricsRef.current ?? getBoardCellMetrics(boardElement)) : getBoardCellMetrics(boardElement);
 
     if (!metrics) {
       return;
@@ -2119,13 +2147,21 @@ export default function App() {
       ghostBounds.top > metrics.gridBottom + slopPx
     ) {
       previewSoundRef.current.key = null;
-      startTransition(() => {
-        setGame((current) => clearPreview(current));
-      });
+      if (livePreviewRef.current !== null) {
+        livePreviewRef.current = null;
+        startTransition(() => {
+          setGame((current) => clearPreview(current));
+        });
+      }
       return;
     }
 
     const preview = buildPreview(game.board, piece, row, col);
+
+    if (matchesPreview(livePreviewRef.current, preview)) {
+      return;
+    }
+
     const previewKey = `${preview.pieceId}:${preview.row}:${preview.col}:${preview.valid ? 1 : 0}`;
     const now = performance.now();
 
@@ -2137,9 +2173,39 @@ export default function App() {
       previewSoundRef.current = { key: previewKey, at: now };
     }
 
+    livePreviewRef.current = preview;
     startTransition(() => {
       setGame((current) => setPreview(current, preview));
     });
+  });
+
+  const queuePreviewFromPoint = useEffectEvent((clientX, clientY, activeDrag = null) => {
+    queuedPreviewRef.current = { clientX, clientY, activeDrag };
+
+    if (previewFrameRef.current) {
+      return;
+    }
+
+    previewFrameRef.current = window.requestAnimationFrame(() => {
+      previewFrameRef.current = 0;
+      const nextPreview = queuedPreviewRef.current;
+      queuedPreviewRef.current = null;
+
+      if (!nextPreview) {
+        return;
+      }
+
+      runPreviewAtPoint(nextPreview.clientX, nextPreview.clientY, nextPreview.activeDrag);
+    });
+  });
+
+  const cancelQueuedPreview = useEffectEvent(() => {
+    if (previewFrameRef.current) {
+      window.cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = 0;
+    }
+
+    queuedPreviewRef.current = null;
   });
 
   const handleWindowPointerMove = useEffectEvent((event) => {
@@ -2159,7 +2225,7 @@ export default function App() {
         dragGhostRef.current.style.transform = getGhostTransform(event.clientX, event.clientY);
       }
 
-      updatePreviewFromPoint(event.clientX, event.clientY, drag);
+      queuePreviewFromPoint(event.clientX, event.clientY, drag);
     }
   });
 
@@ -2171,9 +2237,13 @@ export default function App() {
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
     dismissZoneRef.current?.classList.remove("is-hovered");
+    cancelQueuedPreview();
+    runPreviewAtPoint(event.clientX, event.clientY, drag);
     const pieceId = drag.pieceId;
-    const preview = game.preview;
+    const preview = livePreviewRef.current;
     setDrag(null);
+    dragBoardMetricsRef.current = null;
+    livePreviewRef.current = null;
 
     if (preview?.valid && preview.pieceId === pieceId) {
       const nextGame = applyPlacement(game, pieceId, preview.row, preview.col);
@@ -2220,6 +2290,12 @@ export default function App() {
       window.removeEventListener("pointercancel", onPointerUp);
     };
   }, [drag, handleWindowPointerMove, handleWindowPointerUp]);
+
+  useEffect(() => () => {
+    if (previewFrameRef.current) {
+      window.cancelAnimationFrame(previewFrameRef.current);
+    }
+  }, []);
 
   function startLocalGame() {
     setStartFailed(false);
@@ -2313,15 +2389,20 @@ export default function App() {
     primeSound();
     playPickupSound();
 
-    setGame((current) => ({
-      ...current,
-      selectedPieceId: piece.id,
-    }));
+    setGame((current) => (
+      current.selectedPieceId === piece.id
+        ? current
+        : {
+            ...current,
+            selectedPieceId: piece.id,
+          }
+    ));
 
     dragPointerRef.current = {
       x: event.clientX,
       y: event.clientY,
     };
+    dragBoardMetricsRef.current = getBoardCellMetrics(boardRef.current);
 
     const nextDrag = {
       pieceId: piece.id,
@@ -2329,7 +2410,7 @@ export default function App() {
 
     previewSoundRef.current.key = null;
     setDrag(nextDrag);
-    updatePreviewFromPoint(event.clientX, event.clientY, nextDrag);
+    queuePreviewFromPoint(event.clientX, event.clientY, nextDrag);
   }
 
   function handleBoardMove(event) {
@@ -2337,7 +2418,7 @@ export default function App() {
       return;
     }
 
-    updatePreviewFromPoint(event.clientX, event.clientY);
+    queuePreviewFromPoint(event.clientX, event.clientY);
   }
 
   function handleBoardLeave() {
@@ -2345,7 +2426,9 @@ export default function App() {
       return;
     }
 
+    cancelQueuedPreview();
     previewSoundRef.current.key = null;
+    livePreviewRef.current = null;
     setGame((current) => clearPreview(current));
   }
 
@@ -2707,7 +2790,7 @@ export default function App() {
 
   const dragPiece = drag ? findPiece(game.tray, drag.pieceId) : null;
   const showDragGhost = Boolean(dragPiece);
-  const dragGhostMetrics = dragPiece ? getBoardCellMetrics(boardRef.current) : null;
+  const dragGhostMetrics = dragPiece ? dragBoardMetricsRef.current : null;
   const dragGhostStyle = {
     transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
   };
