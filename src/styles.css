@@ -42,7 +42,9 @@
   --board-filled-bg: rgba(80, 130, 190, 0.18);
   --modal-bg: linear-gradient(150deg, #f5eeff 0%, #eaf4ff 100%);
   --overlay-bg: rgba(30, 5, 70, 0.55);
-  --board-size: min(32rem, calc(100dvh - 14rem), calc(100vw - 24rem));
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --board-size: min(32rem, calc(100dvh - 14rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 24rem));
   --board-gap: 0.2rem;
   font-family: "Press Start 2P", monospace;
   line-height: 1.5;
@@ -365,7 +367,7 @@ h2 {
   z-index: 4200;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   background: var(--overlay-bg);
   backdrop-filter: blur(6px);
 }
@@ -1179,7 +1181,7 @@ h2 {
   z-index: 5000;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   background: rgba(40, 10, 80, 0.55);
   backdrop-filter: blur(3px);
 }
@@ -1712,7 +1714,7 @@ h2 {
 
 @media (max-width: 980px) {
   :root {
-    --board-size: min(calc(100dvh - 22rem), calc(100vw - 2rem), 38rem);
+    --board-size: min(calc(100dvh - 22rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 2rem), 38rem);
   }
 
   body {
@@ -1802,7 +1804,7 @@ h2 {
     display: grid;
     align-items: start;
     justify-items: center;
-    padding: 3.3rem 0.5rem 0.75rem;
+    padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
     background: rgba(40, 10, 80, 0.42);
     backdrop-filter: blur(4px);
   }
@@ -1845,7 +1847,7 @@ h2 {
 @media (max-width: 700px) {
   :root {
     --board-gap: 0.15rem;
-    --board-size: clamp(14rem, calc(100dvh - 20rem), calc(100vw - 2rem));
+    --board-size: clamp(14rem, calc(100dvh - 20rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 2rem));
   }
 
   body {
@@ -1902,7 +1904,7 @@ h2 {
     display: grid;
     align-items: start;
     justify-items: center;
-    padding: 3.3rem 0.5rem 0.75rem;
+    padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
     background: rgba(40, 10, 80, 0.42);
     backdrop-filter: blur(4px);
   }
@@ -2117,7 +2119,7 @@ h2 {
 
 @media (max-width: 980px) and (min-width: 640px) and (orientation: landscape) {
   :root {
-    --board-size: min(calc(100dvh - 8rem), calc(100vw - 20rem), 30rem);
+    --board-size: min(calc(100dvh - 8rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 20rem), 30rem);
   }
 
   .app-shell {
@@ -2685,4 +2687,39 @@ h2 {
   color: rgba(255, 255, 255, 0.75);
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
   line-height: 1.4;
+}
+
+/* ── PWA standalone mode ─────────────────────────────────────────────────── */
+@media (display-mode: standalone) {
+  html {
+    background-color: var(--bg-bottom);
+    min-height: 100dvh;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: min(1200px, calc(100% - 2rem));
+    margin: 0 auto;
+    height: auto;
+    min-height: 0;
+    padding: max(3.75rem, env(safe-area-inset-top)) 0 max(1.5rem, env(safe-area-inset-bottom));
+    background:
+      linear-gradient(rgba(160, 120, 255, 0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(160, 120, 255, 0.13) 1px, transparent 1px),
+      radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
+      radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
+      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    background-size: 2rem 2rem, 2rem 2rem, auto, auto, auto;
+  }
 }

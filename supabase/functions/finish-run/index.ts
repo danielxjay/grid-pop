@@ -305,7 +305,8 @@ function applyPlacement(game: GameState, pieceId: number, row: number, col: numb
 
   const linesCleared = countLines(clearedIndices);
   const comboMultiplier = Math.max(1, combo + 1);
-  const score = game.score + blocksPlaced * 10 + linesCleared * 120 * comboMultiplier;
+  const lineScore = (linesCleared * (linesCleared + 1) / 2) * 120;
+  const score = game.score + blocksPlaced * 10 + lineScore * comboMultiplier;
   const bestScore = Math.max(score, game.bestScore);
   let tray = game.tray.map((entry) => (entry?.id === pieceId ? null : entry));
   let nextPieceId = game.nextPieceId;
