@@ -13,7 +13,7 @@ export default defineConfig({
       includeAssets: ["favicon.ico", "favicon.svg", "og.png", "apple-icon-*.png", "favicon-*.png"],
       manifest: {
         name: "GridPop!",
-        short_name: "GridPop",
+        short_name: "GridPop!",
         description: "Drop & Pop",
         theme_color: "#2a0a50",
         background_color: "#2a0a50",
