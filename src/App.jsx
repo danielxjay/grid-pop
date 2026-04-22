@@ -785,6 +785,7 @@ function LeaderboardModal({
   personalError,
   personalLabel,
   personalLoading,
+  personalRunCount,
   personalRuns,
   personalTopRuns,
   personalVisibleCount,
@@ -883,7 +884,7 @@ function LeaderboardModal({
                   {personalRuns.map((run, index) =>
                     index < personalVisibleCount ? (
                       <li key={`personal-visible-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--pop">
-                        <span className="leaderboard-rank">{String(index + 1).padStart(2, "0")}</span>
+                        <span className="leaderboard-rank">{String(Math.max(1, personalRunCount - index)).padStart(2, "0")}</span>
                         <strong className="leaderboard-score">{run.score}</strong>
                         <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
                       </li>
@@ -909,9 +910,8 @@ function LeaderboardModal({
         ) : (
           <div key="global-panel" className="leaderboard-panel">
             <section className="leaderboard-section leaderboard-section--hero">
-              <p className="section-label">Best Run</p>
               {globalLoading ? (
-                <div className="leaderboard-hero leaderboard-hero--skeleton" aria-hidden="true">
+                <div className="leaderboard-hero leaderboard-hero--global leaderboard-hero--skeleton" aria-hidden="true">
                   <span className="leaderboard-hero-rank">&nbsp;</span>
                   <strong className="leaderboard-hero-score">&nbsp;</strong>
                   <span className="leaderboard-hero-name">&nbsp;</span>
@@ -2723,6 +2723,7 @@ export default function App() {
   const personalLabel = session ? "My Runs" : "This Device";
   const personalLoading = session ? accountRunsLoading : false;
   const personalError = session ? accountRunsError : "";
+  const personalRunCount = session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length;
 
   useEffect(() => {
     const nextPersonalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
@@ -3023,6 +3024,7 @@ export default function App() {
         personalError={personalError}
         personalLabel={personalLabel}
         personalLoading={personalLoading}
+        personalRunCount={personalRunCount}
         personalRuns={personalRuns}
         personalTopRuns={personalTopRuns}
         personalVisibleCount={personalVisibleCount}
