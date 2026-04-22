@@ -74,10 +74,22 @@ body,
   width: 100%;
 }
 
+html,
+body {
+  background-color: var(--bg-bottom);
+}
+
 body {
   min-width: 0;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   overflow-x: clip;
   overflow-y: auto;
+  background:
+    radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
+    radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
+    linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
 }
 
 body.is-dragging {
@@ -2860,34 +2872,37 @@ h2 {
 /* ── PWA standalone mode ─────────────────────────────────────────────────── */
 @media (display-mode: standalone) {
   html {
-    background-color: var(--bg-bottom);
-    min-height: 100dvh;
+    background:
+      radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
+      radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
+      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    min-height: var(--vvh, 100dvh);
   }
 
   html,
   body,
   #root {
-    height: 100%;
-    overflow: hidden;
+    height: auto;
+    min-height: var(--vvh, 100dvh);
+  }
+
+  body {
+    overflow-x: clip;
+    overflow-y: auto;
   }
 
   .app-shell {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
     width: min(1200px, calc(100% - 2rem));
+    max-width: 100%;
     margin: 0 auto;
+    min-height: calc(var(--vvh, 100dvh) - var(--vv-top, 0px) - var(--vv-bottom, 0px));
     height: auto;
-    min-height: 0;
-    padding: max(3.75rem, env(safe-area-inset-top)) 0 max(1.5rem, env(safe-area-inset-bottom));
-    background:
-      linear-gradient(rgba(160, 120, 255, 0.13) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(160, 120, 255, 0.13) 1px, transparent 1px),
-      radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
-      radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
-      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-    background-size: 2rem 2rem, 2rem 2rem, auto, auto, auto;
+    padding:
+      calc(0.75rem + max(env(safe-area-inset-top), var(--vv-top, 0px)))
+      0
+      calc(1.5rem + max(env(safe-area-inset-bottom), var(--vv-bottom, 0px)));
+    background: transparent;
+    overflow: visible;
   }
 }
