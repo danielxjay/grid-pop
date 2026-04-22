@@ -795,7 +795,9 @@ function LeaderboardModal({
   personalLoading,
   personalRunCount,
   personalRuns,
+  personalRunNumbers,
   personalTopRuns,
+  personalTopRunNumbers,
   personalVisibleCount,
   signedIn,
   onClose,
@@ -868,8 +870,10 @@ function LeaderboardModal({
                       role="listitem"
                     >
                       <span className="leaderboard-podium-rank">
-                        {index + 1}
-                        {index === 0 ? "st" : index === 1 ? "nd" : "rd"}
+                        {String(
+                          personalTopRunNumbers[String(run.id)] ??
+                          Math.max(1, personalRunCount - index)
+                        ).padStart(2, "0")}
                       </span>
                       <strong className="leaderboard-podium-score">{run.score}</strong>
                       <span className="leaderboard-meta">{formatRunDate(run.createdAt)}</span>
@@ -892,7 +896,12 @@ function LeaderboardModal({
                   {personalRuns.map((run, index) =>
                     index < personalVisibleCount ? (
                       <li key={`personal-visible-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--pop">
-                        <span className="leaderboard-rank">{String(Math.max(1, personalRunCount - index)).padStart(2, "0")}</span>
+                        <span className="leaderboard-rank">
+                          {String(
+                            personalRunNumbers[String(run.id)] ??
+                            Math.max(1, personalRunCount - index)
+                          ).padStart(2, "0")}
+                        </span>
                         <strong className="leaderboard-score">{run.score}</strong>
                         <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
                       </li>
@@ -1491,6 +1500,7 @@ export default function App() {
   const [localRuns, setLocalRuns] = useState(() => loadRunHistory());
   const [accountRecentRuns, setAccountRecentRuns] = useState([]);
   const [accountTopRuns, setAccountTopRuns] = useState([]);
+  const [accountRunNumbers, setAccountRunNumbers] = useState({});
   const [accountRunsLoading, setAccountRunsLoading] = useState(false);
   const [accountRunsError, setAccountRunsError] = useState("");
   const [accountStats, setAccountStats] = useState(null);
@@ -1540,6 +1550,7 @@ export default function App() {
     setShowMobileAuthPanel(false);
     setAccountRecentRuns([]);
     setAccountTopRuns([]);
+    setAccountRunNumbers({});
     setAccountStats(null);
     setAccountRunsError("");
     setAccountRunsLoading(false);
@@ -1580,6 +1591,7 @@ export default function App() {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
+      setAccountRunNumbers({});
       setAccountStats(null);
       setAccountRunsError("");
       return;
@@ -1593,7 +1605,7 @@ export default function App() {
     setAccountRunsLoading(true);
     setAccountRunsError("");
 
-    const [recentResult, topResult, countResult, lowScoreResult] = await Promise.all([
+    const [recentResult, topResult, verifiedStatsResult, lowScoreResult, numberingResult] = await Promise.all([
       supabase
         .from("scores")
         .select("id, score, created_at")
@@ -1609,7 +1621,7 @@ export default function App() {
         .limit(PERSONAL_TOP_RUN_LIMIT),
       supabase
         .from("scores")
-        .select("best_combo, best_move_score, best_lines_cleared, move_count", { count: "exact" })
+        .select("id, created_at, best_combo, best_move_score, best_lines_cleared, move_count", { count: "exact" })
         .eq("user_id", session.user.id)
         .not("run_id", "is", null),
       supabase
@@ -1619,14 +1631,20 @@ export default function App() {
         .not("run_id", "is", null)
         .lt("score", 500)
         .limit(1),
+      supabase
+        .from("scores")
+        .select("id, created_at", { count: "exact" })
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false }),
     ]);
 
     setAccountRunsLoading(false);
     accountRunsFetchInFlightRef.current = false;
 
-    if (recentResult.error || topResult.error) {
+    if (recentResult.error || topResult.error || numberingResult.error) {
       setAccountRecentRuns([]);
       setAccountTopRuns([]);
+      setAccountRunNumbers({});
       setAccountStats(null);
       setAccountRunsError("Could not load your runs right now.");
       return;
@@ -1646,13 +1664,20 @@ export default function App() {
         createdAt: run.created_at,
       }))
     );
-    const statsRows = countResult.data ?? [];
+    const statsRows = verifiedStatsResult.data ?? [];
+    const numberingRows = numberingResult.data ?? [];
+    const accountRunNumberMap = Object.fromEntries(
+      [...numberingRows]
+        .sort((left, right) => String(right.created_at ?? "").localeCompare(String(left.created_at ?? "")))
+        .map((run, index) => [String(run.id), Math.max(1, (numberingResult.count ?? numberingRows.length) - index)])
+    );
+    setAccountRunNumbers(accountRunNumberMap);
     const bestCombo = statsRows.reduce((max, r) => Math.max(max, r.best_combo ?? 0), 0);
     const bestMoveScore = statsRows.reduce((max, r) => Math.max(max, r.best_move_score ?? 0), 0);
     const bestLinesCleared = statsRows.reduce((max, r) => Math.max(max, r.best_lines_cleared ?? 0), 0);
     const mostMoves = statsRows.reduce((max, r) => Math.max(max, r.move_count ?? 0), 0);
     setAccountStats({
-      gamesPlayed: countResult.count ?? 0,
+      gamesPlayed: numberingResult.count ?? 0,
       bestScore: topResult.data?.[0]?.score ?? 0,
       bestCombo,
       bestMoveScore,
@@ -1786,9 +1811,10 @@ export default function App() {
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
-      setAccountRecentRuns([]);
-      setAccountTopRuns([]);
-      setAccountStats(null);
+    setAccountRecentRuns([]);
+    setAccountTopRuns([]);
+    setAccountRunNumbers({});
+    setAccountStats(null);
       setAccountRunsError("");
       setAccountRunsLoading(false);
       return;
@@ -2865,11 +2891,16 @@ export default function App() {
   const localTopRuns = [...localRuns]
     .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
     .slice(0, PERSONAL_TOP_RUN_LIMIT);
+  const localRunNumbers = Object.fromEntries(
+    localRuns.map((run, index) => [String(run.id), Math.max(1, localRuns.length - index)])
+  );
   const displayedBestScore = session
     ? Math.max(game.score, accountBestScore)
     : game.bestScore;
   const personalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
   const personalTopRuns = session ? accountTopRuns : localTopRuns;
+  const personalRunNumbers = session ? accountRunNumbers : localRunNumbers;
+  const personalTopRunNumbers = session ? accountRunNumbers : localRunNumbers;
   const personalLabel = session ? "My Runs" : "This Device";
   const personalLoading = session ? accountRunsLoading : false;
   const personalError = session ? accountRunsError : "";
@@ -3184,7 +3215,9 @@ export default function App() {
         personalLoading={personalLoading}
         personalRunCount={personalRunCount}
         personalRuns={personalRuns}
+        personalRunNumbers={personalRunNumbers}
         personalTopRuns={personalTopRuns}
+        personalTopRunNumbers={personalTopRunNumbers}
         personalVisibleCount={personalVisibleCount}
         signedIn={Boolean(session)}
         onClose={handleCloseLeaderboard}

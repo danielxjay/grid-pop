@@ -416,6 +416,7 @@ h2 {
 .leaderboard-modal {
   position: relative;
   width: 100%;
+  min-width: 0;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -506,14 +507,17 @@ h2 {
   align-content: start;
   gap: 0;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 1rem;
 }
 
 .leaderboard-section {
   display: grid;
   gap: 0.55rem;
+  min-width: 0;
 }
 
 .leaderboard-section + .leaderboard-section {
@@ -566,11 +570,13 @@ h2 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
+  min-width: 0;
 }
 
 .leaderboard-podium-card {
   display: grid;
   gap: 0.18rem;
+  min-width: 0;
   justify-items: center;
   padding: 0.75rem 0.5rem;
   border-radius: 0.6rem;
@@ -637,12 +643,14 @@ h2 {
   padding: 0;
   display: grid;
   gap: 0.45rem;
+  min-width: 0;
 }
 
 .leaderboard-row {
   display: grid;
   grid-template-columns: 2rem 4.5rem minmax(0, 1fr);
   gap: 1rem;
+  min-width: 0;
   align-items: center;
   padding: 0.6rem 0.75rem;
   border-radius: 0.55rem;
