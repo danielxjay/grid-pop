@@ -726,6 +726,14 @@ function PlayerHandle({ displayName }) {
   );
 }
 
+function PlayerHandleStatus({ message }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="player-handle player-handle--status">{message}</p>;
+}
+
 function ProfileTrigger({ active, onClick }) {
   return (
     <button
@@ -2054,6 +2062,19 @@ export default function App() {
   const rankedReady = Boolean(
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
+  const startAuthPending = Boolean(hasSupabaseConfig && !authReady);
+  const startProfilePending = Boolean(session?.user?.id && profileLoading);
+  const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
+  const startNeedsDisplayName = Boolean(session?.user?.id && !profileLoading && !profile?.display_name);
+  const startBlocked = Boolean(startPending || startAuthPending || startProfilePending || startAccountPending);
+  const startBlockedMessage = startAuthPending || startProfilePending
+    ? "Loading your account..."
+    : startAccountPending
+      ? "Loading your score history..."
+      : startNeedsDisplayName
+        ? "Set a display name to start ranked runs."
+        : "";
+  const startHandleMessage = !started && !startFailed ? startBlockedMessage : "";
 
   const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id);
 
@@ -2305,6 +2326,24 @@ export default function App() {
   }
 
   async function beginNextGame() {
+    if (hasSupabaseConfig && !authReady) {
+      return;
+    }
+
+    if (session?.user?.id && profileLoading) {
+      return;
+    }
+
+    if (session?.user?.id && !accountRunsReadyRef.current) {
+      return;
+    }
+
+    if (session?.user?.id && !profile?.display_name) {
+      setAuthError("Set a display name before starting a ranked run.");
+      handleOpenAuthPrompt();
+      return;
+    }
+
     prevBestScoreRef.current = displayedBestScore;
     setGameOverPhase(null);
     setFillCells([]);
@@ -2892,7 +2931,11 @@ export default function App() {
               <ScoreboardTrigger onClick={() => handleOpenLeaderboard("personal")} />
             </div>
             <div className="mobile-player-handle">
-              <PlayerHandle displayName={profile?.display_name ?? null} />
+              {startHandleMessage ? (
+                <PlayerHandleStatus message={startHandleMessage} />
+              ) : (
+                <PlayerHandle displayName={profile?.display_name ?? null} />
+              )}
             </div>
             <div className="desktop-auth-panel">
               <ProfileTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
@@ -2931,7 +2974,11 @@ export default function App() {
           <section className="playfield">
             <div className="playfield-header">
               <div className="desktop-player-handle">
-                <PlayerHandle displayName={profile?.display_name ?? null} />
+                {startHandleMessage ? (
+                  <PlayerHandleStatus message={startHandleMessage} />
+                ) : (
+                  <PlayerHandle displayName={profile?.display_name ?? null} />
+                )}
               </div>
             </div>
             <div className="board-container">
@@ -2956,7 +3003,7 @@ export default function App() {
                       <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
                     </>
                   ) : (
-                    <button className="start-button" type="button" onClick={handleStartGame} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
+                    <button className="start-button" type="button" onClick={handleStartGame} disabled={startBlocked}>
                       {startPending ? "Starting..." : "Start Game"}
                     </button>
                   )}

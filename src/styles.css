@@ -1770,6 +1770,11 @@ h2 {
   text-align: center;
 }
 
+.player-handle--status {
+  width: 100%;
+  text-align: center;
+}
+
 .start-local-button {
   cursor: pointer;
   background: none;
