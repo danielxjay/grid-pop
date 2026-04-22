@@ -296,7 +296,8 @@ h2 {
   line-height: 1;
 }
 
-.profile-trigger {
+.profile-trigger,
+.theme-trigger {
   width: 100%;
   max-width: 10.5rem;
   min-height: 2.85rem;
@@ -315,7 +316,8 @@ h2 {
   justify-self: center;
 }
 
-.profile-trigger span {
+.profile-trigger span,
+.theme-trigger span {
   font-size: 0.58rem;
   letter-spacing: 0.04em;
 }
@@ -330,6 +332,24 @@ h2 {
   background: color-mix(in srgb, var(--accent2) 14%, transparent);
   border-color: var(--accent2);
   color: var(--accent2);
+}
+
+.theme-trigger {
+  border-color: color-mix(in srgb, var(--accent) 80%, transparent);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.theme-trigger:hover,
+.theme-trigger:focus-visible {
+  transform: translate(-1px, -1px);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.theme-trigger.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .scoreboard-trigger {
@@ -1108,22 +1128,37 @@ h2 {
   transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease, color 140ms ease;
 }
 
+.hero-auth-button,
+.hero-theme-button,
+.hero-info-button,
 .hero-sound-button {
   position: absolute;
   top: 50%;
-  right: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  min-width: 2.2rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transform: translateY(-50%);
+}
+
+.hero-sound-button {
+  right: 0;
 }
 
 .hero-auth-button {
   display: none;
-  position: absolute;
-  top: 50%;
   left: 0;
-  width: 2.2rem;
-  min-width: 2.2rem;
-  padding: 0;
-  transform: translateY(-50%);
+}
+
+.hero-theme-button {
+  display: none;
+  left: 2.6rem;
+  background: color-mix(in srgb, var(--accent2) 15%, transparent);
+  border-color: var(--accent2);
+  color: var(--accent2);
 }
 
 .sound-icon-button:hover,
@@ -1138,7 +1173,9 @@ h2 {
 }
 
 .hero-auth-button:hover,
-.hero-auth-button:focus-visible {
+.hero-auth-button:focus-visible,
+.hero-theme-button:hover,
+.hero-theme-button:focus-visible {
   transform: translateY(calc(-50% - 1px));
 }
 
@@ -1149,13 +1186,7 @@ h2 {
 }
 
 .hero-info-button {
-  position: absolute;
-  top: 50%;
   right: 2.6rem;
-  width: 2.2rem;
-  min-width: 2.2rem;
-  padding: 0;
-  transform: translateY(-50%);
   background: color-mix(in srgb, var(--accent2) 15%, transparent);
   border-color: var(--accent2);
   color: var(--accent2);
@@ -1830,9 +1861,10 @@ h2 {
 
   .hero-auth-button {
     display: flex;
-    width: 2.2rem;
-    min-width: 2.2rem;
-    padding: 0;
+  }
+
+  .hero-theme-button {
+    display: flex;
   }
 
   .mobile-auth-overlay {
@@ -2011,9 +2043,20 @@ h2 {
 
   .hero-auth-button {
     display: flex;
+  }
+
+  .hero-theme-button {
+    display: flex;
+    left: 2.3rem;
+  }
+
+  .hero-auth-button,
+  .hero-theme-button,
+  .hero-info-button,
+  .hero-sound-button {
     width: 1.9rem;
+    height: 1.9rem;
     min-width: 1.9rem;
-    padding: 0;
   }
 
   .hero-sound-button,
@@ -2224,12 +2267,14 @@ h2 {
     margin-bottom: 0.35rem;
   }
 
-  .profile-trigger {
+  .profile-trigger,
+  .theme-trigger {
     max-width: 9rem;
     min-height: 2.4rem;
   }
 
-  .profile-trigger span {
+  .profile-trigger span,
+  .theme-trigger span {
     font-size: 0.52rem;
   }
 
@@ -2645,13 +2690,36 @@ h2 {
   border-color: var(--accent);
 }
 
+.theme-card.is-locked:hover {
+  border-color: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
 .theme-card.is-active {
   border-color: var(--accent);
 }
 
 .theme-card.is-locked {
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.68;
+  border-color: color-mix(in srgb, var(--muted) 30%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.theme-card.is-locked .theme-preview-board {
+  filter: saturate(0.7) brightness(0.78) contrast(0.94);
+}
+
+.theme-card.is-guest-locked {
+  opacity: 1;
+}
+
+.theme-card.is-guest-locked .theme-preview-board {
+  filter: saturate(0.35) brightness(0.6) contrast(0.9);
+}
+
+.theme-card.is-guest-locked .theme-card-label {
+  filter: grayscale(1) blur(1.2px);
+  opacity: 0.2;
 }
 
 /* Mini board preview */
@@ -2685,18 +2753,65 @@ h2 {
     inset 0 -2px 3px rgba(0, 0, 0, 0.18);
 }
 
+.theme-card-obscured-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(18, 14, 30, 0.26), rgba(18, 14, 30, 0.56)),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.04) 0 10px,
+      rgba(0, 0, 0, 0.14) 10px 20px
+    );
+  backdrop-filter: blur(5px) saturate(0.45);
+}
+
 /* Big lock glyph centred over the preview for locked themes */
 .theme-card-lock-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 2rem;
+  gap: 0.55rem;
+  padding: 0.9rem 0.9rem 2.8rem;
   font-size: 2.4rem;
   color: rgba(255, 255, 255, 0.9);
   pointer-events: none;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+}
+
+.theme-card-lock-overlay--guest {
+  pointer-events: auto;
+}
+
+.theme-card-lock-cta-button {
+  min-height: 2.1rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.45rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.24);
+  font: inherit;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--text);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease;
+}
+
+.theme-card-lock-cta-button:hover,
+.theme-card-lock-cta-button:focus-visible {
+  transform: translate(-1px, -1px);
+  border-color: #fff;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.28);
 }
 
 /* Name + hint overlay — bottom of card with gradient shadow */
@@ -2705,6 +2820,7 @@ h2 {
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: 0;
   padding: 2rem 0.75rem 0.65rem;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);
   display: flex;

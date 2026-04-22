@@ -151,6 +151,8 @@ const THEMES = [
   },
 ];
 
+const FREE_THEME_KEYS = new Set(THEMES.filter((theme) => theme.free).map((theme) => theme.key));
+
 function getUnlockedThemes(stats, profile, globalRuns = [], userId = null) {
   const unlocked = new Set(["classic", "classic-dark"]);
   if (stats?.gamesPlayed >= 50) unlocked.add("gen-y");
@@ -737,6 +739,33 @@ function ProfileTrigger({ active, onClick }) {
   );
 }
 
+function ThemeTrigger({ active, mobile = false, onClick }) {
+  if (mobile) {
+    return (
+      <button
+        className="sound-icon-button hero-theme-button is-active"
+        type="button"
+        onClick={onClick}
+        aria-label={active ? "Close themes" : "Open themes"}
+      >
+        <PaletteIcon />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className={`theme-trigger${active ? " is-active" : ""}`}
+      type="button"
+      onClick={onClick}
+      aria-label={active ? "Close themes" : "Open themes"}
+    >
+      <PaletteIcon />
+      <span>Themes</span>
+    </button>
+  );
+}
+
 function ScoreboardTrigger({ onClick }) {
   return (
     <button className="scoreboard-trigger" type="button" onClick={onClick}>
@@ -966,7 +995,14 @@ function ThemePreviewBoard({ board, cell, cellBorder, tones, tonesHi, tonesLo, g
   );
 }
 
-function ThemeModal({ activeTheme, unlockedThemes, onSelect, onClose }) {
+function getThemeUnlockHint(theme) {
+  if (theme.free) return "Free";
+  if (theme.condition === "rank1") return "Hold the #1 spot";
+  if (theme.condition === "top10") return "Hold a top 10 spot";
+  return theme.unlock;
+}
+
+function ThemeModal({ activeTheme, signedIn, unlockedThemes, onGuestSignIn, onSelect, onClose }) {
   return (
     <div
       className="how-to-play-overlay"
@@ -986,34 +1022,58 @@ function ThemeModal({ activeTheme, unlockedThemes, onSelect, onClose }) {
             {THEMES.map((theme) => {
               const isUnlocked = unlockedThemes.has(theme.key);
               const isActive = activeTheme === theme.key;
+              const cardClassName = `theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}${!isUnlocked && !signedIn ? " is-guest-locked" : ""}`;
+              const cardPreview = (
+                <ThemePreviewBoard
+                  board={theme.board}
+                  cell={theme.cell}
+                  cellBorder={theme.cellBorder}
+                  tones={theme.tones}
+                  tonesHi={theme.tonesHi}
+                  tonesLo={theme.tonesLo}
+                  grid={theme.grid}
+                />
+              );
+              const cardLabel = (
+                <div className="theme-card-label">
+                  <span className="theme-card-name">{theme.name}{isActive ? " ✓" : ""}</span>
+                  <span className="theme-card-hint">
+                    {getThemeUnlockHint(theme)}
+                  </span>
+                </div>
+              );
+
+              if (!isUnlocked && !signedIn) {
+                return (
+                  <div key={theme.key} className={cardClassName} role="group" aria-label={`${theme.name} theme locked`}>
+                    {cardPreview}
+                    <div className="theme-card-obscured-layer" aria-hidden="true" />
+                    <div className="theme-card-lock-overlay theme-card-lock-overlay--guest">
+                      <LockIcon />
+                      <button className="theme-card-lock-cta-button" type="button" onClick={onGuestSignIn}>
+                        Sign in to view
+                      </button>
+                    </div>
+                    {cardLabel}
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={theme.key}
-                  className={`theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}`}
+                  className={cardClassName}
                   type="button"
                   disabled={!isUnlocked}
                   onClick={() => isUnlocked && onSelect(theme.key)}
                 >
-                  <ThemePreviewBoard
-                    board={theme.board}
-                    cell={theme.cell}
-                    cellBorder={theme.cellBorder}
-                    tones={theme.tones}
-                    tonesHi={theme.tonesHi}
-                    tonesLo={theme.tonesLo}
-                    grid={theme.grid}
-                  />
+                  {cardPreview}
                   {!isUnlocked && (
                     <div className="theme-card-lock-overlay">
                       <LockIcon />
                     </div>
                   )}
-                  <div className="theme-card-label">
-                    <span className="theme-card-name">{theme.name}{isActive ? " ✓" : ""}</span>
-                    <span className="theme-card-hint">
-                      {theme.free ? "Free" : theme.condition === "rank1" ? "Hold the #1 spot" : theme.condition === "top10" ? "Hold a top 10 spot" : theme.unlock}
-                    </span>
-                  </div>
+                  {cardLabel}
                 </button>
               );
             })}
@@ -1043,7 +1103,6 @@ function AuthPanel({
   onSaveProfile,
   onShowStats,
   onSignOut,
-  onOpenThemes,
   onVerifyCode,
   otpSentTo,
   profile,
@@ -1120,10 +1179,6 @@ function AuthPanel({
                 <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onShowStats}>
                   <ChartIcon />
                   <span>Stats</span>
-                </button>
-                <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onOpenThemes}>
-                  <PaletteIcon />
-                  <span>Themes</span>
                 </button>
                 <button className="auth-secondary-button auth-secondary-button--icon" type="button" onClick={onEditProfile} disabled={profilePending}>
                   <PencilIcon />
@@ -1803,7 +1858,11 @@ export default function App() {
       setProfileLoading(false);
       setDisplayNameDraft("");
       setEditingProfile(false);
-      setActiveTheme("classic");
+      setActiveTheme((current) => {
+        const nextTheme = FREE_THEME_KEYS.has(current) ? current : "classic";
+        try { localStorage.setItem("gridpop-theme", nextTheme); } catch {}
+        return nextTheme;
+      });
       return;
     }
 
@@ -2416,9 +2475,11 @@ export default function App() {
   }
 
   async function handleThemeSelect(key) {
-    if (!hasSupabaseConfig || !session?.user?.id) return;
+    if (!unlockedThemes.has(key)) return;
     setActiveTheme(key);
+    setShowThemeModal(false);
     try { localStorage.setItem("gridpop-theme", key); } catch {}
+    if (!hasSupabaseConfig || !session?.user?.id) return;
     const { error } = await supabase
       .from("profiles")
       .update({ theme: key })
@@ -2526,6 +2587,33 @@ export default function App() {
     setShowDesktopAuthPanel(false);
     setShowMobileAuthPanel(false);
     setShowStats(true);
+  }
+
+  function handleOpenThemes() {
+    resetProfilePanelState();
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+    setShowThemeModal(true);
+  }
+
+  function handleOpenAuthPrompt() {
+    resetProfilePanelState();
+    setShowThemeModal(false);
+    if (window.matchMedia("(max-width: 980px)").matches) {
+      setShowDesktopAuthPanel(false);
+      setShowMobileAuthPanel(true);
+      return;
+    }
+    setShowMobileAuthPanel(false);
+    setShowDesktopAuthPanel(true);
+  }
+
+  function handleToggleThemeModal() {
+    if (showThemeModal) {
+      setShowThemeModal(false);
+      return;
+    }
+    handleOpenThemes();
   }
 
   function handleEditProfile() {
@@ -2646,6 +2734,7 @@ export default function App() {
           >
             <UserIcon />
           </button>
+          <ThemeTrigger active={showThemeModal} mobile onClick={handleToggleThemeModal} />
           <button
             className="sound-icon-button hero-info-button"
             type="button"
@@ -2680,6 +2769,7 @@ export default function App() {
             </div>
             <div className="desktop-auth-panel">
               <ProfileTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
+              <ThemeTrigger active={showThemeModal} onClick={handleToggleThemeModal} />
               {showDesktopAuthPanel ? (
                 <AuthPanel
                   authCode={authCode}
@@ -2700,7 +2790,6 @@ export default function App() {
                   onSaveProfile={handleSaveProfile}
                   onShowStats={handleShowStats}
                   onSignOut={handleSignOut}
-                  onOpenThemes={() => setShowThemeModal(true)}
                   onVerifyCode={handleVerifyCode}
                   otpSentTo={otpSentTo}
                   profile={profile}
@@ -2849,7 +2938,6 @@ export default function App() {
               onSaveProfile={handleSaveProfile}
               onShowStats={handleShowStats}
               onSignOut={handleSignOut}
-              onOpenThemes={() => { setShowMobileAuthPanel(false); setShowThemeModal(true); }}
               onVerifyCode={handleVerifyCode}
               otpSentTo={otpSentTo}
               profile={profile}
@@ -2865,7 +2953,9 @@ export default function App() {
       {showThemeModal ? (
         <ThemeModal
           activeTheme={activeTheme}
+          signedIn={Boolean(session?.user?.id)}
           unlockedThemes={unlockedThemes}
+          onGuestSignIn={handleOpenAuthPrompt}
           onSelect={handleThemeSelect}
           onClose={() => setShowThemeModal(false)}
         />
