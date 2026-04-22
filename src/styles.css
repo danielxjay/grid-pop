@@ -492,11 +492,33 @@ h2 {
 .leaderboard-panel {
   display: grid;
   align-content: start;
-  gap: 0.9rem;
+  gap: 0;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-bottom: 1rem;
+}
+
+.leaderboard-section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.leaderboard-section + .leaderboard-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+}
+
+.leaderboard-section--hero {
+  justify-items: center;
+  text-align: center;
+}
+
+.leaderboard-section + .leaderboard-section.leaderboard-section--global-list {
+  margin-top: 0.7rem;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .leaderboard-disclaimer {
@@ -520,17 +542,6 @@ h2 {
 
 .leaderboard-row--pop {
   animation: leaderboard-row-pop 200ms ease-out both;
-}
-
-.leaderboard-best,
-.leaderboard-list-wrap {
-  display: grid;
-  gap: 0.55rem;
-  padding: 0.85rem;
-  border-radius: 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
 }
 
 .leaderboard-best-score {
@@ -557,11 +568,14 @@ h2 {
   box-shadow: 2px 2px 0 color-mix(in srgb, var(--muted) 10%, transparent);
 }
 
-.leaderboard-podium-card.is-best,
-.leaderboard-best--global {
+.leaderboard-hero--global {
+  width: 100%;
+  padding: 0.95rem 0.85rem;
+  border-radius: 0.75rem;
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 85%, transparent), 3px 3px 0 color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .leaderboard-podium-rank {

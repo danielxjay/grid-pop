@@ -847,14 +847,14 @@ function LeaderboardModal({
 
         {!globalEnabled || activeTab === "personal" ? (
           <div key="personal-panel" className="leaderboard-panel">
-            <div className="leaderboard-list-wrap">
+            <section className="leaderboard-section">
               <p className="section-label">Best Runs</p>
               {bestPersonalRun ? (
                 <div className="leaderboard-podium" role="list" aria-label={`${personalLabel} best runs`}>
                   {personalTopRuns.map((run, index) => (
                     <div
                       key={`${run.id ?? run.createdAt}-${run.score}-top-${index}`}
-                      className={`leaderboard-podium-card${index === 0 ? " is-best" : ""}`}
+                      className="leaderboard-podium-card"
                       role="listitem"
                     >
                       <span className="leaderboard-podium-rank">
@@ -871,9 +871,9 @@ function LeaderboardModal({
                   {personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet."}
                 </p>
               )}
-            </div>
+            </section>
 
-            <div className="leaderboard-list-wrap">
+            <section className="leaderboard-section">
               <p className="section-label">Recent Runs</p>
               {personalLoading ? <p className="leaderboard-empty">Loading {personalLabel.toLowerCase()}...</p> : null}
               {!personalLoading && personalError ? <p className="leaderboard-empty">{personalError}</p> : null}
@@ -903,11 +903,12 @@ function LeaderboardModal({
                     : "Finish a run and it will show up here."}
                 </p>
               ) : null}
-            </div>
+            </section>
           </div>
         ) : (
           <div key="global-panel" className="leaderboard-panel">
-            <div className="leaderboard-best leaderboard-best--global">
+            <section className="leaderboard-section leaderboard-section--hero">
+              <p className="section-label">Best Run</p>
               {globalLoading ? (
                 <div className="leaderboard-hero leaderboard-hero--skeleton" aria-hidden="true">
                   <span className="leaderboard-hero-rank">&nbsp;</span>
@@ -916,7 +917,7 @@ function LeaderboardModal({
                 </div>
               ) : null}
               {!globalLoading && globalTopRun ? (
-                <div className="leaderboard-hero">
+                <div className="leaderboard-hero leaderboard-hero--global">
                   <span className="leaderboard-hero-rank" aria-label="First place">
                     <CrownIcon />
                   </span>
@@ -927,9 +928,9 @@ function LeaderboardModal({
               {!globalLoading && !globalError && !globalTopRun ? (
                 <p className="leaderboard-empty">No global runs yet.</p>
               ) : null}
-            </div>
+            </section>
 
-            <div className="leaderboard-list-wrap leaderboard-list-wrap--global">
+            <section className="leaderboard-section leaderboard-section--global-list">
               {globalLoading ? (
                 <ol className="leaderboard-list leaderboard-list-global leaderboard-list--loading">
                   {Array.from({ length: Math.max(0, GLOBAL_LEADERBOARD_LIMIT - 1) }, (_, i) => (
@@ -961,7 +962,7 @@ function LeaderboardModal({
                   )}
                 </ol>
               ) : null}
-            </div>
+            </section>
           </div>
         )}
         </section>
