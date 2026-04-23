@@ -19,14 +19,6 @@ create index if not exists runs_status_started_at_idx
 
 alter table public.runs enable row level security;
 revoke all on table public.runs from anon, authenticated;
-grant select on table public.runs to authenticated;
-
-drop policy if exists "users can read their own runs" on public.runs;
-create policy "users can read their own runs"
-on public.runs
-for select
-to authenticated
-using ((select auth.uid()) = user_id);
 
 alter table public.scores
 add column if not exists run_id uuid references public.runs(id) on delete set null;
@@ -34,3 +26,7 @@ add column if not exists run_id uuid references public.runs(id) on delete set nu
 create unique index if not exists scores_run_id_idx
   on public.scores (run_id)
   where run_id is not null;
+
+-- Ranked run state now includes hidden server-side seed and committed move paths.
+-- Do not expose rows directly to browser clients.
+drop policy if exists "users can read their own runs" on public.runs;

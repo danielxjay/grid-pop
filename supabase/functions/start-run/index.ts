@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createGameState } from "./run-logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
     const clientVersion =
       typeof body?.clientVersion === "string" ? body.clientVersion.slice(0, 64) : null;
     const seed = crypto.randomUUID();
+    const game = createGameState(seed);
 
     const { data: run, error: runError } = await supabaseAdmin
       .from("runs")
@@ -90,7 +92,7 @@ Deno.serve(async (req) => {
 
     return json({
       runId: run.id,
-      seed: run.seed,
+      tray: game.tray,
     });
   } catch (error) {
     console.error("Unexpected start-run failure.", error);

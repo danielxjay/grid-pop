@@ -120,6 +120,25 @@ export const SHAPES = [
   { name: "step-5", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
 ];
 
+function normalizeIncomingPiece(piece) {
+  if (!piece) {
+    return null;
+  }
+
+  const shapeName = typeof piece.shape?.name === "string" ? piece.shape.name : "";
+  const shape = SHAPES.find((entry) => entry.name === shapeName) ?? piece.shape;
+  return {
+    id: Number.parseInt(String(piece.id ?? -1), 10),
+    shape,
+    tone: typeof piece.tone === "string" ? piece.tone : TONES[0],
+    bounds: piece.bounds ?? getShapeBounds(shape),
+  };
+}
+
+function normalizeIncomingTray(tray) {
+  return Array.from({ length: TRAY_SIZE }, (_, index) => normalizeIncomingPiece(tray?.[index] ?? null));
+}
+
 export function createBoard() {
   return Array.from({ length: GRID_SIZE * GRID_SIZE }, () => null);
 }
@@ -223,9 +242,22 @@ export function markRunsAsSynced(runIds) {
 
 export function createGameState(bestScore = loadBestScore(), options = {}) {
   const board = createBoard();
-  const seed = typeof options.seed === "string" && options.seed ? options.seed : createGameSeed();
-  const initialRngState = hashSeed(seed);
-  const { tray, nextPieceId, rngState } = buildTray(board, 1, initialRngState);
+  const ranked = Boolean(options.ranked);
+  const hasServerTray = Array.isArray(options.tray);
+  const seed = hasServerTray
+    ? null
+    : typeof options.seed === "string" && options.seed
+      ? options.seed
+      : createGameSeed();
+  const initialRngState = hasServerTray ? 0 : hashSeed(seed);
+  const serverTray = hasServerTray ? normalizeIncomingTray(options.tray) : null;
+  const { tray, nextPieceId, rngState } = hasServerTray
+    ? {
+        tray: serverTray,
+        nextPieceId: (serverTray.reduce((max, piece) => Math.max(max, piece?.id ?? 0), 0) || 0) + 1,
+        rngState: 0,
+      }
+    : buildTray(board, 1, initialRngState);
 
   return {
     board,
@@ -233,6 +265,8 @@ export function createGameState(bestScore = loadBestScore(), options = {}) {
     nextPieceId,
     seed,
     rngState,
+    ranked,
+    awaitingTray: false,
     score: 0,
     bestScore,
     combo: 0,
@@ -336,12 +370,37 @@ export function applyPlacement(game, pieceId, row, col) {
   let tray = game.tray.map((entry) => (entry?.id === pieceId ? null : entry));
   let nextPieceId = game.nextPieceId;
   let rngState = game.rngState;
+  const trayExhausted = tray.every((entry) => entry === null);
 
-  if (tray.every((entry) => entry === null)) {
+  if (trayExhausted && !game.ranked) {
     const nextTrayState = buildTray(board, nextPieceId, game.rngState);
     tray = nextTrayState.tray;
     nextPieceId = nextTrayState.nextPieceId;
     rngState = nextTrayState.rngState;
+  }
+
+  if (trayExhausted && game.ranked) {
+    return {
+      ...game,
+      board,
+      tray,
+      nextPieceId,
+      rngState,
+      ranked: true,
+      awaitingTray: true,
+      score,
+      bestScore,
+      combo,
+      bestCombo,
+      bestMoveScore,
+      bestLinesCleared,
+      moveCount,
+      selectedPieceId: null,
+      preview: null,
+      gameOver: false,
+      cleared,
+      clearedTones,
+    };
   }
 
   const gameOver = !tray.some((entry) => entry && hasAnyPlacement(board, entry));
@@ -352,6 +411,8 @@ export function applyPlacement(game, pieceId, row, col) {
     tray,
     nextPieceId,
     rngState,
+    ranked: Boolean(game.ranked),
+    awaitingTray: false,
     score,
     bestScore,
     combo,
@@ -364,6 +425,23 @@ export function applyPlacement(game, pieceId, row, col) {
     gameOver,
     cleared,
     clearedTones,
+  };
+}
+
+export function setRankedTray(game, tray) {
+  const nextTray = normalizeIncomingTray(tray);
+  const nextPieceId = Math.max(game.nextPieceId, nextTray.reduce((max, piece) => Math.max(max, piece?.id ?? 0), 0) + 1);
+  const gameOver = !nextTray.some((piece) => piece && hasAnyPlacement(game.board, piece));
+
+  return {
+    ...game,
+    tray: nextTray,
+    nextPieceId,
+    ranked: true,
+    awaitingTray: false,
+    selectedPieceId: null,
+    preview: null,
+    gameOver,
   };
 }
 

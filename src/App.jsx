@@ -14,6 +14,7 @@ import {
   findPiece,
   loadBestScore,
   saveBestScore,
+  setRankedTray,
   setPreview,
   toIndex,
   togglePieceSelection,
@@ -1574,6 +1575,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [startFailed, setStartFailed] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [runSubmissionError, setRunSubmissionError] = useState("");
+  const [nextTrayPending, setNextTrayPending] = useState(false);
+  const [nextTrayError, setNextTrayError] = useState("");
+  const [nextTrayRetryTick, setNextTrayRetryTick] = useState(0);
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const accountRunsFetchInFlightRef = useRef(false);
@@ -1593,6 +1597,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
+  const nextTrayFetchInFlightRef = useRef(false);
   const themeObserverBypassRef = useRef(false);
 
   function resetClientSessionState(nextMessage = "") {
@@ -1614,6 +1619,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setAuthCode("");
     setOtpSentTo("");
     setStartPending(false);
+    nextTrayFetchInFlightRef.current = false;
+    setNextTrayPending(false);
+    setNextTrayError("");
+    setNextTrayRetryTick(0);
     if (nextMessage) {
       setAuthMessage(nextMessage);
     }
@@ -1984,6 +1993,58 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
       });
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (
+      !GLOBAL_LEADERBOARD_ENABLED ||
+      !hasSupabaseConfig ||
+      !started ||
+      game.gameOver ||
+      !game.awaitingTray ||
+      !activeVerifiedRun?.id
+    ) {
+      return;
+    }
+
+    if (nextTrayFetchInFlightRef.current) {
+      return;
+    }
+
+    const pendingRun = activeVerifiedRun;
+    nextTrayFetchInFlightRef.current = true;
+    setNextTrayPending(true);
+    setNextTrayError("");
+
+    supabase.functions
+      .invoke("next-tray", {
+        body: {
+          runId: pendingRun.id,
+          moves: pendingRun.moves,
+        },
+      })
+      .then(async ({ data, error }) => {
+        nextTrayFetchInFlightRef.current = false;
+        setNextTrayPending(false);
+
+        if (error) {
+          if (activeVerifiedRunRef.current?.id === pendingRun.id) {
+            setNextTrayError(await getFunctionErrorMessage(error, "Could not load the next tray. Tap to retry."));
+          }
+          return;
+        }
+
+        setNextTrayError("");
+        setGame((current) => (
+          current.awaitingTray ? setRankedTray(current, data?.tray ?? []) : current
+        ));
+      });
+  }, [
+    activeVerifiedRun,
+    game.awaitingTray,
+    game.gameOver,
+    nextTrayRetryTick,
+    started,
+  ]);
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !game.gameOver || !activeVerifiedRun?.id) {
@@ -2498,6 +2559,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   function startLocalGame() {
     setStartFailed(false);
+    nextTrayFetchInFlightRef.current = false;
+    setNextTrayPending(false);
+    setNextTrayError("");
+    setNextTrayRetryTick(0);
     setGame(createGameState(displayedBestScore));
     setStarted(true);
     if (soundEnabled) unlockAndTestSound();
@@ -2528,10 +2593,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setIsNewBest(false);
     setRunSubmitting(false);
     setRunSubmissionError("");
+    setNextTrayPending(false);
+    setNextTrayError("");
+    setNextTrayRetryTick(0);
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
     setStartFailed(false);
     setStarted(false);
+    nextTrayFetchInFlightRef.current = false;
     setGame(createGameState(displayedBestScore));
 
     if (!rankedReady) {
@@ -2547,14 +2616,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ({ data, error } = await supabase.functions.invoke("start-run", {
         body: { clientVersion: CLIENT_VERSION },
       }));
-      if (!error && data?.runId && data?.seed) break;
+      if (!error && data?.runId && Array.isArray(data?.tray)) break;
       if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
     }
 
     setStartPending(false);
 
-    if (!error && data?.runId && data?.seed) {
-      setGame(createGameState(displayedBestScore, { seed: data.seed }));
+    if (!error && data?.runId && Array.isArray(data?.tray)) {
+      setGame(createGameState(displayedBestScore, { ranked: true, tray: data.tray }));
       setActiveVerifiedRun({ id: data.runId, moves: [] });
       setStarted(true);
       if (soundEnabled) unlockAndTestSound();
@@ -3260,6 +3329,21 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               </svg>
               <span>return to tray</span>
             </div>
+            {started && game.awaitingTray ? (
+              <button
+                className="leaderboard-empty run-submission-retry"
+                type="button"
+                disabled={nextTrayPending}
+                onClick={() => {
+                  if (!nextTrayPending) {
+                    setNextTrayError("");
+                    setNextTrayRetryTick((tick) => tick + 1);
+                  }
+                }}
+              >
+                {nextTrayPending ? "Loading next tray..." : nextTrayError || "Loading next tray..."}
+              </button>
+            ) : null}
           </aside>
         </main>
 
