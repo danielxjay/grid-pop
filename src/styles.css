@@ -177,6 +177,72 @@ button {
   color: color-mix(in srgb, var(--text) 28%, transparent);
 }
 
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + max(env(safe-area-inset-bottom), 0px));
+  z-index: 4600;
+  transform: translateX(-50%);
+  width: min(calc(100% - 1.5rem), 25rem);
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 2px solid color-mix(in srgb, var(--accent2) 30%, transparent);
+  background: color-mix(in srgb, var(--modal-bg) 94%, var(--panel));
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent2) 12%, transparent), var(--shadow);
+}
+
+.update-toast-copy {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.update-toast-copy strong {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.48rem;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.update-toast-copy span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.update-toast-actions {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.update-toast-button {
+  min-height: 2.2rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent);
+  background: color-mix(in srgb, var(--panel) 75%, transparent);
+  color: var(--text);
+  font-size: 0.56rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: transform 80ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.update-toast-button:hover,
+.update-toast-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+.update-toast-button--primary {
+  border-color: color-mix(in srgb, var(--accent2) 55%, transparent);
+  background: color-mix(in srgb, var(--accent2) 16%, transparent);
+  color: var(--accent2);
+}
+
 h1,
 h2 {
   margin: 0;
@@ -2154,6 +2220,20 @@ h2 {
 
   .site-footer {
     font-size: 0.4rem;
+  }
+
+  .update-toast {
+    width: min(calc(100% - 1rem), 22rem);
+    bottom: calc(0.75rem + max(env(safe-area-inset-bottom), 0px));
+    padding: 0.75rem 0.8rem;
+  }
+
+  .update-toast-actions {
+    justify-content: stretch;
+  }
+
+  .update-toast-button {
+    flex: 1;
   }
 
   .leaderboard-modal-overlay {

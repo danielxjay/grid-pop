@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
 import App from "./App.jsx";
 import "./styles.css";
 
@@ -22,8 +23,33 @@ window.addEventListener("resize", syncViewportVars, { passive: true });
 window.visualViewport?.addEventListener("resize", syncViewportVars, { passive: true });
 window.visualViewport?.addEventListener("scroll", syncViewportVars, { passive: true });
 
+function Root() {
+  const [updateReady, setUpdateReady] = useState(false);
+  const [applyUpdate, setApplyUpdate] = useState(() => () => {});
+
+  useEffect(() => {
+    let updateSW = () => {};
+
+    updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        setApplyUpdate(() => () => updateSW(true));
+        setUpdateReady(true);
+      },
+    });
+  }, []);
+
+  return (
+    <App
+      updateReady={updateReady}
+      onApplyUpdate={() => applyUpdate()}
+      onDismissUpdate={() => setUpdateReady(false)}
+    />
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <Root />
   </React.StrictMode>
 );

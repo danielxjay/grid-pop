@@ -1476,7 +1476,32 @@ function matchesPreview(left, right) {
   );
 }
 
-export default function App() {
+function syncRunSubmittingState(runIds, setRunSubmitting) {
+  setRunSubmitting(runIds.size > 0);
+}
+
+function storePendingRun(runId, moves) {
+  try {
+    localStorage.setItem(PENDING_RUN_KEY, JSON.stringify({
+      runId,
+      moves,
+      savedAt: Date.now(),
+    }));
+  } catch {}
+}
+
+function clearPendingRun(runId) {
+  try {
+    const raw = localStorage.getItem(PENDING_RUN_KEY);
+    const pending = raw ? JSON.parse(raw) : null;
+
+    if (!runId || pending?.runId === runId) {
+      localStorage.removeItem(PENDING_RUN_KEY);
+    }
+  } catch {}
+}
+
+export default function App({ updateReady = false, onApplyUpdate = () => {}, onDismissUpdate = () => {} }) {
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
   const [drag, setDrag] = useState(null);
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
@@ -1523,10 +1548,11 @@ export default function App() {
   const [runSubmitting, setRunSubmitting] = useState(false);
   const [runSubmissionError, setRunSubmissionError] = useState("");
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const accountRunsFetchInFlightRef = useRef(false);
   const accountRunsReadyRef = useRef(false);
   const globalFetchInFlightRef = useRef(false);
-  const runSubmissionInFlightRef = useRef(false);
+  const runSubmissionInFlightRef = useRef(new Set());
   const boardRef = useRef(null);
   const dragGhostRef = useRef(null);
   const dismissZoneRef = useRef(null);
@@ -1539,6 +1565,7 @@ export default function App() {
   const livePreviewRef = useRef(game.preview);
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
+  const activeVerifiedRunRef = useRef(activeVerifiedRun);
 
   function resetClientSessionState(nextMessage = "") {
     setSession(null);
@@ -1572,6 +1599,16 @@ export default function App() {
   useEffect(() => {
     livePreviewRef.current = game.preview;
   }, [game.preview]);
+
+  useEffect(() => {
+    activeVerifiedRunRef.current = activeVerifiedRun;
+  }, [activeVerifiedRun]);
+
+  useEffect(() => {
+    if (updateReady) {
+      setUpdateDismissed(false);
+    }
+  }, [updateReady]);
 
   useEffect(() => {
     document.body.classList.toggle("is-dragging", drag !== null);
@@ -1861,40 +1898,37 @@ export default function App() {
       return;
     }
 
-    if (runSubmissionInFlightRef.current) {
+    const submittedRun = activeVerifiedRun;
+
+    if (runSubmissionInFlightRef.current.has(submittedRun.id)) {
       return;
     }
 
-    runSubmissionInFlightRef.current = true;
-    setRunSubmitting(true);
+    runSubmissionInFlightRef.current.add(submittedRun.id);
+    syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
     setRunSubmissionError("");
-
-    try {
-      localStorage.setItem(PENDING_RUN_KEY, JSON.stringify({
-        runId: activeVerifiedRun.id,
-        moves: activeVerifiedRun.moves,
-        savedAt: Date.now(),
-      }));
-    } catch {}
+    storePendingRun(submittedRun.id, submittedRun.moves);
 
     supabase.functions
       .invoke("finish-run", {
         body: {
-          runId: activeVerifiedRun.id,
-          moves: activeVerifiedRun.moves,
+          runId: submittedRun.id,
+          moves: submittedRun.moves,
         },
       })
       .then(async ({ error }) => {
-        runSubmissionInFlightRef.current = false;
-        setRunSubmitting(false);
+        runSubmissionInFlightRef.current.delete(submittedRun.id);
+        syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
 
         if (error) {
-          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
+          if (activeVerifiedRunRef.current?.id === submittedRun.id) {
+            setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
+          }
           return;
         }
 
-        try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
-        setActiveVerifiedRun(null);
+        clearPendingRun(submittedRun.id);
+        setActiveVerifiedRun((current) => (current?.id === submittedRun.id ? null : current));
         loadAccountRuns();
         loadGlobalLeaderboard();
       });
@@ -2905,6 +2939,7 @@ export default function App() {
   const personalLoading = session ? accountRunsLoading : false;
   const personalError = session ? accountRunsError : "";
   const personalRunCount = session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length;
+  const showUpdatePrompt = updateReady && !updateDismissed && (!started || game.gameOver);
 
   useEffect(() => {
     const nextPersonalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
@@ -3087,7 +3122,10 @@ export default function App() {
                         className="leaderboard-empty run-submission-retry"
                         type="button"
                         onClick={() => {
-                          runSubmissionInFlightRef.current = false;
+                          if (activeVerifiedRun?.id) {
+                            runSubmissionInFlightRef.current.delete(activeVerifiedRun.id);
+                          }
+                          syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
                           setRunSubmissionError("");
                           setFinishRunAttempt((n) => n + 1);
                         }}
@@ -3133,6 +3171,30 @@ export default function App() {
           <span className="site-footer-separator" aria-hidden="true">·</span>
           <span className="site-footer-version">v1.1</span>
         </footer>
+
+        {showUpdatePrompt ? (
+          <div className="update-toast" role="status" aria-live="polite">
+            <div className="update-toast-copy">
+              <strong>Update Available</strong>
+              <span>A newer version of GridPop is ready.</span>
+            </div>
+            <div className="update-toast-actions">
+              <button className="update-toast-button update-toast-button--primary" type="button" onClick={onApplyUpdate}>
+                Reload
+              </button>
+              <button
+                className="update-toast-button"
+                type="button"
+                onClick={() => {
+                  setUpdateDismissed(true);
+                  onDismissUpdate();
+                }}
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {showMobileAuthPanel ? (
