@@ -149,17 +149,31 @@ const THEMES = [
     tonesHi: ["#707070", "#a8a8a8", "#8c8c8c", "#d0d0d0", "#585858"],
     tonesLo: ["#383838", "#686868", "#505050", "#909090", "#282828"],
   },
+  {
+    key: "dev", name: "Dev", unlock: "Caught poking around", secret: true,
+    grid: [
+      [1, 0, 2, 0, 3, 0, 4, 0],
+      [0, 1, 0, 2, 0, 3, 0, 4],
+      [5, 0, 1, 0, 2, 0, 3, 0],
+    ],
+    board: "linear-gradient(145deg,rgba(10,16,12,0.96),rgba(18,28,20,0.98))",
+    cell: "rgba(135,255,180,0.06)", cellBorder: "rgba(135,255,180,0.18)",
+    tones:   ["#5eff9a", "#9dff6a", "#41e6c2", "#8ae1ff", "#b6bcc4"],
+    tonesHi: ["#c9ffd9", "#e4ffb8", "#aaf8e8", "#d4f8ff", "#edf1f4"],
+    tonesLo: ["#1da74b", "#5eaf20", "#138e76", "#2e8fb0", "#6c737c"],
+  },
 ];
 
 const FREE_THEME_KEYS = new Set(THEMES.filter((theme) => theme.free).map((theme) => theme.key));
 
-function getUnlockedThemes(stats, profile, globalRuns = [], userId = null) {
+function getUnlockedThemes(stats, profile, globalRuns = [], userId = null, devThemeUnlocked = false) {
   const unlocked = new Set(["classic", "classic-dark"]);
   if (stats?.gamesPlayed >= 50) unlocked.add("gen-y");
   if (stats?.bestLinesCleared >= 4) unlocked.add("dmg");
   if (profile?.has_shared_stats) unlocked.add("broadcast");
   if (stats?.bestScore >= 20000) unlocked.add("y2k");
   if (stats?.hasLowScore) unlocked.add("greige");
+  if (devThemeUnlocked || profile?.theme === "dev") unlocked.add("dev");
   // Conditional themes — only available while the live condition is met
   if (userId && globalRuns.length > 0) {
     if (globalRuns.some((r) => r.userId === userId)) unlocked.add("summit");
@@ -178,6 +192,7 @@ const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1.1";
 const PENDING_RUN_KEY = "gridpop-pending-run";
+const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
 
@@ -1016,6 +1031,7 @@ function ThemePreviewBoard({ board, cell, cellBorder, tones, tonesHi, tonesLo, g
 
 function getThemeUnlockHint(theme) {
   if (theme.free) return "Free";
+  if (theme.key === "dev") return "Theme override detected";
   if (theme.condition === "rank1") return "Hold the #1 spot";
   if (theme.condition === "top10") return "Hold a top 10 spot";
   return theme.unlock;
@@ -1038,7 +1054,7 @@ function ThemeModal({ activeTheme, signedIn, unlockedThemes, onGuestSignIn, onSe
           <div className="leaderboard-colour-strip" aria-hidden="true" />
           <h2>Themes</h2>
           <div className="theme-picker">
-            {THEMES.map((theme) => {
+            {THEMES.filter((theme) => !theme.secret || unlockedThemes.has(theme.key)).map((theme) => {
               const isUnlocked = unlockedThemes.has(theme.key);
               const isActive = activeTheme === theme.key;
               const cardClassName = `theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}${!isUnlocked && !signedIn ? " is-guest-locked" : ""}`;
@@ -1501,6 +1517,10 @@ function clearPendingRun(runId) {
   } catch {}
 }
 
+function getAllowedThemeKey(themeKey, unlockedThemes) {
+  return unlockedThemes.has(themeKey) ? themeKey : "classic";
+}
+
 export default function App({ updateReady = false, onApplyUpdate = () => {}, onDismissUpdate = () => {} }) {
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
   const [drag, setDrag] = useState(null);
@@ -1542,6 +1562,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [showStats, setShowStats] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
+  const [devThemeUnlocked, setDevThemeUnlocked] = useState(() => {
+    try {
+      return localStorage.getItem(DEV_THEME_UNLOCK_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
   const [startPending, setStartPending] = useState(false);
   const [startFailed, setStartFailed] = useState(false);
@@ -1566,6 +1593,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
+  const themeObserverBypassRef = useRef(false);
 
   function resetClientSessionState(nextMessage = "") {
     setSession(null);
@@ -1593,8 +1621,45 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", activeTheme);
-  }, [activeTheme]);
+    const root = document.documentElement;
+    themeObserverBypassRef.current = true;
+    root.setAttribute("data-theme", activeTheme);
+    queueMicrotask(() => {
+      themeObserverBypassRef.current = false;
+    });
+
+    const observer = new MutationObserver(() => {
+      if (themeObserverBypassRef.current) {
+        return;
+      }
+
+      if (root.getAttribute("data-theme") !== activeTheme) {
+        console.log("Sneaky sneaky! Dev unlocked.");
+        if (!devThemeUnlocked) {
+          setDevThemeUnlocked(true);
+          try { localStorage.setItem(DEV_THEME_UNLOCK_KEY, "true"); } catch {}
+        }
+
+        if (activeTheme !== "dev") {
+          setActiveTheme("dev");
+          return;
+        }
+
+        themeObserverBypassRef.current = true;
+        root.setAttribute("data-theme", "dev");
+        queueMicrotask(() => {
+          themeObserverBypassRef.current = false;
+        });
+      }
+    });
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, [activeTheme, devThemeUnlocked]);
 
   useEffect(() => {
     livePreviewRef.current = game.preview;
@@ -2008,7 +2073,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setDisplayNameDraft("");
       setEditingProfile(false);
       setActiveTheme((current) => {
-        const nextTheme = FREE_THEME_KEYS.has(current) ? current : "classic";
+        const nextTheme = FREE_THEME_KEYS.has(current) || (devThemeUnlocked && current === "dev")
+          ? current
+          : "classic";
         try { localStorage.setItem("gridpop-theme", nextTheme); } catch {}
         return nextTheme;
       });
@@ -2057,7 +2124,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     return () => {
       alive = false;
     };
-  }, [session?.user?.id]);
+  }, [devThemeUnlocked, session?.user?.id]);
 
   useEffect(() => {
     if (!game.gameOver) {
@@ -2149,7 +2216,18 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         : "";
   const startHandleMessage = !started && !startFailed ? startBlockedMessage : "";
 
-  const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id);
+  const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked);
+
+  useEffect(() => {
+    const nextTheme = getAllowedThemeKey(activeTheme, unlockedThemes);
+
+    if (nextTheme === activeTheme) {
+      return;
+    }
+
+    setActiveTheme(nextTheme);
+    try { localStorage.setItem("gridpop-theme", nextTheme); } catch {}
+  }, [activeTheme, unlockedThemes]);
 
   // Auto-revoke conditional themes when fresh global data shows the condition is no longer met
   useEffect(() => {

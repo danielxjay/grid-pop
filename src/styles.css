@@ -1995,10 +1995,10 @@ h2 {
     min-height: 2rem;
     padding: 0 0.65rem;
     border-radius: 0.4rem;
-    border: 2px solid rgba(110, 185, 220, 0.75);
-    background: rgba(255, 255, 255, 0.8);
+    border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
     color: var(--text);
-    box-shadow: 3px 3px 0 rgba(72, 190, 221, 0.2);
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
     font-size: 0.48rem;
     letter-spacing: 0.03em;
   }
@@ -2095,10 +2095,10 @@ h2 {
     min-height: 2rem;
     padding: 0 0.65rem;
     border-radius: 0.4rem;
-    border: 2px solid rgba(110, 185, 220, 0.75);
-    background: rgba(255, 255, 255, 0.8);
+    border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
     color: var(--text);
-    box-shadow: 3px 3px 0 rgba(72, 190, 221, 0.2);
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
     font-size: 0.48rem;
     letter-spacing: 0.03em;
   }
@@ -2690,6 +2690,53 @@ h2 {
   --tone-orchid: #383838;
   --tone-orchid-hi: #585858;
   --tone-orchid-lo: #282828;
+}
+
+/* Dev — hidden console easter egg */
+[data-theme="dev"] {
+  color-scheme: dark;
+
+  --bg-top: #020503;
+  --bg-bottom: #07110a;
+  --bg-bloom-a: rgba(80, 255, 140, 0.12);
+  --bg-bloom-b: rgba(90, 180, 255, 0.08);
+  --panel: rgba(8, 18, 11, 0.92);
+  --line: rgba(110, 255, 165, 0.16);
+  --text: #dfffe8;
+  --muted: #7fa88d;
+  --accent: #5eff9a;
+  --accent2: #8ae1ff;
+  --gold: #9dff6a;
+  --shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+  --board-bg: linear-gradient(145deg, rgba(10, 16, 12, 0.96), rgba(18, 28, 20, 0.98));
+  --board-cell-bg: rgba(135, 255, 180, 0.06);
+  --board-cell-border: rgba(135, 255, 180, 0.18);
+  --board-cell-tint: #05110a;
+  --board-filled-bg: rgba(18, 42, 24, 0.3);
+
+  --modal-bg: linear-gradient(150deg, #06100a 0%, #0a1810 100%);
+  --overlay-bg: rgba(0, 0, 0, 0.8);
+
+  --tone-coral: #5eff9a;
+  --tone-coral-hi: #c9ffd9;
+  --tone-coral-lo: #1da74b;
+
+  --tone-gold: #9dff6a;
+  --tone-gold-hi: #e4ffb8;
+  --tone-gold-lo: #5eaf20;
+
+  --tone-mint: #41e6c2;
+  --tone-mint-hi: #aaf8e8;
+  --tone-mint-lo: #138e76;
+
+  --tone-sky: #8ae1ff;
+  --tone-sky-hi: #d4f8ff;
+  --tone-sky-lo: #2e8fb0;
+
+  --tone-orchid: #b6bcc4;
+  --tone-orchid-hi: #edf1f4;
+  --tone-orchid-lo: #6c737c;
 }
 
 /* Summit — conditional: currently in global top 10 */
