@@ -1,4 +1,4 @@
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false;
 
 export const MAINTENANCE_COPY = {
   eyebrow: "GridPop! is temporarily offline",

@@ -120,6 +120,46 @@ export const SHAPES = [
   { name: "step-5", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
 ];
 
+const SHAPE_BASE_WEIGHTS = {
+  single: 1.4,
+  "bar-2": 1.25,
+  "col-2": 1.2,
+  "bar-3": 1.1,
+  "col-3": 1.05,
+  "square-2": 1.0,
+  "l-3": 0.98,
+  "bar-4": 0.92,
+  "col-4": 0.88,
+  "t-4": 0.9,
+  "j-4": 0.84,
+  "l-4": 0.84,
+  "zig-4": 0.82,
+  "s-4": 0.82,
+  "bar-5": 0.72,
+  "step-5": 0.7,
+  "square-3": 0.4,
+};
+
+const SHAPE_FAMILIES = {
+  single: "single",
+  "bar-2": "line",
+  "bar-3": "line",
+  "bar-4": "line",
+  "bar-5": "line",
+  "col-2": "line",
+  "col-3": "line",
+  "col-4": "line",
+  "square-2": "square",
+  "square-3": "square",
+  "l-3": "hook",
+  "l-4": "hook",
+  "j-4": "hook",
+  "t-4": "tee",
+  "zig-4": "zig",
+  "s-4": "zig",
+  "step-5": "step",
+};
+
 function normalizeIncomingPiece(piece) {
   if (!piece) {
     return null;
@@ -496,7 +536,7 @@ function buildTray(board, nextPieceId, rngState) {
   let currentRngState = rngState;
 
   for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-    const pieceState = createRandomPiece(currentPieceId, currentRngState);
+    const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState);
     tray.push(pieceState.piece);
     currentPieceId = pieceState.nextPieceId;
     currentRngState = pieceState.rngState;
@@ -510,7 +550,7 @@ function buildTray(board, nextPieceId, rngState) {
       currentPieceId = nextPieceId;
 
       for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-        const pieceState = createRandomPiece(currentPieceId, currentRngState);
+        const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState);
         tray.push(pieceState.piece);
         currentPieceId = pieceState.nextPieceId;
         currentRngState = pieceState.rngState;
@@ -527,18 +567,111 @@ function buildTray(board, nextPieceId, rngState) {
   };
 }
 
-function createRandomPiece(nextPieceId, rngState) {
+function countPlacements(board, shape) {
+  const probe = {
+    id: -1,
+    shape,
+    tone: TONES[0],
+    bounds: getShapeBounds(shape),
+  };
+  let count = 0;
+
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      if (canPlace(board, probe, row, col)) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
+
+function getShapeFamily(shape) {
+  return SHAPE_FAMILIES[shape.name] || shape.name;
+}
+
+function getShapeWeight(board, shape, trayShapes) {
+  const placements = countPlacements(board, shape);
+
+  if (placements === 0) {
+    return 0;
+  }
+
+  let weight = SHAPE_BASE_WEIGHTS[shape.name] ?? 1;
+  const fillRatio = board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length;
+
+  if (placements <= 2) {
+    weight *= fillRatio >= 0.7 ? 0.42 : fillRatio >= 0.5 ? 0.65 : 0.82;
+  } else if (placements <= 4) {
+    weight *= fillRatio >= 0.7 ? 0.68 : fillRatio >= 0.5 ? 0.86 : 0.94;
+  }
+
+  if (fillRatio >= 0.7) {
+    if (shape.cells.length <= 2) weight *= 1.25;
+    if (shape.cells.length >= 5) weight *= 0.74;
+    if (shape.name === "square-3") weight *= 0.45;
+  } else if (fillRatio >= 0.5) {
+    if (shape.cells.length <= 2) weight *= 1.08;
+    if (shape.cells.length >= 5) weight *= 0.86;
+    if (shape.name === "square-3") weight *= 0.62;
+  } else if (fillRatio <= 0.25 && shape.cells.length >= 5) {
+    weight *= 1.08;
+  }
+
+  const family = getShapeFamily(shape);
+  const repeatedFamilyCount = trayShapes.filter((entry) => getShapeFamily(entry) === family).length;
+
+  if (repeatedFamilyCount === 1) {
+    weight *= 0.62;
+  } else if (repeatedFamilyCount >= 2) {
+    weight *= 0.35;
+  }
+
+  return weight;
+}
+
+function pickWeightedShape(board, rngState, trayShapes) {
+  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const shapePick = nextRandomValue(rngState);
+
+  if (totalWeight <= 0) {
+    return {
+      shape: SHAPES[Math.floor(shapePick.value * SHAPES.length) % SHAPES.length],
+      rngState: shapePick.rngState,
+    };
+  }
+
+  let remaining = shapePick.value * totalWeight;
+
+  for (let index = 0; index < SHAPES.length; index += 1) {
+    remaining -= weights[index];
+    if (remaining <= 0) {
+      return {
+        shape: SHAPES[index],
+        rngState: shapePick.rngState,
+      };
+    }
+  }
+
+  return {
+    shape: SHAPES[SHAPES.length - 1],
+    rngState: shapePick.rngState,
+  };
+}
+
+function createRandomPiece(board, trayShapes, nextPieceId, rngState) {
+  const shapePick = pickWeightedShape(board, rngState, trayShapes);
   const tonePick = nextRandomValue(shapePick.rngState);
-  const shape = SHAPES[Math.floor(shapePick.value * SHAPES.length) % SHAPES.length];
   const tone = TONES[Math.floor(tonePick.value * TONES.length) % TONES.length];
 
   return {
     piece: {
       id: nextPieceId,
-      shape,
+      shape: shapePick.shape,
       tone,
-      bounds: getShapeBounds(shape),
+      bounds: getShapeBounds(shapePick.shape),
     },
     nextPieceId: nextPieceId + 1,
     rngState: tonePick.rngState,
