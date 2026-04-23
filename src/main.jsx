@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App.jsx";
+import MaintenancePage from "./MaintenancePage.jsx";
+import { MAINTENANCE_MODE } from "./maintenance.js";
 import "./styles.css";
 
 function syncViewportVars() {
@@ -28,6 +30,10 @@ function Root() {
   const [applyUpdate, setApplyUpdate] = useState(() => () => {});
 
   useEffect(() => {
+    if (MAINTENANCE_MODE) {
+      return undefined;
+    }
+
     let updateSW = () => {};
 
     updateSW = registerSW({
@@ -40,11 +46,15 @@ function Root() {
   }, []);
 
   return (
-    <App
-      updateReady={updateReady}
-      onApplyUpdate={() => applyUpdate()}
-      onDismissUpdate={() => setUpdateReady(false)}
-    />
+    MAINTENANCE_MODE ? (
+      <MaintenancePage />
+    ) : (
+      <App
+        updateReady={updateReady}
+        onApplyUpdate={() => applyUpdate()}
+        onDismissUpdate={() => setUpdateReady(false)}
+      />
+    )
   );
 }
 
