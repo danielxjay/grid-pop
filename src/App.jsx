@@ -173,7 +173,7 @@ function getUnlockedThemes(stats, profile, globalRuns = [], userId = null, devTh
   if (profile?.has_shared_stats) unlocked.add("broadcast");
   if (stats?.bestScore >= 20000) unlocked.add("y2k");
   if (stats?.hasLowScore) unlocked.add("greige");
-  if (devThemeUnlocked || profile?.theme === "dev") unlocked.add("dev");
+  if (devThemeUnlocked || profile?.dev_theme_unlocked || profile?.theme === "dev") unlocked.add("dev");
   // Conditional themes — only available while the live condition is met
   if (userId && globalRuns.length > 0) {
     if (globalRuns.some((r) => r.userId === userId)) unlocked.add("summit");
@@ -1620,6 +1620,24 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
 
+  const syncDevThemeUnlock = useEffectEvent(async () => {
+    if (!hasSupabaseConfig || !session?.user?.id || profile?.dev_theme_unlocked) {
+      return;
+    }
+
+    setProfile((current) => current ? { ...current, dev_theme_unlocked: true } : current);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ dev_theme_unlocked: true })
+      .eq("id", session.user.id);
+
+    if (error) {
+      setAuthError("Dev theme unlocked locally but could not sync to your account.");
+    }
+  });
+
+
   useEffect(() => {
     const root = document.documentElement;
     themeObserverBypassRef.current = true;
@@ -1639,6 +1657,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           setDevThemeUnlocked(true);
           try { localStorage.setItem(DEV_THEME_UNLOCK_KEY, "true"); } catch {}
         }
+        void syncDevThemeUnlock();
 
         if (activeTheme !== "dev") {
           setActiveTheme("dev");
@@ -1660,6 +1679,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     return () => observer.disconnect();
   }, [activeTheme, devThemeUnlocked]);
+
+  useEffect(() => {
+    if (!devThemeUnlocked || profile?.dev_theme_unlocked) {
+      return;
+    }
+
+    void syncDevThemeUnlock();
+  }, [devThemeUnlocked, profile?.dev_theme_unlocked, session?.user?.id]);
 
   useEffect(() => {
     livePreviewRef.current = game.preview;
@@ -2088,7 +2115,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     async function loadProfile() {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, display_name, theme, has_shared_stats")
+        .select("id, display_name, theme, has_shared_stats, dev_theme_unlocked")
         .eq("id", session.user.id)
         .maybeSingle();
 
