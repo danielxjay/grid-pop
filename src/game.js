@@ -121,23 +121,23 @@ export const SHAPES = [
 ];
 
 const SHAPE_BASE_WEIGHTS = {
-  single: 1.4,
-  "bar-2": 1.25,
-  "col-2": 1.2,
-  "bar-3": 1.1,
-  "col-3": 1.05,
+  single: 1.15,
+  "bar-2": 1.05,
+  "col-2": 1.0,
+  "bar-3": 1.03,
+  "col-3": 1.0,
   "square-2": 1.0,
-  "l-3": 0.98,
-  "bar-4": 0.92,
-  "col-4": 0.88,
-  "t-4": 0.9,
-  "j-4": 0.84,
-  "l-4": 0.84,
-  "zig-4": 0.82,
-  "s-4": 0.82,
-  "bar-5": 0.72,
-  "step-5": 0.7,
-  "square-3": 0.4,
+  "l-3": 0.97,
+  "bar-4": 0.96,
+  "col-4": 0.93,
+  "t-4": 0.94,
+  "j-4": 0.9,
+  "l-4": 0.9,
+  "zig-4": 0.9,
+  "s-4": 0.9,
+  "bar-5": 0.85,
+  "step-5": 0.82,
+  "square-3": 0.7,
 };
 
 const SHAPE_FAMILIES = {
@@ -602,30 +602,30 @@ function getShapeWeight(board, shape, trayShapes) {
   const fillRatio = board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length;
 
   if (placements <= 2) {
-    weight *= fillRatio >= 0.7 ? 0.42 : fillRatio >= 0.5 ? 0.65 : 0.82;
+    weight *= fillRatio >= 0.7 ? 0.62 : fillRatio >= 0.5 ? 0.8 : 0.9;
   } else if (placements <= 4) {
-    weight *= fillRatio >= 0.7 ? 0.68 : fillRatio >= 0.5 ? 0.86 : 0.94;
+    weight *= fillRatio >= 0.7 ? 0.82 : fillRatio >= 0.5 ? 0.92 : 0.97;
   }
 
   if (fillRatio >= 0.7) {
-    if (shape.cells.length <= 2) weight *= 1.25;
-    if (shape.cells.length >= 5) weight *= 0.74;
-    if (shape.name === "square-3") weight *= 0.45;
+    if (shape.cells.length <= 2) weight *= 1.1;
+    if (shape.cells.length >= 5) weight *= 0.9;
+    if (shape.name === "square-3") weight *= 0.82;
   } else if (fillRatio >= 0.5) {
-    if (shape.cells.length <= 2) weight *= 1.08;
-    if (shape.cells.length >= 5) weight *= 0.86;
-    if (shape.name === "square-3") weight *= 0.62;
+    if (shape.cells.length <= 2) weight *= 1.03;
+    if (shape.cells.length >= 5) weight *= 0.96;
+    if (shape.name === "square-3") weight *= 0.9;
   } else if (fillRatio <= 0.25 && shape.cells.length >= 5) {
-    weight *= 1.08;
+    weight *= 1.04;
   }
 
   const family = getShapeFamily(shape);
   const repeatedFamilyCount = trayShapes.filter((entry) => getShapeFamily(entry) === family).length;
 
   if (repeatedFamilyCount === 1) {
-    weight *= 0.62;
+    weight *= 0.8;
   } else if (repeatedFamilyCount >= 2) {
-    weight *= 0.35;
+    weight *= 0.6;
   }
 
   return weight;
