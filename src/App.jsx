@@ -192,6 +192,7 @@ const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1.2";
+const TRAY_REVEAL_STAGGER_MS = 110;
 const PENDING_RUN_KEY = "gridpop-pending-run";
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -1274,7 +1275,91 @@ function AuthPanel({
   );
 }
 
-function Tray({ tray, selectedPieceId, gameOver, started, onSelectPiece, onStartDrag }) {
+
+function Tray({
+  tray,
+  selectedPieceId,
+  gameOver,
+  started,
+  awaitingTray,
+  nextTrayPending,
+  nextTrayError,
+  trayRevealToken,
+  soundEnabled,
+  onTrayPieceReveal,
+  onRetryNextTray,
+  onSelectPiece,
+  onStartDrag,
+}) {
+  const [revealedPieceIds, setRevealedPieceIds] = useState(() => new Set());
+  const revealTimersRef = useRef([]);
+  const lastRevealTokenRef = useRef(0);
+  const pieceIdsKey = tray.filter(Boolean).map((piece) => piece.id).join(",");
+
+  useEffect(() => {
+    revealTimersRef.current.forEach(clearTimeout);
+    revealTimersRef.current = [];
+
+    if (!started) {
+      setRevealedPieceIds(new Set());
+      return undefined;
+    }
+
+    const pieceIds = tray.filter(Boolean).map((piece) => piece.id);
+
+    if (pieceIds.length === 0) {
+      setRevealedPieceIds(new Set());
+      return undefined;
+    }
+
+    // Only stagger-reveal when a new tray token arrives; piece placements that
+    // change pieceIdsKey should just reveal the remaining pieces immediately.
+    if (!trayRevealToken || trayRevealToken === lastRevealTokenRef.current) {
+      setRevealedPieceIds(new Set(pieceIds));
+      return undefined;
+    }
+
+    lastRevealTokenRef.current = trayRevealToken;
+    const shuffledIds = [...pieceIds].sort(() => Math.random() - 0.5);
+    setRevealedPieceIds(new Set());
+
+    shuffledIds.forEach((pieceId, index) => {
+      const timer = window.setTimeout(() => {
+        setRevealedPieceIds((current) => {
+          const next = new Set(current);
+          next.add(pieceId);
+          return next;
+        });
+
+        if (soundEnabled) {
+          onTrayPieceReveal();
+        }
+      }, index * TRAY_REVEAL_STAGGER_MS);
+
+      revealTimersRef.current.push(timer);
+    });
+
+    return () => {
+      revealTimersRef.current.forEach(clearTimeout);
+      revealTimersRef.current = [];
+    };
+  }, [onTrayPieceReveal, pieceIdsKey, soundEnabled, started, trayRevealToken]);
+
+  if (awaitingTray) {
+    return (
+      <div className="tray" aria-live="polite" aria-busy={nextTrayPending}>
+        {Array.from({ length: TRAY_SIZE }, (_, index) => (
+          <button key={`awaiting-${index}`} className="piece-button piece-button--loading" type="button" disabled aria-hidden="true" />
+        ))}
+        {nextTrayError ? (
+          <button className="tray-status-button" type="button" onClick={onRetryNextTray} disabled={nextTrayPending}>
+            {nextTrayError}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="tray" aria-label="Available shapes">
       {Array.from({ length: TRAY_SIZE }, (_, index) => {
@@ -1286,18 +1371,20 @@ function Tray({ tray, selectedPieceId, gameOver, started, onSelectPiece, onStart
           );
         }
 
+        const isRevealed = revealedPieceIds.has(piece.id);
+
         return (
           <button
             key={piece.id}
-            className={`piece-button${selectedPieceId === piece.id ? " is-selected" : ""}`}
+            className={`piece-button${selectedPieceId === piece.id ? " is-selected" : ""}${isRevealed ? " piece-button--reveal" : " piece-button--loading"}`}
             type="button"
             data-piece-id={piece.id}
             aria-label={`${piece.shape.name} piece`}
             onClick={() => onSelectPiece(piece.id)}
             onPointerDown={(event) => onStartDrag(piece, event)}
-            disabled={gameOver || !started}
+            disabled={gameOver || !started || !isRevealed}
           >
-            <PieceGrid piece={piece} />
+            {isRevealed ? <PieceGrid piece={piece} /> : null}
           </button>
         );
       })}
@@ -1578,6 +1665,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [nextTrayPending, setNextTrayPending] = useState(false);
   const [nextTrayError, setNextTrayError] = useState("");
   const [nextTrayRetryTick, setNextTrayRetryTick] = useState(0);
+  const [trayRevealToken, setTrayRevealToken] = useState(0);
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const accountRunsFetchInFlightRef = useRef(false);
@@ -1623,6 +1711,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayPending(false);
     setNextTrayError("");
     setNextTrayRetryTick(0);
+    setTrayRevealToken(0);
     if (nextMessage) {
       setAuthMessage(nextMessage);
     }
@@ -1644,6 +1733,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     if (error) {
       setAuthError("Dev theme unlocked locally but could not sync to your account.");
     }
+  });
+
+  const handleTrayPieceReveal = useEffectEvent(() => {
+    playFillCellSound();
   });
 
 
@@ -2034,6 +2127,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
 
         setNextTrayError("");
+        setTrayRevealToken((token) => token + 1);
         setGame((current) => (
           current.awaitingTray ? setRankedTray(current, data?.tray ?? []) : current
         ));
@@ -2563,6 +2657,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayPending(false);
     setNextTrayError("");
     setNextTrayRetryTick(0);
+    setTrayRevealToken(0);
     setGame(createGameState(displayedBestScore));
     setStarted(true);
     if (soundEnabled) unlockAndTestSound();
@@ -2596,6 +2691,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayPending(false);
     setNextTrayError("");
     setNextTrayRetryTick(0);
+    setTrayRevealToken(0);
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
     setStartFailed(false);
@@ -2623,6 +2719,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setStartPending(false);
 
     if (!error && data?.runId && Array.isArray(data?.tray)) {
+      setTrayRevealToken((token) => token + 1);
       setGame(createGameState(displayedBestScore, { ranked: true, tray: data.tray }));
       setActiveVerifiedRun({ id: data.runId, moves: [] });
       setStarted(true);
@@ -3319,6 +3416,18 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               selectedPieceId={game.selectedPieceId}
               gameOver={game.gameOver}
               started={started}
+              awaitingTray={game.awaitingTray}
+              nextTrayPending={nextTrayPending}
+              nextTrayError={nextTrayError}
+              trayRevealToken={trayRevealToken}
+              soundEnabled={soundEnabled}
+              onTrayPieceReveal={handleTrayPieceReveal}
+              onRetryNextTray={() => {
+                if (!nextTrayPending) {
+                  setNextTrayError("");
+                  setNextTrayRetryTick((tick) => tick + 1);
+                }
+              }}
               onSelectPiece={handleSelectPiece}
               onStartDrag={handleStartDrag}
             />
@@ -3329,21 +3438,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               </svg>
               <span>return to tray</span>
             </div>
-            {started && game.awaitingTray ? (
-              <button
-                className="leaderboard-empty run-submission-retry"
-                type="button"
-                disabled={nextTrayPending}
-                onClick={() => {
-                  if (!nextTrayPending) {
-                    setNextTrayError("");
-                    setNextTrayRetryTick((tick) => tick + 1);
-                  }
-                }}
-              >
-                {nextTrayPending ? "Loading next tray..." : nextTrayError || "Loading next tray..."}
-              </button>
-            ) : null}
           </aside>
         </main>
 
