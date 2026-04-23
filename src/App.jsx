@@ -191,7 +191,7 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const CLIENT_VERSION = "gridpop-web-1.1";
+const CLIENT_VERSION = "gridpop-web-1.2";
 const PENDING_RUN_KEY = "gridpop-pending-run";
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -3358,7 +3358,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             @dxniel.jxy
           </a>
           <span className="site-footer-separator" aria-hidden="true">·</span>
-          <span className="site-footer-version">v1.1</span>
+          <span className="site-footer-version">v1.2</span>
         </footer>
 
         {showUpdatePrompt ? (
