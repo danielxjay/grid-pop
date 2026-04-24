@@ -482,14 +482,14 @@ export function applyPlacement(game: GameState, pieceId: number, row: number, co
   };
 }
 
-export function parseMoves(rawMoves: unknown, maxMoves = 512) {
+export function parseMoves(rawMoves: unknown) {
   if (!Array.isArray(rawMoves)) {
     return null;
   }
 
   const moves: Move[] = [];
 
-  for (const rawMove of rawMoves.slice(0, maxMoves)) {
+  for (const rawMove of rawMoves) {
     const pieceId = Number.parseInt(String((rawMove as { pieceId?: unknown })?.pieceId ?? ""), 10);
     const row = Number.parseInt(String((rawMove as { row?: unknown })?.row ?? ""), 10);
     const col = Number.parseInt(String((rawMove as { col?: unknown })?.col ?? ""), 10);

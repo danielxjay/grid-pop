@@ -3151,13 +3151,65 @@ h2 {
 
 /* Maintenance page */
 .maintenance-page {
+  position: relative;
   min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  overflow: hidden;
+}
+
+.maintenance-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 1.25rem;
-  padding: 1.5rem 1rem;
+}
+
+.maintenance-pixels {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.maintenance-pixel {
+  --pixel-size: clamp(1.6rem, calc((min(32rem, 100vw - 1.5rem) - 7 * 0.2rem) / 8), 3.8rem);
+  position: absolute;
+  width: var(--pixel-size);
+  height: var(--pixel-size);
+  border-radius: 28%;
+  background: var(--cell-bg);
+  border: 1px solid color-mix(in srgb, var(--tone-fill) 55%, transparent);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.08),
+    2px 2px 0 rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 0;
+  transform-origin: center;
+  touch-action: manipulation;
+}
+
+.maintenance-pixel.is-popping {
+  animation: bubblePop 360ms ease-out both;
+  border: 0 solid color-mix(in srgb, var(--tone-fill) 82%, white 18%);
+  pointer-events: none;
+}
+
+.maintenance-pixel.is-spawning {
+  animation: leaderboard-row-pop 220ms ease-out both;
+}
+
+.maintenance-sound-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
 }
 
 .maintenance-page h1 {

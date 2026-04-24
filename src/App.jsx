@@ -193,6 +193,7 @@ const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1.2";
 const TRAY_REVEAL_STAGGER_MS = 110;
+const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const PENDING_RUN_KEY = "gridpop-pending-run";
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -250,10 +251,20 @@ async function getFunctionErrorMessage(error, fallback) {
   }
 
   if (error instanceof FunctionsRelayError || error instanceof FunctionsFetchError) {
-    return error.message || fallback;
+    return fallback;
   }
 
   return typeof error.message === "string" && error.message.trim() ? error.message.trim() : fallback;
+}
+
+function isTransientFunctionTransportError(error) {
+  return error instanceof FunctionsRelayError || error instanceof FunctionsFetchError;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOverride = null }) {
@@ -2108,30 +2119,69 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayPending(true);
     setNextTrayError("");
 
-    supabase.functions
-      .invoke("next-tray", {
-        body: {
-          runId: pendingRun.id,
-          moves: pendingRun.moves,
-        },
-      })
-      .then(async ({ data, error }) => {
-        nextTrayFetchInFlightRef.current = false;
-        setNextTrayPending(false);
+    let cancelled = false;
 
-        if (error) {
-          if (activeVerifiedRunRef.current?.id === pendingRun.id) {
-            setNextTrayError(await getFunctionErrorMessage(error, "Could not load the next tray. Tap to retry."));
-          }
+    (async () => {
+      let data = null;
+      let error = null;
+
+      for (let attempt = 0; attempt <= NEXT_TRAY_RETRY_DELAYS_MS.length; attempt += 1) {
+        ({ data, error } = await supabase.functions.invoke("next-tray", {
+          body: {
+            runId: pendingRun.id,
+            moves: pendingRun.moves,
+          },
+        }));
+
+        if (!error || !isTransientFunctionTransportError(error) || attempt === NEXT_TRAY_RETRY_DELAYS_MS.length) {
+          break;
+        }
+
+        if (cancelled || activeVerifiedRunRef.current?.id !== pendingRun.id) {
+          nextTrayFetchInFlightRef.current = false;
+          setNextTrayPending(false);
           return;
         }
 
-        setNextTrayError("");
-        setTrayRevealToken((token) => token + 1);
-        setGame((current) => (
-          current.awaitingTray ? setRankedTray(current, data?.tray ?? []) : current
-        ));
-      });
+        await sleep(NEXT_TRAY_RETRY_DELAYS_MS[attempt]);
+
+        if (cancelled || activeVerifiedRunRef.current?.id !== pendingRun.id) {
+          nextTrayFetchInFlightRef.current = false;
+          setNextTrayPending(false);
+          return;
+        }
+      }
+
+      if (cancelled) {
+        nextTrayFetchInFlightRef.current = false;
+        setNextTrayPending(false);
+        return;
+      }
+
+      nextTrayFetchInFlightRef.current = false;
+      setNextTrayPending(false);
+
+      if (error) {
+        if (activeVerifiedRunRef.current?.id === pendingRun.id) {
+          setNextTrayError(await getFunctionErrorMessage(error, "Could not load the next tray. Tap to retry."));
+        }
+        return;
+      }
+
+      if (activeVerifiedRunRef.current?.id !== pendingRun.id) {
+        return;
+      }
+
+      setNextTrayError("");
+      setTrayRevealToken((token) => token + 1);
+      setGame((current) => (
+        current.awaitingTray ? setRankedTray(current, data?.tray ?? []) : current
+      ));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeVerifiedRun,
     game.awaitingTray,

@@ -269,6 +269,39 @@ export function playClearSound() {
   });
 }
 
+// Single velcro pop — one burst of the row-clear sound, for popping individual pixels
+export function playPixelPopSound() {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+  const t = startAt;
+
+  const amp = 0.48 + Math.random() * 0.34;
+  const bpfFreq = 580 + Math.random() * 480;
+  const decayTime = 0.052 + Math.random() * 0.05;
+
+  playNoise(ctx, makeVelcro(ctx, decayTime + 0.04), {
+    hpf: 180,
+    bpf: bpfFreq,
+    bpfQ: 1.4 + Math.random() * 0.8,
+    lpf: 2800,
+    attack: 0.003,
+    decay: decayTime,
+    gain: amp,
+    t,
+  });
+
+  playNoise(ctx, makeGranular(ctx, 0.08, 0.46), {
+    hpf: 2800,
+    bpf: 4800,
+    bpfQ: 2.6,
+    attack: 0.001,
+    decay: 0.058,
+    gain: 0.44,
+    t: t + 0.007,
+  });
+}
+
 // Mini sticker-crackle — dragged piece moving over board positions
 export function playPreviewMoveSound() {
   if (!enabled) return;

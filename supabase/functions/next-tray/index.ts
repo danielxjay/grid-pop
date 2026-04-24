@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_MOVES = 512;
-
 function json(data: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(data), {
     ...init,
@@ -56,7 +54,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const runId = typeof body?.runId === "string" ? body.runId : "";
-    const moves = parseMoves(body?.moves, MAX_MOVES);
+    const moves = parseMoves(body?.moves);
 
     if (!runId || !moves) {
       return json({ error: "A run id and moves array are required." }, { status: 400 });
@@ -79,7 +77,7 @@ Deno.serve(async (req) => {
       return json({ error: "This run is no longer active." }, { status: 409 });
     }
 
-    const committedMoves = parseMoves(run.moves, MAX_MOVES) ?? [];
+    const committedMoves = parseMoves(run.moves) ?? [];
 
     if (!movesMatchPrefix(committedMoves, moves)) {
       return json({ error: "Run state is out of sync. Finish this tray in-game before requesting the next one." }, { status: 409 });
