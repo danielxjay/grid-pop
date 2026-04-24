@@ -23,6 +23,10 @@ Deno.serve(async (req) => {
       return new Response("ok", { headers: corsHeaders });
     }
 
+    if (Deno.env.get("MAINTENANCE_MODE")) {
+      return json({ error: "Maintenance in progress" }, { status: 503 });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

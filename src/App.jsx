@@ -261,6 +261,10 @@ function isTransientFunctionTransportError(error) {
   return error instanceof FunctionsRelayError || error instanceof FunctionsFetchError;
 }
 
+function isMaintenance503(error) {
+  return error instanceof FunctionsHttpError && error.context?.status === 503;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -2092,6 +2096,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           loadGlobalLeaderboard();
           return;
         }
+        if (isMaintenance503(error)) { window.location.reload(); return; }
         if (error instanceof FunctionsHttpError && error.context?.status === 409) {
           try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
         }
@@ -2162,6 +2167,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setNextTrayPending(false);
 
       if (error) {
+        if (isMaintenance503(error)) { window.location.reload(); return; }
         if (activeVerifiedRunRef.current?.id === pendingRun.id) {
           setNextTrayError(await getFunctionErrorMessage(error, "Could not load the next tray. Tap to retry."));
         }
@@ -2218,6 +2224,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
 
         if (error) {
+          if (isMaintenance503(error)) { window.location.reload(); return; }
           if (activeVerifiedRunRef.current?.id === submittedRun.id) {
             setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
           }
@@ -2776,6 +2783,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       if (soundEnabled) unlockAndTestSound();
       return;
     }
+
+    if (isMaintenance503(error)) { window.location.reload(); return; }
 
     if (error instanceof FunctionsHttpError && error.context?.status === 401) {
       resetClientSessionState();
