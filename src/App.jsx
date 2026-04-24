@@ -1843,6 +1843,23 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     activeVerifiedRunRef.current = activeVerifiedRun;
   }, [activeVerifiedRun]);
 
+  const rankedReady = Boolean(
+    GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
+  );
+  const startAuthPending = Boolean(hasSupabaseConfig && !authReady);
+  const startProfilePending = Boolean(session?.user?.id && profileLoading);
+  const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
+  const startNeedsDisplayName = Boolean(session?.user?.id && !profileLoading && !profile?.display_name);
+  const startBlocked = Boolean(startPending || startAuthPending || startProfilePending || startAccountPending);
+  const startBlockedMessage = startAuthPending || startProfilePending
+    ? "Loading your account..."
+    : startAccountPending
+      ? "Loading your score history..."
+      : startNeedsDisplayName
+        ? "Set a display name before starting."
+        : "";
+  const startHandleMessage = !started && !startFailed ? startBlockedMessage : "";
+
   useEffect(() => {
     if (updateReady) {
       setUpdateDismissed(false);
@@ -2705,23 +2722,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     return () => window.clearTimeout(timer);
   }, [game.cleared]);
-
-  const rankedReady = Boolean(
-    GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
-  );
-  const startAuthPending = Boolean(hasSupabaseConfig && !authReady);
-  const startProfilePending = Boolean(session?.user?.id && profileLoading);
-  const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
-  const startNeedsDisplayName = Boolean(session?.user?.id && !profileLoading && !profile?.display_name);
-  const startBlocked = Boolean(startPending || startAuthPending || startProfilePending || startAccountPending);
-  const startBlockedMessage = startAuthPending || startProfilePending
-    ? "Loading your account..."
-    : startAccountPending
-      ? "Loading your score history..."
-      : startNeedsDisplayName
-        ? "Set a display name before starting."
-        : "";
-  const startHandleMessage = !started && !startFailed ? startBlockedMessage : "";
 
   const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked);
 
