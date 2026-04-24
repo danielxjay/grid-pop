@@ -3904,7 +3904,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               {resumedElsewhere ? (
                 <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Run picked up elsewhere">
                   <p className="resumed-elsewhere-title">Picked up on another device</p>
-                  <p className="resumed-elsewhere-body">Run picked up somewhere else.</p>
                   {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                   {!resumeRunGone && (
                     <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
