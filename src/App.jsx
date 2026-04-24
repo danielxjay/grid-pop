@@ -73,7 +73,7 @@ const THEMES = [
     tonesLo: ["#d4a880", "#c8b070", "#9ab88a", "#a8b0b8", "#ccc4b0"],
   },
   {
-    key: "dmg", name: "DMG", unlock: "Pop 4+ lines in one move",
+    key: "dmg", name: "DMG", unlock: "Pop 4+ lines in one burst",
     grid: [
       [1, 1, 2, 2, 3, 3, 4, 4],
       [1, 0, 0, 2, 0, 3, 0, 4],
@@ -232,6 +232,15 @@ function formatRunDate(value) {
   const hh = String(date.getHours()).padStart(2, "0");
   const min = String(date.getMinutes()).padStart(2, "0");
   return `${dd}/${mm} at ${hh}:${min}`;
+}
+
+function formatBurstLabel(lines) {
+  if (!Number.isFinite(Number(lines)) || Number(lines) <= 0) {
+    return "\u2014";
+  }
+
+  const count = Math.max(0, Number(lines));
+  return `${count} line${count === 1 ? "" : "s"}`;
 }
 
 async function getFunctionErrorMessage(error, fallback) {
@@ -417,7 +426,7 @@ function ScorePanel({ score, bestScore, combo }) {
         <strong className="score-value">{bestScore}</strong>
       </div>
       <div className="score-stat">
-        <p className="section-label">Combo</p>
+        <p className="section-label">Chain Bonus</p>
         <strong className="score-value">x{Math.max(1, combo + 1)}</strong>
       </div>
     </section>
@@ -463,9 +472,9 @@ async function buildStatsCardBlob(displayName, stats, theme) {
   if (stats?.mostMoves > 0) activity.push(["Most moves in a game", String(stats.mostMoves)]);
 
   const skills = [];
-  if (stats?.bestCombo > 0) skills.push(["Highest combo", `\u00d7${stats.bestCombo + 1}`]);
+  if (stats?.bestCombo > 0) skills.push(["Highest chain", `\u00d7${stats.bestCombo + 1}`]);
   if (stats?.bestMoveScore > 0) skills.push(["Best single move", stats.bestMoveScore.toLocaleString()]);
-  if (stats?.bestLinesCleared > 0) skills.push(["Most lines in a single move", String(stats.bestLinesCleared)]);
+  if (stats?.bestLinesCleared > 0) skills.push(["Biggest burst", formatBurstLabel(stats.bestLinesCleared)]);
 
   // Calculate total height
   const headerH = displayName ? 248 : 180;
@@ -647,7 +656,7 @@ function StatsModal({ displayName, onClose, onShare, stats, theme }) {
                 <dd>{stats.mostMoves > 0 ? stats.mostMoves : "\u2014"}</dd>
               </div>
               <div className="stats-row">
-                <dt>Highest combo</dt>
+                <dt>Highest chain</dt>
                 <dd>{stats.bestCombo > 0 ? `\u00d7${stats.bestCombo + 1}` : "\u2014"}</dd>
               </div>
               <div className="stats-row">
@@ -655,8 +664,8 @@ function StatsModal({ displayName, onClose, onShare, stats, theme }) {
                 <dd>{stats.bestMoveScore > 0 ? stats.bestMoveScore.toLocaleString() : "\u2014"}</dd>
               </div>
               <div className="stats-row">
-                <dt>Most lines in a single move</dt>
-                <dd>{stats.bestLinesCleared > 0 ? stats.bestLinesCleared : "\u2014"}</dd>
+                <dt>Biggest burst</dt>
+                <dd>{formatBurstLabel(stats.bestLinesCleared)}</dd>
               </div>
             </dl>
           ) : (
@@ -719,8 +728,8 @@ function HowToPlayModal({ onClose }) {
               <MiniBoard grid={clearGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Pop</strong>
-                <p>Fill a full row or column of poxels and the whole line pops. Pop multiple lines in one move for a bonus.</p>
-                <p className="how-to-play-pts">120 pts per line, more for multiples</p>
+                <p>Fill a full row or column of poxels and the whole line pops. Pop multiple lines in one move to trigger a burst bonus.</p>
+                <p className="how-to-play-pts">120 pts per line, plus extra for bursts</p>
               </div>
             </div>
             <div className="how-to-play-step">
@@ -730,8 +739,8 @@ function HowToPlayModal({ onClose }) {
                 <span className="how-to-play-badge how-to-play-badge--hot">×3</span>
               </div>
               <div className="how-to-play-step-body">
-                <strong className="how-to-play-step-title">Combo</strong>
-                <p>Clear lines on back-to-back placements to grow your combo multiplier.</p>
+                <strong className="how-to-play-step-title">Chain Bonus</strong>
+                <p>Clear lines on back-to-back placements to grow your chain bonus multiplier.</p>
                 <p className="how-to-play-pts">Each clear in a row adds ×1</p>
               </div>
             </div>

@@ -398,8 +398,8 @@ export function applyPlacement(game, pieceId, row, col) {
 
   const linesCleared = countLines(clearedIndices);
   const comboMultiplier = Math.max(1, combo + 1);
-  const lineScore = (linesCleared * (linesCleared + 1) / 2) * 120;
-  const moveScore = blocksPlaced * 10 + lineScore * comboMultiplier;
+  const burstScore = linesCleared * linesCleared * 120;
+  const moveScore = blocksPlaced * 10 + burstScore * comboMultiplier;
   const score = game.score + moveScore;
   const bestScore = Math.max(score, game.bestScore);
   const bestCombo = Math.max(game.bestCombo, combo);
