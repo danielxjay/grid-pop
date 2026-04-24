@@ -770,6 +770,11 @@ h2 {
   max-width: 10.5rem;
 }
 
+.desktop-auth-dialog .auth-panel,
+.mobile-auth-sheet .auth-panel {
+  max-width: none;
+}
+
 .auth-form {
   display: grid;
   gap: 0.65rem;
@@ -1313,7 +1318,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
-  background: rgba(40, 10, 80, 0.55);
+  background: var(--overlay-bg);
   backdrop-filter: blur(3px);
 }
 
@@ -1334,9 +1339,9 @@ h2 {
   gap: 1rem;
   padding: 1.1rem 1rem 1rem;
   border-radius: 1rem;
-  border: 2px solid rgba(160, 100, 230, 0.35);
+  border: 2px solid color-mix(in srgb, var(--line) 85%, transparent);
   background: var(--modal-bg);
-  box-shadow: 6px 6px 0 rgba(110, 50, 200, 0.14), var(--shadow);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--line) 35%, transparent), var(--shadow);
 }
 
 .how-to-play-modal h2 {
@@ -1385,9 +1390,9 @@ h2 {
 
 .how-to-play-footer {
   font-size: 0.46rem;
-  color: rgba(56, 16, 106, 0.55);
+  color: color-mix(in srgb, var(--text) 58%, transparent);
   text-align: center;
-  border-top: 1px solid rgba(160, 100, 230, 0.2);
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   padding-top: 0.75rem;
   letter-spacing: 0.02em;
   line-height: 1.7;
@@ -1401,7 +1406,7 @@ h2 {
   list-style: none;
   border-radius: 0.5rem;
   overflow: hidden;
-  border: 1px solid rgba(160, 100, 230, 0.2);
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
 }
 
 .stats-modal .stats-row {
@@ -1410,16 +1415,16 @@ h2 {
   align-items: baseline;
   gap: 1rem;
   padding: 0.55rem 0.75rem;
-  background: rgba(255, 255, 255, 0.55);
+  background: color-mix(in srgb, var(--panel) 86%, white);
 }
 
 .stats-modal .stats-row + .stats-row {
-  border-top: 1px solid rgba(160, 100, 230, 0.15);
+  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
 }
 
 .stats-modal .stats-row dt {
   font-size: 0.5rem;
-  color: rgba(56, 16, 106, 0.65);
+  color: color-mix(in srgb, var(--text) 66%, transparent);
   letter-spacing: 0.02em;
 }
 
@@ -1489,13 +1494,13 @@ h2 {
   height: 4.2rem;
   background: var(--board);
   border-radius: 4px;
-  border: 2px solid rgba(72, 90, 180, 0.35);
-  box-shadow: 3px 3px 0 rgba(72, 90, 180, 0.15);
+  border: 2px solid color-mix(in srgb, var(--line) 85%, transparent);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--line) 35%, transparent);
 }
 
 .mini-cell {
   border-radius: 2px;
-  background: rgba(120, 80, 200, 0.1);
+  background: color-mix(in srgb, var(--board-cell-bg) 90%, transparent);
 }
 
 .mini-cell--coral { background: var(--tone-coral); }
@@ -1540,8 +1545,45 @@ h2 {
   justify-items: center;
 }
 
+.desktop-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+}
+
 .mobile-auth-overlay {
   display: none;
+}
+
+.desktop-auth-dialog {
+  width: min(100%, 24rem);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.desktop-auth-close {
+  justify-self: end;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  border-radius: 0.4rem;
+  border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--text);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+  font-size: 0.48rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease, opacity 120ms ease;
+}
+
+.desktop-auth-close:hover,
+.desktop-auth-close:focus-visible {
+  transform: translate(-1px, -1px);
 }
 
 .score-value {
@@ -2107,7 +2149,7 @@ h2 {
     align-items: start;
     justify-items: center;
     padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-    background: rgba(40, 10, 80, 0.42);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
   }
 
@@ -2207,7 +2249,7 @@ h2 {
     align-items: start;
     justify-items: center;
     padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-    background: rgba(40, 10, 80, 0.42);
+    background: var(--overlay-bg);
     backdrop-filter: blur(4px);
   }
 

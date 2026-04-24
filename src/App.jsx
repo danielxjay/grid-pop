@@ -3818,34 +3818,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             <div className="desktop-auth-panel">
               <ProfileTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
               <ThemeTrigger active={showThemeModal} onClick={handleToggleThemeModal} />
-              {showDesktopAuthPanel ? (
-                <AuthPanel
-                  authCode={authCode}
-                  authEmail={authEmail}
-                  authError={authError}
-                  authMessage={authMessage}
-                  authPending={authPending}
-                  authReady={authReady}
-                  displayNameDraft={displayNameDraft}
-                  editingProfile={editingProfile}
-                  hasConfig={hasSupabaseConfig}
-                  onCodeChange={setAuthCode}
-                  onCancelEditProfile={handleCancelEditProfile}
-                  onDisplayNameChange={handleAuthFieldChange}
-                  onEditProfile={handleEditProfile}
-                  onRequestCode={handleRequestCode}
-                  onResetOtp={handleResetOtp}
-                  onSaveProfile={handleSaveProfile}
-                  onShowStats={handleShowStats}
-                  onSignOut={handleSignOut}
-                  onVerifyCode={handleVerifyCode}
-                  otpSentTo={otpSentTo}
-                  profile={profile}
-                  profileLoading={profileLoading}
-                  profilePending={profilePending}
-                  session={session}
-                />
-              ) : null}
             </div>
           </aside>
 
@@ -4034,6 +4006,53 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               className="mobile-auth-close"
               type="button"
               onClick={handleCloseMobileAuthPanel}
+              aria-label="Close sign in panel"
+            >
+              Close
+            </button>
+            <AuthPanel
+              authCode={authCode}
+              authEmail={authEmail}
+              authError={authError}
+              authMessage={authMessage}
+              authPending={authPending}
+              authReady={authReady}
+              displayNameDraft={displayNameDraft}
+              editingProfile={editingProfile}
+              hasConfig={hasSupabaseConfig}
+              onCodeChange={setAuthCode}
+              onCancelEditProfile={handleCancelEditProfile}
+              onDisplayNameChange={handleAuthFieldChange}
+              onEditProfile={handleEditProfile}
+              onRequestCode={handleRequestCode}
+              onResetOtp={handleResetOtp}
+              onSaveProfile={handleSaveProfile}
+              onShowStats={handleShowStats}
+              onSignOut={handleSignOut}
+              onVerifyCode={handleVerifyCode}
+              otpSentTo={otpSentTo}
+              profile={profile}
+              profileLoading={profileLoading}
+              profilePending={profilePending}
+              session={session}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {showDesktopAuthPanel ? (
+        <div
+          className="desktop-auth-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Player account"
+          onClick={handleToggleDesktopAuthPanel}
+        >
+          <div className="desktop-auth-dialog" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="desktop-auth-close"
+              type="button"
+              onClick={handleToggleDesktopAuthPanel}
               aria-label="Close sign in panel"
             >
               Close
