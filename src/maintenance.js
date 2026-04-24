@@ -1,10 +1,10 @@
 export const MAINTENANCE_MODE = true;
 
 export const MAINTENANCE_COPY = {
-  eyebrow: "GridPop! is temporarily offline",
+  eyebrow: "Temporarily offline",
   title: "Maintenance in progress",
   body:
-    "GridPop! is being updated right now. Refresh again later and you should be back in.",
+    "GridPop! is currently being updated. Please check back later.",
   note:
-    "If you already have GridPop! open elsewhere, close it fully and reopen after maintenance ends.",
+    "Please close all other sessions to prevent issues.",
 };
