@@ -1685,6 +1685,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [resumedElsewhere, setResumedElsewhere] = useState(false);
   const [resumePending, setResumePending] = useState(false);
   const [resumeFailed, setResumeFailed] = useState("");
+  const [resumeRunGone, setResumeRunGone] = useState(false);
   const deviceTokenRef = useRef(null);
   const [startPending, setStartPending] = useState(false);
   const [startFailed, setStartFailed] = useState(false);
@@ -1741,6 +1742,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setActiveRunCheckFailed(false);
     setResumedElsewhere(false);
     setResumeFailed("");
+    setResumeRunGone(false);
     deviceTokenRef.current = null;
     setAuthCode("");
     setOtpSentTo("");
@@ -2726,6 +2728,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked);
 
   useEffect(() => {
+    // Don't enforce theme restrictions before account stats are ready — avoids revoking
+    // a profile theme due to a race where stats haven't loaded yet to confirm the unlock.
+    if (profile !== null && accountStats === null) return;
+    // Don't revoke conditional themes (top10/rank1) before leaderboard data is loaded;
+    // the auto-revoke effect handles those once globalRuns arrives.
+    const activeThemeObj = THEMES.find((t) => t.key === activeTheme);
+    if (activeThemeObj?.condition && globalRuns.length === 0) return;
+
     const nextTheme = getAllowedThemeKey(activeTheme, unlockedThemes);
 
     if (nextTheme === activeTheme) {
@@ -3178,11 +3188,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         return;
       }
       if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
-        setResumeFailed("Your previous game is no longer available.");
+        setResumeFailed("Run cannot be found.");
         setActiveRunDetected(null);
         return;
       }
-      setResumeFailed("Couldn't reach your previous game. Try again.");
+      setResumeFailed("Couldn't reach your run. Try again.");
       return;
     }
 
@@ -3221,10 +3231,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         return;
       }
       if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
-        setResumeFailed("That game is no longer available here. Start fresh to keep playing.");
+        setResumeFailed("Run cannot be found.");
+        setResumeRunGone(true);
         return;
       }
-      setResumeFailed("Couldn't reclaim that game right now. Try again.");
+      setResumeFailed("Couldn't reclaim that run right now. Try again.");
       return;
     }
 
@@ -3871,8 +3882,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     </>
                   ) : activeRunDetected && activeRunCheckDone ? (
                     <>
-                      <p className="start-resume-msg">You have an unfinished game!</p>
-                      <p className="resumed-elsewhere-body">If you switched devices moments ago, you'll continue from the most recently synced move.</p>
+                      <p className="start-resume-msg">You have an unfinished run!</p>
                       {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                       <button className="start-button" type="button" onClick={handleContinueGame} disabled={resumePending || startBlocked}>
                         {resumePending ? "Loading..." : "Continue"}
@@ -3892,14 +3902,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 </div>
               ) : null}
               {resumedElsewhere ? (
-                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Game resumed elsewhere">
+                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Run picked up elsewhere">
                   <p className="resumed-elsewhere-title">Picked up on another device</p>
-                  <p className="resumed-elsewhere-body">Your game was continued somewhere else. What would you like to do?</p>
-                  <p className="resumed-elsewhere-body">If you switched devices moments ago, you'll continue from the most recently synced move.</p>
+                  <p className="resumed-elsewhere-body">Run picked up somewhere else.</p>
                   {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
-                  <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
-                    {resumePending ? "Loading..." : "Resume here"}
-                  </button>
+                  {!resumeRunGone && (
+                    <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
+                      {resumePending ? "Loading..." : "Resume here"}
+                    </button>
+                  )}
                   <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
                     Start fresh
                   </button>
