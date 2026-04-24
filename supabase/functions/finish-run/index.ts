@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null);
     const runId = typeof body?.runId === "string" ? body.runId : "";
     const moves = parseMoves(body?.moves);
+    const deviceToken = typeof body?.deviceToken === "string" ? body.deviceToken : null;
 
     if (!runId || !moves) {
       return json({ error: "A run id and moves array are required." }, { status: 400 });
@@ -99,7 +100,7 @@ Deno.serve(async (req) => {
 
     const { data: run, error: runLookupError } = await supabaseAdmin
       .from("runs")
-      .select("id, seed, moves")
+      .select("id, seed, moves, device_token")
       .eq("id", runId)
       .eq("user_id", authData.user.id)
       .eq("status", "active")
@@ -112,6 +113,10 @@ Deno.serve(async (req) => {
 
     if (!run) {
       return json({ error: "This run is no longer active." }, { status: 409 });
+    }
+
+    if (run.device_token && deviceToken !== run.device_token) {
+      return json({ code: "resumed_elsewhere", error: "This game was resumed on another device." }, { status: 409 });
     }
 
     const committedMoves = parseMoves(run.moves) ?? [];

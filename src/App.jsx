@@ -194,6 +194,7 @@ const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const CLIENT_VERSION = "gridpop-web-1.2";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
+const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
 const PENDING_RUN_KEY = "gridpop-pending-run";
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -1599,11 +1600,16 @@ function syncRunSubmittingState(runIds, setRunSubmitting) {
   setRunSubmitting(runIds.size > 0);
 }
 
-function storePendingRun(runId, moves) {
+function resetMoveSyncState(ref) {
+  ref.current = { runId: null, moveCount: 0 };
+}
+
+function storePendingRun(runId, moves, deviceToken = null) {
   try {
     localStorage.setItem(PENDING_RUN_KEY, JSON.stringify({
       runId,
       moves,
+      deviceToken,
       savedAt: Date.now(),
     }));
   } catch {}
@@ -1673,6 +1679,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
   });
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
+  const [activeRunDetected, setActiveRunDetected] = useState(null);
+  const [activeRunCheckDone, setActiveRunCheckDone] = useState(false);
+  const [activeRunCheckFailed, setActiveRunCheckFailed] = useState(false);
+  const [resumedElsewhere, setResumedElsewhere] = useState(false);
+  const [resumePending, setResumePending] = useState(false);
+  const [resumeFailed, setResumeFailed] = useState("");
+  const deviceTokenRef = useRef(null);
   const [startPending, setStartPending] = useState(false);
   const [startFailed, setStartFailed] = useState(false);
   const [runSubmitting, setRunSubmitting] = useState(false);
@@ -1680,6 +1693,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [nextTrayPending, setNextTrayPending] = useState(false);
   const [nextTrayError, setNextTrayError] = useState("");
   const [nextTrayRetryTick, setNextTrayRetryTick] = useState(0);
+  const [moveSyncRetryTick, setMoveSyncRetryTick] = useState(0);
   const [trayRevealToken, setTrayRevealToken] = useState(0);
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const [updateDismissed, setUpdateDismissed] = useState(false);
@@ -1701,6 +1715,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const previewFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
   const nextTrayFetchInFlightRef = useRef(false);
+  const moveSyncStateRef = useRef({ runId: null, moveCount: 0 });
+  const moveSyncInFlightRef = useRef(false);
+  const moveSyncRetryTimerRef = useRef(0);
   const themeObserverBypassRef = useRef(false);
 
   function resetClientSessionState(nextMessage = "") {
@@ -1719,13 +1736,26 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setAccountRunsLoading(false);
     accountRunsReadyRef.current = false;
     setActiveVerifiedRun(null);
+    setActiveRunDetected(null);
+    setActiveRunCheckDone(false);
+    setActiveRunCheckFailed(false);
+    setResumedElsewhere(false);
+    setResumeFailed("");
+    deviceTokenRef.current = null;
     setAuthCode("");
     setOtpSentTo("");
     setStartPending(false);
     nextTrayFetchInFlightRef.current = false;
+    moveSyncInFlightRef.current = false;
+    resetMoveSyncState(moveSyncStateRef);
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
     setNextTrayPending(false);
     setNextTrayError("");
     setNextTrayRetryTick(0);
+    setMoveSyncRetryTick(0);
     setTrayRevealToken(0);
     if (nextMessage) {
       setAuthMessage(nextMessage);
@@ -2055,6 +2085,87 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     loadGlobalLeaderboard();
   }, []);
 
+  const checkForActiveRun = useEffectEvent(async () => {
+    if (!hasSupabaseConfig || !session?.user?.id) return;
+    const delays = [800, 2000];
+    let lastError = null;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        const { data, error } = await supabase
+          .from("runs")
+          .select("id, moves")
+          .eq("user_id", session.user.id)
+          .eq("status", "active")
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        setActiveRunDetected(data ? { id: data.id, moveCount: Array.isArray(data.moves) ? data.moves.length : 0 } : null);
+        setActiveRunCheckFailed(false);
+        setActiveRunCheckDone(true);
+        return;
+      } catch (err) {
+        lastError = err;
+        if (attempt < delays.length) await sleep(delays[attempt]);
+      }
+    }
+    console.error("Active run check failed after retries.", lastError);
+    setActiveRunCheckFailed(true);
+    setActiveRunCheckDone(true);
+  });
+
+  useEffect(() => {
+    if (rankedReady && !started && !activeRunCheckDone) {
+      checkForActiveRun();
+    }
+  }, [rankedReady, started, activeRunCheckDone]);
+
+  useEffect(() => {
+    if (!activeVerifiedRun?.id || !hasSupabaseConfig || !deviceTokenRef.current) return;
+    const runId = activeVerifiedRun.id;
+
+    // Re-verify token immediately after subscribing to catch any race
+    supabase.from("runs").select("device_token").eq("id", runId).single().then(({ data }) => {
+      if (data && deviceTokenRef.current && data.device_token !== deviceTokenRef.current) {
+        setResumedElsewhere(true);
+      }
+    });
+
+    const channel = supabase
+      .channel(`run-device-${runId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "runs", filter: `id=eq.${runId}` },
+        async (payload) => {
+          const newToken = payload.new?.device_token;
+          if (newToken !== undefined) {
+            if (deviceTokenRef.current && newToken !== deviceTokenRef.current) setResumedElsewhere(true);
+          } else {
+            const { data } = await supabase.from("runs").select("device_token").eq("id", runId).single();
+            if (data && deviceTokenRef.current && data.device_token !== deviceTokenRef.current) setResumedElsewhere(true);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeVerifiedRun?.id]);
+
+  useEffect(() => {
+    if (!activeVerifiedRun?.id || !hasSupabaseConfig) return;
+    const runId = activeVerifiedRun.id;
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      supabase.from("runs").select("device_token").eq("id", runId).single().then(({ data }) => {
+        if (data && deviceTokenRef.current && data.device_token !== deviceTokenRef.current) {
+          setResumedElsewhere(true);
+        }
+      });
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [activeVerifiedRun?.id]);
+
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !session?.user?.id) {
     setAccountRecentRuns([]);
@@ -2088,7 +2199,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     supabase.functions
-      .invoke("finish-run", { body: { runId: pending.runId, moves: pending.moves } })
+      .invoke("finish-run", { body: { runId: pending.runId, moves: pending.moves, deviceToken: pending.deviceToken ?? null } })
       .then(({ error }) => {
         if (!error) {
           try { localStorage.removeItem(PENDING_RUN_KEY); } catch {}
@@ -2102,6 +2213,153 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
       });
   }, [session?.user?.id]);
+
+  useEffect(() => () => {
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
+  }, []);
+
+  useEffect(() => {
+    const pendingRun = activeVerifiedRun;
+
+    if (
+      !GLOBAL_LEADERBOARD_ENABLED ||
+      !hasSupabaseConfig ||
+      !started ||
+      game.gameOver ||
+      !pendingRun?.id ||
+      !deviceTokenRef.current
+    ) {
+      if (!pendingRun?.id) {
+        resetMoveSyncState(moveSyncStateRef);
+        if (moveSyncRetryTimerRef.current) {
+          window.clearTimeout(moveSyncRetryTimerRef.current);
+          moveSyncRetryTimerRef.current = 0;
+        }
+      }
+      return;
+    }
+
+    if (runSubmissionInFlightRef.current.has(pendingRun.id)) {
+      return;
+    }
+
+    if (moveSyncStateRef.current.runId !== pendingRun.id) {
+      moveSyncStateRef.current = { runId: pendingRun.id, moveCount: 0 };
+    }
+
+    if (
+      pendingRun.moves.length === 0 ||
+      pendingRun.moves.length <= moveSyncStateRef.current.moveCount ||
+      moveSyncInFlightRef.current
+    ) {
+      return;
+    }
+
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
+
+    const syncedRunId = pendingRun.id;
+    const syncedMoves = pendingRun.moves;
+    const syncedDeviceToken = deviceTokenRef.current;
+    moveSyncInFlightRef.current = true;
+
+    (async () => {
+      let data = null;
+      let error = null;
+
+      for (let attempt = 0; attempt <= MOVE_SYNC_RETRY_DELAYS_MS.length; attempt += 1) {
+        ({ data, error } = await supabase.functions.invoke("sync-run-move", {
+          body: {
+            runId: syncedRunId,
+            moves: syncedMoves,
+            deviceToken: syncedDeviceToken,
+          },
+        }));
+
+        if (!error || !isTransientFunctionTransportError(error) || attempt === MOVE_SYNC_RETRY_DELAYS_MS.length) {
+          break;
+        }
+
+        await sleep(MOVE_SYNC_RETRY_DELAYS_MS[attempt]);
+      }
+
+      moveSyncInFlightRef.current = false;
+
+      if (error) {
+        const latestRun = activeVerifiedRunRef.current;
+
+        if (isMaintenance503(error)) {
+          window.location.reload();
+          return;
+        }
+
+        if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+          const payload = await error.context.json().catch(() => ({}));
+          if (payload?.code === "resumed_elsewhere") {
+            setResumedElsewhere(true);
+            return;
+          }
+        }
+
+        if (
+          latestRun?.id &&
+          latestRun.id !== syncedRunId &&
+          !runSubmissionInFlightRef.current.has(latestRun.id)
+        ) {
+          setMoveSyncRetryTick((tick) => tick + 1);
+          return;
+        }
+
+        if (activeVerifiedRunRef.current?.id === syncedRunId && !runSubmissionInFlightRef.current.has(syncedRunId)) {
+          moveSyncRetryTimerRef.current = window.setTimeout(() => {
+            moveSyncRetryTimerRef.current = 0;
+            setMoveSyncRetryTick((tick) => tick + 1);
+          }, 2500);
+        }
+        return;
+      }
+
+      const syncedMoveCount = Number.isFinite(Number(data?.moveCount))
+        ? Math.max(0, Number(data.moveCount))
+        : syncedMoves.length;
+
+      if (moveSyncStateRef.current.runId === syncedRunId) {
+        moveSyncStateRef.current = {
+          runId: syncedRunId,
+          moveCount: Math.max(moveSyncStateRef.current.moveCount, syncedMoveCount),
+        };
+      }
+
+      const latestRun = activeVerifiedRunRef.current;
+
+      if (
+        latestRun?.id &&
+        latestRun.id !== syncedRunId &&
+        !runSubmissionInFlightRef.current.has(latestRun.id)
+      ) {
+        setMoveSyncRetryTick((tick) => tick + 1);
+        return;
+      }
+
+      if (
+        latestRun?.id === syncedRunId &&
+        latestRun.moves.length > moveSyncStateRef.current.moveCount &&
+        !runSubmissionInFlightRef.current.has(syncedRunId)
+      ) {
+        setMoveSyncRetryTick((tick) => tick + 1);
+      }
+    })();
+  }, [
+    activeVerifiedRun,
+    game.gameOver,
+    moveSyncRetryTick,
+    started,
+  ]);
 
   useEffect(() => {
     if (
@@ -2135,6 +2393,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           body: {
             runId: pendingRun.id,
             moves: pendingRun.moves,
+            deviceToken: deviceTokenRef.current,
           },
         }));
 
@@ -2168,6 +2427,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
       if (error) {
         if (isMaintenance503(error)) { window.location.reload(); return; }
+        if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+          const payload = await error.context.json().catch(() => ({}));
+          if (payload?.code === "resumed_elsewhere") { setResumedElsewhere(true); return; }
+        }
         if (activeVerifiedRunRef.current?.id === pendingRun.id) {
           setNextTrayError(await getFunctionErrorMessage(error, "Could not load the next tray. Tap to retry."));
         }
@@ -2210,13 +2473,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     runSubmissionInFlightRef.current.add(submittedRun.id);
     syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
     setRunSubmissionError("");
-    storePendingRun(submittedRun.id, submittedRun.moves);
+    storePendingRun(submittedRun.id, submittedRun.moves, deviceTokenRef.current);
 
     supabase.functions
       .invoke("finish-run", {
         body: {
           runId: submittedRun.id,
           moves: submittedRun.moves,
+          deviceToken: deviceTokenRef.current,
         },
       })
       .then(async ({ error }) => {
@@ -2225,6 +2489,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
         if (error) {
           if (isMaintenance503(error)) { window.location.reload(); return; }
+          if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+            const payload = await error.context.json().catch(() => ({}));
+            if (payload?.code === "resumed_elsewhere") { setResumedElsewhere(true); return; }
+          }
           if (activeVerifiedRunRef.current?.id === submittedRun.id) {
             setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
           }
@@ -2711,16 +2979,73 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   function startLocalGame() {
     setStartFailed(false);
     nextTrayFetchInFlightRef.current = false;
+    moveSyncInFlightRef.current = false;
+    resetMoveSyncState(moveSyncStateRef);
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
     setNextTrayPending(false);
     setNextTrayError("");
     setNextTrayRetryTick(0);
+    setMoveSyncRetryTick(0);
     setTrayRevealToken(0);
     setGame(createGameState(displayedBestScore));
     setStarted(true);
     if (soundEnabled) unlockAndTestSound();
   }
 
-  async function beginNextGame() {
+  function applyResumedRunState(data, options = {}) {
+    const { clearStartOverlay = false } = options;
+    deviceTokenRef.current = data.deviceToken ?? null;
+    moveSyncInFlightRef.current = false;
+    moveSyncStateRef.current = {
+      runId: data.runId ?? null,
+      moveCount: Array.isArray(data.moves) ? data.moves.length : 0,
+    };
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
+    const baseState = createGameState(displayedBestScore, { ranked: true, tray: data.tray });
+    setGameOverPhase(null);
+    setFillCells([]);
+    setIsNewBest(false);
+    setRunSubmitting(false);
+    setRunSubmissionError("");
+    setNextTrayPending(false);
+    setNextTrayError("");
+    setNextTrayRetryTick(0);
+    setMoveSyncRetryTick(0);
+    setFinishRunAttempt(0);
+    setActiveVerifiedRun(null);
+    nextTrayFetchInFlightRef.current = false;
+    setGame({
+      ...baseState,
+      board: data.board,
+      score: data.score ?? 0,
+      moveCount: data.moveCount ?? 0,
+      bestCombo: data.bestCombo ?? 0,
+      bestMoveScore: data.bestMoveScore ?? 0,
+      bestLinesCleared: data.bestLinesCleared ?? 0,
+      combo: 0,
+      cleared: [],
+      clearedTones: {},
+    });
+    setActiveVerifiedRun({ id: data.runId, moves: data.moves ?? [] });
+    if (clearStartOverlay) {
+      setActiveRunDetected(null);
+    }
+    setResumeFailed("");
+    setResumedElsewhere(false);
+    setTrayRevealToken((token) => token + 1);
+    if (clearStartOverlay) {
+      setStarted(true);
+    }
+    if (soundEnabled) unlockAndTestSound();
+  }
+
+  async function beginNextGame(confirmAbandon = false) {
     if (hasSupabaseConfig && !authReady) {
       return;
     }
@@ -2751,9 +3076,22 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setTrayRevealToken(0);
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
+    setActiveRunDetected(null);
+    setActiveRunCheckDone(false);
+    setActiveRunCheckFailed(false);
+    setResumedElsewhere(false);
+    setResumeFailed("");
+    deviceTokenRef.current = null;
     setStartFailed(false);
     setStarted(false);
     nextTrayFetchInFlightRef.current = false;
+    moveSyncInFlightRef.current = false;
+    resetMoveSyncState(moveSyncStateRef);
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
+    setMoveSyncRetryTick(0);
     setGame(createGameState(displayedBestScore));
 
     if (!rankedReady) {
@@ -2767,7 +3105,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     for (let attempt = 0; attempt < 2; attempt++) {
       ({ data, error } = await supabase.functions.invoke("start-run", {
-        body: { clientVersion: CLIENT_VERSION },
+        body: { clientVersion: CLIENT_VERSION, ...(confirmAbandon ? { confirmAbandon: true } : {}) },
       }));
       if (!error && data?.runId && Array.isArray(data?.tray)) break;
       if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
@@ -2776,6 +3114,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setStartPending(false);
 
     if (!error && data?.runId && Array.isArray(data?.tray)) {
+      deviceTokenRef.current = data.deviceToken ?? null;
+      moveSyncStateRef.current = { runId: data.runId, moveCount: 0 };
       setTrayRevealToken((token) => token + 1);
       setGame(createGameState(displayedBestScore, { ranked: true, tray: data.tray }));
       setActiveVerifiedRun({ id: data.runId, moves: [] });
@@ -2785,6 +3125,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     if (isMaintenance503(error)) { window.location.reload(); return; }
+
+    if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+      const payload = await error.context.json().catch(() => ({}));
+      if (payload?.code === "active_run_exists") {
+        setActiveRunDetected({ id: null, moveCount: payload.moveCount ?? 0 });
+        setActiveRunCheckDone(true);
+        return;
+      }
+    }
 
     if (error instanceof FunctionsHttpError && error.context?.status === 401) {
       resetClientSessionState();
@@ -2798,6 +3147,100 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   function handleStartGame() {
     beginNextGame();
+  }
+
+  function handleNewGame() {
+    beginNextGame(true);
+  }
+
+  async function handleContinueGame() {
+    setResumePending(true);
+    setResumeFailed("");
+
+    const RESUME_RETRY_DELAYS_MS = [600, 1500];
+    let data = null;
+    let error = null;
+
+    for (let attempt = 0; attempt <= RESUME_RETRY_DELAYS_MS.length; attempt++) {
+      ({ data, error } = await supabase.functions.invoke("resume-run", {}));
+      if (!error || !isTransientFunctionTransportError(error) || attempt === RESUME_RETRY_DELAYS_MS.length) break;
+      await sleep(RESUME_RETRY_DELAYS_MS[attempt]);
+    }
+
+    setResumePending(false);
+
+    if (error) {
+      if (isMaintenance503(error)) { window.location.reload(); return; }
+      if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+        resetClientSessionState();
+        setAuthError("Your session expired. Your game is saved. Sign in to continue.");
+        handleOpenAuthPrompt();
+        return;
+      }
+      if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
+        setResumeFailed("Your previous game is no longer available.");
+        setActiveRunDetected(null);
+        return;
+      }
+      setResumeFailed("Couldn't reach your previous game. Try again.");
+      return;
+    }
+
+    if (data?.gameEnded) {
+      setResumeFailed("Your last game has ended. Your score has been saved!");
+      setActiveRunDetected(null);
+      loadAccountRuns();
+      loadGlobalLeaderboard();
+      return;
+    }
+
+    applyResumedRunState(data, { clearStartOverlay: true });
+  }
+
+  async function handleResumeHere() {
+    setResumePending(true);
+    setResumeFailed("");
+
+    let data = null;
+    let error = null;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      ({ data, error } = await supabase.functions.invoke("resume-run", {}));
+      if (!error || !isTransientFunctionTransportError(error)) break;
+      await sleep(800);
+    }
+
+    setResumePending(false);
+
+    if (error) {
+      if (isMaintenance503(error)) { window.location.reload(); return; }
+      if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+        resetClientSessionState();
+        setAuthError("Your session expired. Sign in again to keep playing.");
+        handleOpenAuthPrompt();
+        return;
+      }
+      if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
+        setResumeFailed("That game is no longer available here. Start fresh to keep playing.");
+        return;
+      }
+      setResumeFailed("Couldn't reclaim that game right now. Try again.");
+      return;
+    }
+
+    if (data?.gameEnded) {
+      setResumeFailed("That game already ended on the other device. Your score has been saved.");
+      loadAccountRuns();
+      loadGlobalLeaderboard();
+      return;
+    }
+
+    applyResumedRunState(data);
+  }
+
+  function handleStartFresh() {
+    setResumedElsewhere(false);
+    handleNewGame();
   }
 
   function handleRestart() {
@@ -3426,11 +3869,40 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                       <button className="start-button" type="button" onClick={handleStartGame}>Retry</button>
                       <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
                     </>
+                  ) : activeRunDetected && activeRunCheckDone ? (
+                    <>
+                      <p className="start-resume-msg">You have an unfinished game!</p>
+                      <p className="resumed-elsewhere-body">If you switched devices moments ago, you'll continue from the most recently synced move.</p>
+                      {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
+                      <button className="start-button" type="button" onClick={handleContinueGame} disabled={resumePending || startBlocked}>
+                        {resumePending ? "Loading..." : "Continue"}
+                      </button>
+                      <button className="start-local-button" type="button" onClick={handleNewGame} disabled={resumePending || startBlocked}>
+                        New Game
+                      </button>
+                    </>
                   ) : (
-                    <button className="start-button" type="button" onClick={handleStartGame} disabled={startBlocked}>
-                      {startPending ? "Starting..." : "Start Game"}
-                    </button>
+                    <>
+                      {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
+                      <button className="start-button" type="button" onClick={handleStartGame} disabled={startBlocked || resumePending}>
+                        {startPending || resumePending ? "Loading..." : "Start Game"}
+                      </button>
+                    </>
                   )}
+                </div>
+              ) : null}
+              {resumedElsewhere ? (
+                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Game resumed elsewhere">
+                  <p className="resumed-elsewhere-title">Picked up on another device</p>
+                  <p className="resumed-elsewhere-body">Your game was continued somewhere else. What would you like to do?</p>
+                  <p className="resumed-elsewhere-body">If you switched devices moments ago, you'll continue from the most recently synced move.</p>
+                  {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
+                  <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
+                    {resumePending ? "Loading..." : "Resume here"}
+                  </button>
+                  <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
+                    Start fresh
+                  </button>
                 </div>
               ) : null}
               {gameOverPhase === 'overlay' ? (

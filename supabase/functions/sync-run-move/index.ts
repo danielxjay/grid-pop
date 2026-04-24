@@ -88,8 +88,12 @@ Deno.serve(async (req) => {
 
     const committedMoves = parseMoves(run.moves) ?? [];
 
+    if (movesMatchPrefix(moves, committedMoves)) {
+      return json({ moveCount: committedMoves.length });
+    }
+
     if (!movesMatchPrefix(committedMoves, moves)) {
-      return json({ error: "Run state is out of sync. Finish this tray in-game before requesting the next one." }, { status: 409 });
+      return json({ error: "Run state is out of sync. Reload to continue from the saved game." }, { status: 409 });
     }
 
     const replay = replayRun(run.seed, moves, { requireGameOver: false });
@@ -105,16 +109,13 @@ Deno.serve(async (req) => {
       .eq("status", "active");
 
     if (updateError) {
-      console.error("Run move commit failed.", updateError);
-      return json({ error: "Could not prepare the next tray." }, { status: 500 });
+      console.error("Run move sync failed.", updateError);
+      return json({ error: "Could not save your latest move." }, { status: 500 });
     }
 
-    return json({
-      tray: replay.game.tray,
-      gameOver: replay.game.gameOver,
-    });
+    return json({ moveCount: moves.length });
   } catch (error) {
-    console.error("Unexpected next-tray failure.", error);
-    return json({ error: "Unexpected next-tray failure." }, { status: 500 });
+    console.error("Unexpected sync-run-move failure.", error);
+    return json({ error: "Unexpected sync-run-move failure." }, { status: 500 });
   }
 });

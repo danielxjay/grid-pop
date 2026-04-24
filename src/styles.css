@@ -1939,6 +1939,38 @@ h2 {
   text-align: center;
 }
 
+.start-resume-msg {
+  margin: 0 0 0.75rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+}
+
+.resumed-elsewhere-overlay {
+  animation: overlayFadeIn 280ms ease forwards;
+}
+
+.resumed-elsewhere-title {
+  margin: 0 0 0.4rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-align: center;
+}
+
+.resumed-elsewhere-body {
+  margin: 0 0 1.1rem;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 240px;
+}
+
 .player-handle--status {
   width: 100%;
   text-align: center;
