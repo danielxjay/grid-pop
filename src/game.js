@@ -530,13 +530,33 @@ export function toIndex(row, col) {
   return row * GRID_SIZE + col;
 }
 
+const SLOT_PLACEABLE_THRESHOLDS = [1.0, 0.8, 0.5];
+
 function buildTray(board, nextPieceId, rngState) {
   let tray = [];
   let currentPieceId = nextPieceId;
   let currentRngState = rngState;
 
+  const thresholds = [...SLOT_PLACEABLE_THRESHOLDS];
+
+  for (let i = thresholds.length - 1; i > 0; i -= 1) {
+    const roll = nextRandomValue(currentRngState);
+    currentRngState = roll.rngState;
+    const j = Math.floor(roll.value * (i + 1));
+    [thresholds[i], thresholds[j]] = [thresholds[j], thresholds[i]];
+  }
+
   for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-    const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState);
+    const threshold = thresholds[slot] ?? 0.5;
+    let requirePlaceable = true;
+
+    if (threshold < 1.0) {
+      const roll = nextRandomValue(currentRngState);
+      requirePlaceable = roll.value < threshold;
+      currentRngState = roll.rngState;
+    }
+
+    const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState, requirePlaceable);
     tray.push(pieceState.piece);
     currentPieceId = pieceState.nextPieceId;
     currentRngState = pieceState.rngState;
@@ -550,7 +570,7 @@ function buildTray(board, nextPieceId, rngState) {
       currentPieceId = nextPieceId;
 
       for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-        const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState);
+        const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState, true);
         tray.push(pieceState.piece);
         currentPieceId = pieceState.nextPieceId;
         currentRngState = pieceState.rngState;
@@ -591,32 +611,35 @@ function getShapeFamily(shape) {
   return SHAPE_FAMILIES[shape.name] || shape.name;
 }
 
-function getShapeWeight(board, shape, trayShapes) {
+function getShapeWeight(board, shape, trayShapes, requirePlaceable) {
   const placements = countPlacements(board, shape);
 
-  if (placements === 0) {
+  if (requirePlaceable && placements === 0) {
     return 0;
   }
 
   let weight = SHAPE_BASE_WEIGHTS[shape.name] ?? 1;
-  const fillRatio = board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length;
 
-  if (placements <= 2) {
-    weight *= fillRatio >= 0.7 ? 0.62 : fillRatio >= 0.5 ? 0.8 : 0.9;
-  } else if (placements <= 4) {
-    weight *= fillRatio >= 0.7 ? 0.82 : fillRatio >= 0.5 ? 0.92 : 0.97;
-  }
+  if (requirePlaceable) {
+    const fillRatio = board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length;
 
-  if (fillRatio >= 0.7) {
-    if (shape.cells.length <= 2) weight *= 1.1;
-    if (shape.cells.length >= 5) weight *= 0.9;
-    if (shape.name === "square-3") weight *= 0.82;
-  } else if (fillRatio >= 0.5) {
-    if (shape.cells.length <= 2) weight *= 1.03;
-    if (shape.cells.length >= 5) weight *= 0.96;
-    if (shape.name === "square-3") weight *= 0.9;
-  } else if (fillRatio <= 0.25 && shape.cells.length >= 5) {
-    weight *= 1.04;
+    if (placements <= 2) {
+      weight *= fillRatio >= 0.7 ? 0.62 : fillRatio >= 0.5 ? 0.8 : 0.9;
+    } else if (placements <= 4) {
+      weight *= fillRatio >= 0.7 ? 0.82 : fillRatio >= 0.5 ? 0.92 : 0.97;
+    }
+
+    if (fillRatio >= 0.7) {
+      if (shape.cells.length <= 2) weight *= 1.1;
+      if (shape.cells.length >= 5) weight *= 0.9;
+      if (shape.name === "square-3") weight *= 0.82;
+    } else if (fillRatio >= 0.5) {
+      if (shape.cells.length <= 2) weight *= 1.03;
+      if (shape.cells.length >= 5) weight *= 0.96;
+      if (shape.name === "square-3") weight *= 0.9;
+    } else if (fillRatio <= 0.25 && shape.cells.length >= 5) {
+      weight *= 1.04;
+    }
   }
 
   const family = getShapeFamily(shape);
@@ -631,8 +654,8 @@ function getShapeWeight(board, shape, trayShapes) {
   return weight;
 }
 
-function pickWeightedShape(board, rngState, trayShapes) {
-  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes));
+function pickWeightedShape(board, rngState, trayShapes, requirePlaceable) {
+  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes, requirePlaceable));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const shapePick = nextRandomValue(rngState);
 
@@ -661,8 +684,8 @@ function pickWeightedShape(board, rngState, trayShapes) {
   };
 }
 
-function createRandomPiece(board, trayShapes, nextPieceId, rngState) {
-  const shapePick = pickWeightedShape(board, rngState, trayShapes);
+function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlaceable) {
+  const shapePick = pickWeightedShape(board, rngState, trayShapes, requirePlaceable);
   const tonePick = nextRandomValue(shapePick.rngState);
   const tone = TONES[Math.floor(tonePick.value * TONES.length) % TONES.length];
 
