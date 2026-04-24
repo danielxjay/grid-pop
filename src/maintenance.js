@@ -6,5 +6,5 @@ export const MAINTENANCE_COPY = {
   body:
     "GridPop! is currently being updated. Please check back later.",
   note:
-    "Please close all other sessions to prevent issues.",
+    "Expected return: 22:45 UTC.",
 };
