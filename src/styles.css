@@ -1527,7 +1527,7 @@ h2 {
 .how-to-play-badge {
   font-size: 0.56rem;
   color: var(--fg);
-  background: color-mix(in srgb, var(--stroke-muted) 12%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--stroke-muted) 35%, transparent);
   border-radius: 0.3rem;
   padding: 0.2rem 0;
