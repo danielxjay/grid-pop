@@ -32,32 +32,40 @@ import {
 } from "./sound.js";
 import { hasSupabaseConfig, supabase } from "./supabase.js";
 
+const TONE_NAMES = ['coral', 'gold', 'mint', 'sky', 'orchid'];
+
 const THEMES = [
   {
-    key: "classic", name: "Classic", free: true,
+    key: "classic", name: "Classic", free: true, hint: "Default",
     grid: [
       [1, 1, 0, 2, 0, 0, 3, 3],
       [0, 1, 0, 2, 2, 0, 0, 3],
       [4, 0, 0, 0, 2, 5, 0, 3],
     ],
-    board: "linear-gradient(145deg,rgba(225,210,255,0.96),rgba(205,185,252,0.93))",
-    cell: "rgba(130,80,200,0.15)", cellBorder: "rgba(110,60,180,0.2)",
-    tones:   ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"],
-    tonesHi: ["#ffeef5", "#fffbe8", "#eafff7", "#e8fbff", "#fefefe"],
-    tonesLo: ["#ff9dc4", "#ffe080", "#7adec8", "#50d8f0", "#e0dbd6"],
   },
   {
-    key: "classic-dark", name: "Classic Dark", free: true,
+    key: "classic-dark", name: "Classic Dark", free: true, hint: "Dark mode edition",
     grid: [
       [1, 0, 2, 2, 0, 3, 0, 4],
       [1, 1, 0, 2, 3, 3, 0, 4],
       [0, 1, 5, 0, 0, 3, 4, 4],
     ],
-    board: "linear-gradient(145deg,rgba(50,15,90,0.85),rgba(30,8,65,0.92))",
-    cell: "rgba(255,255,255,0.04)", cellBorder: "rgba(180,140,255,0.14)",
-    tones:   ["#ff70a8", "#ffd040", "#40d8b0", "#20c8e8", "#c8b8e8"],
-    tonesHi: ["#ffaace", "#ffe888", "#80eed0", "#70e0f4", "#e0d8f4"],
-    tonesLo: ["#e0508a", "#e0aa20", "#20b890", "#10a8cc", "#a890d0"],
+  },
+  {
+    key: "tinted", name: "Tinted", free: true, hint: "Okabe-Ito inspired",
+    grid: [
+      [1, 1, 0, 2, 2, 0, 3, 0],
+      [0, 1, 4, 0, 2, 0, 3, 3],
+      [5, 4, 4, 0, 0, 0, 0, 3],
+    ],
+  },
+  {
+    key: "tinted-plus-plus", name: "Tinted++", free: true, hint: "Accessible + symbol cues",
+    grid: [
+      [1, 0, 2, 2, 0, 3, 0, 4],
+      [1, 5, 0, 2, 0, 3, 4, 4],
+      [0, 5, 5, 0, 0, 3, 0, 4],
+    ],
   },
   {
     key: "gen-y", name: "Gen Y", unlock: "Play 50 games",
@@ -66,24 +74,14 @@ const THEMES = [
       [0, 1, 1, 0, 0, 2, 0, 3],
       [0, 0, 1, 0, 0, 2, 3, 3],
     ],
-    board: "linear-gradient(145deg,rgba(235,220,195,0.95),rgba(218,202,176,0.92))",
-    cell: "rgba(160,120,80,0.1)", cellBorder: "rgba(140,100,60,0.18)",
-    tones:   ["#e8c0a0", "#ddc890", "#b8c8a8", "#c0c4c8", "#e0d8c8"],
-    tonesHi: ["#fff4ed", "#fff8e4", "#f0f5e8", "#f0f2f4", "#faf8f0"],
-    tonesLo: ["#d4a880", "#c8b070", "#9ab88a", "#a8b0b8", "#ccc4b0"],
   },
   {
-    key: "dmg", name: "DMG", unlock: "Pop 4+ lines in one burst",
+    key: "washed", name: "Washed", unlock: "Score under 500",
     grid: [
-      [1, 1, 2, 2, 3, 3, 4, 4],
-      [1, 0, 0, 2, 0, 3, 0, 4],
-      [5, 5, 0, 0, 0, 0, 0, 4],
+      [0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 1, 1, 0, 2, 0],
+      [0, 0, 0, 0, 0, 0, 2, 2],
     ],
-    board: "linear-gradient(145deg,#9bbc0f,#8bac0f)",
-    cell: "rgba(15,56,15,0.06)", cellBorder: "rgba(15,56,15,0.14)",
-    tones:   ["#0f380f", "#1e4e10", "#306230", "#4a7828", "#628c18"],
-    tonesHi: ["#1e520e", "#306230", "#427840", "#5e9030", "#7aa820"],
-    tonesLo: ["#0a2808", "#142e08", "#204820", "#386018", "#4e7010"],
   },
   {
     key: "broadcast", name: "Broadcast", unlock: "Share your stats",
@@ -92,11 +90,14 @@ const THEMES = [
       [1, 1, 0, 2, 3, 3, 0, 4],
       [0, 1, 5, 2, 0, 3, 4, 4],
     ],
-    board: "linear-gradient(145deg,#111118,#0a0a14)",
-    cell: "rgba(255,255,255,0.04)", cellBorder: "rgba(255,255,255,0.08)",
-    tones:   ["#ff2244", "#ffee00", "#00ff44", "#00eeff", "#e0e0e0"],
-    tonesHi: ["#ff8899", "#ffff88", "#88ffaa", "#88ffff", "#ffffff"],
-    tonesLo: ["#cc0022", "#cccc00", "#00cc33", "#00ccdd", "#c0c0c0"],
+  },
+  {
+    key: "dmg", name: "DMG", unlock: "Pop 4+ lines in one burst",
+    grid: [
+      [1, 1, 2, 2, 3, 3, 4, 4],
+      [1, 0, 0, 2, 0, 3, 0, 4],
+      [5, 5, 0, 0, 0, 0, 0, 4],
+    ],
   },
   {
     key: "y2k", name: "Y2K", unlock: "Score 20,000+",
@@ -105,50 +106,6 @@ const THEMES = [
       [1, 2, 3, 3, 4, 5, 0, 2],
       [0, 2, 0, 3, 4, 5, 5, 0],
     ],
-    board: "linear-gradient(145deg,rgba(0,20,60,0.9),rgba(0,10,40,0.95))",
-    cell: "rgba(0,100,200,0.08)", cellBorder: "rgba(0,200,255,0.14)",
-    tones:   ["#0088ff", "#a0b8d0", "#00ff88", "#00eeff", "#9900ff"],
-    tonesHi: ["#66ccff", "#d0e4f0", "#88ffcc", "#88ffff", "#cc88ff"],
-    tonesLo: ["#0055cc", "#7090b0", "#00cc66", "#00bbdd", "#7700cc"],
-  },
-  {
-    key: "summit", name: "Summit", condition: "top10",
-    grid: [
-      [1, 0, 2, 0, 3, 0, 4, 0],
-      [1, 2, 2, 0, 3, 3, 0, 4],
-      [0, 2, 0, 3, 0, 3, 4, 4],
-    ],
-    board: "linear-gradient(145deg,rgba(90,165,225,0.85),rgba(55,135,205,0.90))",
-    cell: "rgba(255,255,255,0.18)", cellBorder: "rgba(255,255,255,0.30)",
-    tones:   ["#5aaae0", "#2277bb", "#88c8f0", "#3399cc", "#aad8f0"],
-    tonesHi: ["#9ccef4", "#66aadd", "#c4e8f8", "#77bbdd", "#cceeff"],
-    tonesLo: ["#3388cc", "#1155aa", "#66aacc", "#1177aa", "#88bbcc"],
-  },
-  {
-    key: "crown", name: "Crown", condition: "rank1",
-    grid: [
-      [0, 1, 0, 2, 0, 1, 0, 2],
-      [1, 1, 2, 2, 0, 1, 3, 2],
-      [0, 0, 2, 0, 3, 3, 3, 0],
-    ],
-    board: "linear-gradient(145deg,rgba(210,160,30,0.88),rgba(185,135,10,0.92))",
-    cell: "rgba(120,80,0,0.08)", cellBorder: "rgba(150,100,0,0.18)",
-    tones:   ["#d4a017", "#e8880a", "#c87800", "#f0c030", "#b87010"],
-    tonesHi: ["#f0cc66", "#ffcc66", "#eeaa44", "#ffe080", "#e0a844"],
-    tonesLo: ["#aa7800", "#c06800", "#9a5800", "#cca020", "#8a5800"],
-  },
-  {
-    key: "greige", name: "Greige", unlock: "Score under 500",
-    grid: [
-      [0, 0, 0, 1, 0, 0, 0, 0],
-      [0, 0, 0, 1, 1, 0, 2, 0],
-      [0, 0, 0, 0, 0, 0, 2, 2],
-    ],
-    board: "linear-gradient(145deg,#d8d7d4,#c8c7c4)",
-    cell: "rgba(60,60,60,0.07)", cellBorder: "rgba(60,60,60,0.14)",
-    tones:   ["#505050", "#888888", "#6c6c6c", "#b0b0b0", "#383838"],
-    tonesHi: ["#707070", "#a8a8a8", "#8c8c8c", "#d0d0d0", "#585858"],
-    tonesLo: ["#383838", "#686868", "#505050", "#909090", "#282828"],
   },
   {
     key: "dev", name: "Dev", unlock: "Caught poking around", secret: true,
@@ -157,23 +114,34 @@ const THEMES = [
       [0, 1, 0, 2, 0, 3, 0, 4],
       [5, 0, 1, 0, 2, 0, 3, 0],
     ],
-    board: "linear-gradient(145deg,rgba(10,16,12,0.96),rgba(18,28,20,0.98))",
-    cell: "rgba(135,255,180,0.06)", cellBorder: "rgba(135,255,180,0.18)",
-    tones:   ["#5eff9a", "#9dff6a", "#41e6c2", "#8ae1ff", "#b6bcc4"],
-    tonesHi: ["#c9ffd9", "#e4ffb8", "#aaf8e8", "#d4f8ff", "#edf1f4"],
-    tonesLo: ["#1da74b", "#5eaf20", "#138e76", "#2e8fb0", "#6c737c"],
+  },
+  {
+    key: "summit", name: "Summit", condition: "top10",
+    grid: [
+      [1, 0, 2, 0, 3, 0, 4, 0],
+      [1, 2, 2, 0, 3, 3, 0, 4],
+      [0, 2, 0, 3, 0, 3, 4, 4],
+    ],
+  },
+  {
+    key: "crown", name: "Crown", condition: "rank1",
+    grid: [
+      [0, 1, 0, 2, 0, 1, 0, 2],
+      [1, 1, 2, 2, 0, 1, 3, 2],
+      [0, 0, 2, 0, 3, 3, 3, 0],
+    ],
   },
 ];
 
 const FREE_THEME_KEYS = new Set(THEMES.filter((theme) => theme.free).map((theme) => theme.key));
 
 function getUnlockedThemes(stats, profile, globalRuns = [], userId = null, devThemeUnlocked = false) {
-  const unlocked = new Set(["classic", "classic-dark"]);
+  const unlocked = new Set(["classic", "tinted", "tinted-plus-plus", "classic-dark"]);
   if (stats?.gamesPlayed >= 50) unlocked.add("gen-y");
   if (stats?.bestLinesCleared >= 4) unlocked.add("dmg");
   if (profile?.has_shared_stats) unlocked.add("broadcast");
   if (stats?.bestScore >= 20000) unlocked.add("y2k");
-  if (stats?.hasLowScore) unlocked.add("greige");
+  if (stats?.hasLowScore) unlocked.add("washed");
   if (devThemeUnlocked || profile?.dev_theme_unlocked || profile?.theme === "dev") unlocked.add("dev");
   // Conditional themes — only available while the live condition is met
   if (userId && globalRuns.length > 0) {
@@ -444,7 +412,7 @@ function MiniBoard({ grid }) {
   );
 }
 
-async function buildStatsCardBlob(displayName, stats, theme) {
+async function buildStatsCardBlob(displayName, stats) {
   const W = 1080;
   const PAD = 80;
   const GAP = 18;
@@ -459,7 +427,7 @@ async function buildStatsCardBlob(displayName, stats, theme) {
   const bgBottom = style.getPropertyValue('--page-bottom').trim() || '#9ecfff';
   const textColor = style.getPropertyValue('--fg').trim() || '#38106a';
   const panelColor = style.getPropertyValue('--bg-surface').trim() || 'rgba(255,255,255,0.82)';
-  const tones = theme?.tones ?? ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"];
+  const tones = TONE_NAMES.map(t => style.getPropertyValue(`--tone-${t}`).trim());
   const accent = tones[0];
 
   // Build chunk data up front so we can calculate total height before creating the canvas
@@ -601,7 +569,7 @@ function StatsModal({ displayName, onClose, onShare, stats, theme }) {
   async function handleShare() {
     setSharing(true);
     try {
-      const blob = await buildStatsCardBlob(displayName, stats, theme);
+      const blob = await buildStatsCardBlob(displayName, stats);
       const file = new File([blob], "gridpop-stats.png", { type: "image/png" });
       if (navigator.share && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -1031,23 +999,21 @@ function LeaderboardModal({
   );
 }
 
-function ThemePreviewBoard({ board, cell, cellBorder, tones, tonesHi, tonesLo, grid }) {
+function ThemePreviewBoard({ themeKey, grid }) {
   return (
-    <div className="theme-preview-board" style={{ background: board }}>
+    <div className="theme-preview-board" data-theme={themeKey} style={{ background: 'var(--board-bg)' }}>
       {grid.flat().map((tone, i) =>
         tone === 0 ? (
           <div
             key={i}
             className="theme-preview-cell theme-preview-cell--empty"
-            style={{ background: cell, borderColor: cellBorder }}
+            style={{ background: 'var(--board-cell-bg)', borderColor: 'var(--board-cell-border)' }}
           />
         ) : (
           <div key={i} className="theme-preview-cell theme-preview-cell--filled">
             <div
-              className="theme-preview-bubble"
-              style={{
-                background: `radial-gradient(circle at 35% 28%, ${tonesHi[tone - 1]}, ${tonesLo[tone - 1]} 85%)`,
-              }}
+              className={`theme-preview-bubble tone-${TONE_NAMES[tone - 1]}`}
+              style={{ background: 'var(--cell-bg)' }}
             />
           </div>
         )
@@ -1057,6 +1023,7 @@ function ThemePreviewBoard({ board, cell, cellBorder, tones, tonesHi, tonesLo, g
 }
 
 function getThemeUnlockHint(theme) {
+  if (theme.hint) return theme.hint;
   if (theme.free) return "Free";
   if (theme.key === "dev") return "Theme override detected";
   if (theme.condition === "rank1") return "Hold the #1 spot";
@@ -1086,15 +1053,7 @@ function ThemeModal({ activeTheme, signedIn, unlockedThemes, onGuestSignIn, onSe
               const isActive = activeTheme === theme.key;
               const cardClassName = `theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}${!isUnlocked && !signedIn ? " is-guest-locked" : ""}`;
               const cardPreview = (
-                <ThemePreviewBoard
-                  board={theme.board}
-                  cell={theme.cell}
-                  cellBorder={theme.cellBorder}
-                  tones={theme.tones}
-                  tonesHi={theme.tonesHi}
-                  tonesLo={theme.tonesLo}
-                  grid={theme.grid}
-                />
+                <ThemePreviewBoard themeKey={theme.key} grid={theme.grid} />
               );
               const cardLabel = (
                 <div className="theme-card-label">

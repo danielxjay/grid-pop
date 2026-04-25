@@ -2607,8 +2607,50 @@ h2 {
 /* ============================================================
    THEMES
    Applied via data-theme attribute on <html>
-   Classic (light) is the default — no override needed
+   Classic (light) is the default in :root — also defined explicitly below for scoped overrides
    ============================================================ */
+
+/* Classic — explicit block so theme preview thumbnails resolve correctly when a different theme is active */
+[data-theme="classic"] {
+  color-scheme: light;
+  --page-top: #dfc8ff;
+  --page-bottom: #c0dcff;
+  --bg-surface: rgba(255, 255, 255, 0.82);
+  --stroke: rgba(110, 185, 220, 0.7);
+  --fg: #38106a;
+  --stroke-muted: #7a52a0;
+  --accent: #e060b0;
+  --accent-secondary: #48bedd;
+  --gold: #f0c840;
+  --fg-secondary: #7a52a0;
+  --bg-interactive: rgba(255, 255, 255, 0.82);
+  --fg-link: #48bedd;
+  --shadow: 0 6px 20px rgba(80, 40, 160, 0.16);
+  --bg-bloom-a: rgba(255, 150, 210, 0.28);
+  --bg-bloom-b: rgba(120, 200, 255, 0.28);
+  --board-bg: linear-gradient(145deg, rgba(225, 210, 255, 0.96), rgba(205, 185, 252, 0.93));
+  --board-cell-bg: rgba(130, 80, 200, 0.15);
+  --board-cell-border: rgba(110, 60, 180, 0.2);
+  --board-cell-depth: #3c1478;
+  --board-filled-bg: rgba(80, 130, 190, 0.18);
+  --bg-modal: linear-gradient(150deg, #f5eeff 0%, #eaf4ff 100%);
+  --bg-overlay: rgba(30, 5, 70, 0.55);
+  --tone-coral: #ffb0cc;
+  --tone-coral-hi: #ffeef5;
+  --tone-coral-lo: #ff9dc4;
+  --tone-gold: #ffe480;
+  --tone-gold-hi: #fffbe8;
+  --tone-gold-lo: #ffe080;
+  --tone-mint: #90e8d0;
+  --tone-mint-hi: #eafff7;
+  --tone-mint-lo: #7adec8;
+  --tone-sky: #60dcf0;
+  --tone-sky-hi: #e8fbff;
+  --tone-sky-lo: #50d8f0;
+  --tone-orchid: #dcd8d2;
+  --tone-orchid-hi: #fefefe;
+  --tone-orchid-lo: #e0dbd6;
+}
 
 /* Classic Dark — free */
 [data-theme="classic-dark"] {
@@ -2655,6 +2697,297 @@ h2 {
   --tone-orchid: #c8b8e8;
   --tone-orchid-hi: #e0d8f4;
   --tone-orchid-lo: #a890d0;
+}
+
+/* Tinted — free, Okabe-Ito vibe without extra accessibility adornments */
+[data-theme="tinted"] {
+  color-scheme: light;
+
+  /* Soft classic-style shading, but no WCAG-specific symbol or outline layer.
+     Keep the whole theme inside the Okabe-Ito family and its softened tints. */
+
+  /* Every colour is a tint/shade/alpha of the 8 Okabe-Ito hues only:
+     Orange #E69F00 · Sky Blue #56B4E9 · Bluish Green #009E73 · Yellow #F0E442
+     Blue #0072B2 · Vermillion #D55E00 · Reddish Purple #CC79A7 · Black #000000 */
+
+  --okabe-ito-orange: #e69f00;
+  --okabe-ito-sky: #56b4e9;
+  --okabe-ito-green: #009e73;
+  --okabe-ito-yellow: #f0e442;
+  --okabe-ito-blue: #0072b2;
+  --okabe-ito-vermilion: #d55e00;
+  --okabe-ito-purple: #cc79a7;
+  --okabe-ito-black: #000000;
+
+  --page-top: #eef8fc;                         /* soft Sky Blue tint */
+  --page-bottom: #d6eaf5;                      /* soft Blue/Sky tint */
+  --bg-bloom-a: rgba(204, 121, 167, 0.18);
+  --bg-bloom-b: rgba(86, 180, 233, 0.20);
+  --bg-surface: rgba(238, 248, 252, 0.88);     /* soft Sky Blue tint */
+  --stroke: rgba(0, 114, 178, 0.28);           /* Okabe-Ito Blue */
+  --fg: #0072b2;                               /* Okabe-Ito Blue */
+  --stroke-muted: #0072b2;                     /* Okabe-Ito Blue */
+  --fg-secondary: #0072b2;                     /* Okabe-Ito Blue */
+  --accent: #d55e00;                           /* Okabe-Ito Vermillion */
+  --accent-secondary: #0072b2;                 /* Okabe-Ito Blue */
+  --bg-interactive: rgba(238, 248, 252, 0.88); /* soft Sky Blue tint */
+  --fg-link: #0072b2;                          /* Okabe-Ito Blue */
+  --gold: var(--okabe-ito-orange);
+  --shadow: 0 6px 20px rgba(0, 114, 178, 0.12);
+  --board-bg: linear-gradient(145deg, #eef8fc, #d6eaf5);
+  --board-cell-bg: rgba(0, 114, 178, 0.12);
+  --board-cell-border: rgba(0, 114, 178, 0.22);
+  --board-cell-depth: #0072b2;                 /* Okabe-Ito Blue */
+  --board-filled-bg: rgba(0, 114, 178, 0.10);
+  --bg-modal: linear-gradient(150deg, #eef8fc 0%, #d6eaf5 100%);
+  --bg-overlay: rgba(0, 114, 178, 0.26);
+
+  /* Piece tones: full-strength Okabe-Ito — matte 3D shading (35% toward white hi, 15% darker lo) */
+  --tone-coral: var(--okabe-ito-orange);       --tone-coral-hi: #efc159;  --tone-coral-lo: #c48700;   /* Orange */
+  --tone-gold: var(--okabe-ito-vermilion);     --tone-gold-hi: #e49659;   --tone-gold-lo: #b55000;    /* Vermillion */
+  --tone-mint: var(--okabe-ito-green);         --tone-mint-hi: #59c0a4;   --tone-mint-lo: #008662;    /* Bluish Green */
+  --tone-sky: var(--okabe-ito-sky);            --tone-sky-hi: #91cef1;    --tone-sky-lo: #4999c6;     /* Sky Blue */
+  --tone-orchid: var(--okabe-ito-purple);      --tone-orchid-hi: #dea8c6; --tone-orchid-lo: #ad678e;  /* Reddish Purple */
+}
+
+/* Tinted — gameplay board softened to match the theme preview card more closely */
+html[data-theme="tinted"] .board-cell {
+  border-radius: 0.18rem;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-surface) 78%, var(--board-cell-bg)),
+    color-mix(in srgb, var(--bg-surface) 58%, var(--board-cell-bg))
+  );
+  border-color: color-mix(in srgb, var(--accent-secondary) 42%, var(--board-cell-border));
+  box-shadow:
+    inset 0 2px 4px rgba(0, 114, 178, 0.10),
+    inset 0 1px 1px rgba(255, 255, 255, 0.58),
+    inset 0 -1px 2px rgba(0, 114, 178, 0.10);
+}
+
+html[data-theme="tinted"] .board-cell.is-filled {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-surface) 62%, var(--board-cell-bg)),
+    color-mix(in srgb, var(--bg-surface) 44%, var(--board-cell-bg))
+  );
+  box-shadow:
+    inset 0 2px 4px rgba(0, 114, 178, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.46),
+    inset 0 -1px 2px rgba(0, 114, 178, 0.10);
+}
+
+html[data-theme="tinted"] .board-cell.is-filled::before {
+  inset: 1px;
+  border-radius: 30%;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="tinted"] .drag-ghost {
+  filter: drop-shadow(0 6px 12px rgba(0, 114, 178, 0.16));
+}
+
+html[data-theme="tinted"] .drag-ghost .piece-cell.is-solid {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.18);
+}
+
+/* Tinted++ — current WCAG-focused accessible variant */
+[data-theme="tinted-plus-plus"] {
+  color-scheme: light;
+
+  /* WCAG + Okabe-Ito can coexist if the theme does not rely on hue alone.
+     Use Okabe-Ito fills for the pieces, dark high-contrast structural colours,
+     and shape cues so the palette stays recognisable while meeting accessibility. */
+
+  /* Every colour is a tint/shade/alpha of the 8 Okabe-Ito hues only:
+     Orange #E69F00 · Sky Blue #56B4E9 · Bluish Green #009E73 · Yellow #F0E442
+     Blue #0072B2 · Vermillion #D55E00 · Reddish Purple #CC79A7 · Black #000000 */
+
+  --okabe-ito-orange: #e69f00;
+  --okabe-ito-sky: #56b4e9;
+  --okabe-ito-green: #009e73;
+  --okabe-ito-yellow: #f0e442;
+  --okabe-ito-blue: #0072b2;
+  --okabe-ito-vermilion: #d55e00;
+  --okabe-ito-purple: #cc79a7;
+  --okabe-ito-black: #000000;
+
+  --page-top: #ddeeff;
+  --page-bottom: #cce4f8;
+  --bg-bloom-a: rgba(204, 121, 167, 0.28);
+  --bg-bloom-b: rgba(86, 180, 233, 0.28);
+  --bg-surface: rgba(255, 255, 255, 0.82);
+  --stroke: rgba(86, 180, 233, 0.70);
+  --fg: #001a3d;
+  --stroke-muted: #2a6090;
+  --fg-secondary: #2a6090;
+  --accent: #7a5800;
+  --accent-secondary: #005e94;
+  --bg-interactive: rgba(255, 255, 255, 0.82);
+  --fg-link: #005e94;
+  --gold: #7a5800;
+  --shadow: 0 6px 20px rgba(0, 30, 60, 0.20);
+  --board-bg: linear-gradient(145deg, #f0f2f5, #e8ecf0);
+  --board-cell-bg: rgba(30, 50, 80, 0.10);
+  --board-cell-border: rgba(30, 50, 80, 0.22);
+  --board-cell-depth: #2a3a4a;
+  --board-filled-bg: rgba(30, 50, 80, 0.14);
+  --bg-modal: linear-gradient(150deg, #eaf5ff 0%, #dceeff 100%);
+  --bg-overlay: rgba(0, 15, 50, 0.55);
+
+  /* Piece tones: full-strength Okabe-Ito — matte 3D shading (35% toward white hi, 15% darker lo) */
+  --tone-coral: var(--okabe-ito-orange);       --tone-coral-hi: #efc159;  --tone-coral-lo: #c48700;   /* Orange */
+  --tone-gold: var(--okabe-ito-vermilion);     --tone-gold-hi: #e49659;   --tone-gold-lo: #b55000;    /* Vermillion */
+  --tone-mint: var(--okabe-ito-green);         --tone-mint-hi: #59c0a4;   --tone-mint-lo: #008662;    /* Bluish Green */
+  --tone-sky: var(--okabe-ito-sky);            --tone-sky-hi: #91cef1;    --tone-sky-lo: #4999c6;     /* Sky Blue */
+  --tone-orchid: var(--okabe-ito-purple);      --tone-orchid-hi: #dea8c6; --tone-orchid-lo: #ad678e;  /* Reddish Purple */
+
+  /* Per-tone shape symbols — distinguishable by shape, not colour alone */
+  --tone-coral-symbol: "●";   --tone-coral-symbol-size: 1.5rem; --tone-coral-symbol-tray-size: 0.94rem; --tone-coral-symbol-preview-size: 1.12rem;
+  --tone-gold-symbol: "▲";    --tone-gold-symbol-size: 1.5rem; --tone-gold-symbol-tray-size: 0.94rem; --tone-gold-symbol-preview-size: 1.12rem;
+  --tone-mint-symbol: "■";    --tone-mint-symbol-size: 1.5rem; --tone-mint-symbol-tray-size: 0.94rem; --tone-mint-symbol-preview-size: 1.12rem;
+  --tone-sky-symbol: "◆";     --tone-sky-symbol-size: 1.5rem; --tone-sky-symbol-tray-size: 0.94rem; --tone-sky-symbol-preview-size: 1.12rem;
+  --tone-orchid-symbol: "★";  --tone-orchid-symbol-size: 1.9rem; --tone-orchid-symbol-tray-size: 1.16rem; --tone-orchid-symbol-preview-size: 1.36rem; /* star reads smaller optically */
+  --tone-symbol-ink: rgba(0, 0, 0, 0.82);      /* >= 4.6:1 against every tinted fill */
+  --tone-symbol-offset-y: 0.045em;
+  --tone-symbol-tray-offset-y: 0.04em;
+  --tone-symbol-preview-offset-y: 0.05em;
+  --tone-symbol-font: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "Noto Sans Symbols", sans-serif;
+}
+
+/* Tinted++ — per-tone symbol assignment */
+html[data-theme="tinted-plus-plus"] .board-cell.tone-coral,
+html[data-theme="tinted-plus-plus"] .piece-cell.tone-coral,
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble.tone-coral {
+  --tone-symbol: var(--tone-coral-symbol);
+  --tone-symbol-size: var(--tone-coral-symbol-size);
+  --tone-symbol-tray-size: var(--tone-coral-symbol-tray-size);
+  --tone-symbol-preview-size: var(--tone-coral-symbol-preview-size);
+}
+
+html[data-theme="tinted-plus-plus"] .board-cell.tone-gold,
+html[data-theme="tinted-plus-plus"] .piece-cell.tone-gold,
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble.tone-gold {
+  --tone-symbol: var(--tone-gold-symbol);
+  --tone-symbol-size: var(--tone-gold-symbol-size);
+  --tone-symbol-tray-size: var(--tone-gold-symbol-tray-size);
+  --tone-symbol-preview-size: var(--tone-gold-symbol-preview-size);
+}
+
+html[data-theme="tinted-plus-plus"] .board-cell.tone-mint,
+html[data-theme="tinted-plus-plus"] .piece-cell.tone-mint,
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble.tone-mint {
+  --tone-symbol: var(--tone-mint-symbol);
+  --tone-symbol-size: var(--tone-mint-symbol-size);
+  --tone-symbol-tray-size: var(--tone-mint-symbol-tray-size);
+  --tone-symbol-preview-size: var(--tone-mint-symbol-preview-size);
+}
+
+html[data-theme="tinted-plus-plus"] .board-cell.tone-sky,
+html[data-theme="tinted-plus-plus"] .piece-cell.tone-sky,
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble.tone-sky {
+  --tone-symbol: var(--tone-sky-symbol);
+  --tone-symbol-size: var(--tone-sky-symbol-size);
+  --tone-symbol-tray-size: var(--tone-sky-symbol-tray-size);
+  --tone-symbol-preview-size: var(--tone-sky-symbol-preview-size);
+}
+
+html[data-theme="tinted-plus-plus"] .board-cell.tone-orchid,
+html[data-theme="tinted-plus-plus"] .piece-cell.tone-orchid,
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble.tone-orchid {
+  --tone-symbol: var(--tone-orchid-symbol);
+  --tone-symbol-size: var(--tone-orchid-symbol-size);
+  --tone-symbol-tray-size: var(--tone-orchid-symbol-tray-size);
+  --tone-symbol-preview-size: var(--tone-orchid-symbol-preview-size);
+}
+
+/* Tinted++ — piece outline ring: 4.6:1 against the board ✓ meets WCAG 1.4.11 non-text contrast */
+html[data-theme="tinted-plus-plus"] .board-cell.is-filled::before {
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    inset 0 2px 5px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.12),
+    0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme="tinted-plus-plus"] .piece-cell.is-solid {
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.50);
+}
+
+/* Tinted++ — symbol overlay: shape cue for SC 1.4.1, contrast safe for current fills */
+html[data-theme="tinted-plus-plus"] .board-cell.is-filled::after {
+  content: var(--tone-symbol, "");
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--tone-symbol-font);
+  font-weight: 700;
+  font-size: var(--tone-symbol-size, 1.5rem);
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--tone-symbol-ink);
+  transform: translateY(var(--tone-symbol-offset-y));
+  pointer-events: none;
+  z-index: 1;
+}
+
+html[data-theme="tinted-plus-plus"] .piece-grid .piece-cell.is-solid::after {
+  content: var(--tone-symbol, "");
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--tone-symbol-font);
+  font-weight: 700;
+  font-size: var(--tone-symbol-tray-size, 1.5rem);
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--tone-symbol-ink);
+  transform: translateY(var(--tone-symbol-tray-offset-y));
+  pointer-events: none;
+  z-index: 1;
+}
+
+html[data-theme="tinted-plus-plus"] .drag-ghost .piece-cell.is-solid::after {
+  font-size: var(--tone-symbol-size, 1.5rem);
+  transform: translateY(var(--tone-symbol-offset-y));
+}
+
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble {
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.5),
+    inset 0 2px 4px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.18);
+}
+
+.theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble::after {
+  content: var(--tone-symbol, "");
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--tone-symbol-font);
+  font-weight: 700;
+  font-size: var(--tone-symbol-preview-size, 0.62rem);
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--tone-symbol-ink);
+  transform: translateY(var(--tone-symbol-preview-offset-y));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Tinted++ — tray piece cells need position:relative for the ::after to anchor correctly */
+html[data-theme="tinted-plus-plus"] .piece-grid .piece-cell {
+  position: relative;
 }
 
 /* Gen Y — unlock: play 100 games */
@@ -2745,53 +3078,53 @@ h2 {
 [data-theme="dmg"] {
   color-scheme: light;
 
-  /* App shell: GB plastic grey */
-  --page-top: #c0bfb0;
-  --page-bottom: #b0afa0;
-  --bg-bloom-a: rgba(50, 50, 40, 0.06);
-  --bg-bloom-b: rgba(50, 50, 40, 0.04);
-  --bg-surface: rgba(176, 175, 164, 0.65);
-  --stroke: rgba(40, 40, 30, 0.22);
-  --fg: #0f380f;
-  --stroke-muted: #4a6830;
-  --fg-secondary: #4a6830;
-  --accent: #0f380f;
-  --accent-secondary: #4a4a3c;
-  --bg-interactive: rgba(176, 175, 164, 0.65);
-  --fg-link: #4a4a3c;
-  --gold: #306230;
-  --shadow: 0 6px 20px rgba(40, 40, 30, 0.28);
+  /* App shell: GB plastic grey body */
+  --page-top: #d4d4d8;
+  --page-bottom: #c4c4c8;
+  --bg-bloom-a: rgba(210, 25, 120, 0.08);   /* pink button warmth */
+  --bg-bloom-b: rgba(40, 40, 160, 0.06);    /* nintendo blue hint */
+  --bg-surface: rgba(155, 158, 182, 0.68);  /* blue-grey screen bezel */
+  --stroke: rgba(70, 70, 105, 0.26);
+  --fg: #1a1a36;                             /* dark navy — Nintendo logo style */
+  --stroke-muted: #8a8aaa;
+  --fg-secondary: #54546e;
+  --accent: #d4197a;                         /* hot pink A/B buttons */
+  --accent-secondary: #3636a8;              /* Nintendo navy blue */
+  --bg-interactive: rgba(155, 158, 182, 0.68);
+  --fg-link: #3636a8;
+  --gold: #c8a400;
+  --shadow: 0 6px 20px rgba(40, 40, 80, 0.20);
 
-  /* Board: the green LCD screen */
-  --board-bg: linear-gradient(145deg, #9bbc0f, #8bac0f);
-  --board-cell-bg: rgba(15, 56, 15, 0.06);
-  --board-cell-border: rgba(15, 56, 15, 0.14);
+  /* Board: the yellow-green LCD screen */
+  --board-bg: linear-gradient(145deg, #a0bc18, #8bac0f);
+  --board-cell-bg: rgba(15, 56, 15, 0.07);
+  --board-cell-border: rgba(15, 56, 15, 0.16);
   --board-cell-depth: #0f380f;
-  --board-filled-bg: rgba(15, 56, 15, 0.14);
+  --board-filled-bg: rgba(15, 56, 15, 0.16);
 
-  --bg-modal: linear-gradient(150deg, #c4c3b4 0%, #b8b7a8 100%);
-  --bg-overlay: rgba(30, 30, 22, 0.68);
+  --bg-modal: linear-gradient(150deg, #d0d0d8 0%, #c6c6cc 100%);
+  --bg-overlay: rgba(20, 20, 40, 0.72);
 
-  /* Piece tones: all clearly darker than the screen bg for high contrast */
-  --tone-coral: #0f380f;
-  --tone-coral-hi: #204a10;
-  --tone-coral-lo: #0a2808;
+  /* Piece tones: 5 evenly-stepped GB shades — all hi values darker than board bg (#9bbc0f) */
+  --tone-coral: #0a2a0c;
+  --tone-coral-hi: #2e6030;
+  --tone-coral-lo: #061808;
 
-  --tone-gold: #1e4e10;
-  --tone-gold-hi: #306230;
-  --tone-gold-lo: #142e08;
+  --tone-gold: #1a5416;
+  --tone-gold-hi: #428040;
+  --tone-gold-lo: #0e3010;
 
-  --tone-mint: #306230;
-  --tone-mint-hi: #427840;
-  --tone-mint-lo: #204820;
+  --tone-mint: #328426;
+  --tone-mint-hi: #56a048;
+  --tone-mint-lo: #1e5418;
 
-  --tone-sky: #4a7828;
-  --tone-sky-hi: #5e9030;
-  --tone-sky-lo: #386018;
+  --tone-sky: #4ea416;
+  --tone-sky-hi: #6ab410;
+  --tone-sky-lo: #347010;
 
-  --tone-orchid: #628c18;
-  --tone-orchid-hi: #7aa820;
-  --tone-orchid-lo: #4e7010;
+  --tone-orchid: #60b80a;
+  --tone-orchid-hi: #74b00e;
+  --tone-orchid-lo: #489008;
 }
 
 
@@ -2838,54 +3171,55 @@ h2 {
   --tone-orchid-lo: #7700cc;
 }
 
-/* Greige — unlock: finish a game with score < 1,000 */
-[data-theme="greige"] {
+/* Washed — unlock: finish a game with score < 500 */
+[data-theme="washed"] {
   color-scheme: light;
 
-  --page-top: #e0dfdc;
-  --page-bottom: #d0cfcc;
-  --bg-bloom-a: rgba(80, 80, 80, 0.05);
-  --bg-bloom-b: rgba(80, 80, 80, 0.03);
-  --bg-surface: rgba(200, 199, 196, 0.70);
-  --stroke: rgba(60, 60, 60, 0.18);
-  --fg: #2a2a2a;
-  --stroke-muted: #888888;
-  --fg-secondary: #888888;
-  --accent: #505050;
-  --accent-secondary: #909090;
-  --bg-interactive: rgba(200, 199, 196, 0.70);
-  --fg-link: #909090;
-  --gold: #606060;
-  --shadow: 0 6px 20px rgba(60, 60, 60, 0.15);
+  --page-top: #d8d8d8;
+  --page-bottom: #c8c8c8;
+  --bg-bloom-a: rgba(0, 0, 0, 0.04);
+  --bg-bloom-b: rgba(0, 0, 0, 0.03);
+  --bg-surface: rgba(255, 255, 255, 0.72);
+  --stroke: rgba(60, 60, 60, 0.22);
+  --fg: #1a1a1a;
+  --stroke-muted: #909090;
+  --fg-secondary: #606060;
+  --accent: #404040;
+  --accent-secondary: #848484;
+  --bg-interactive: rgba(255, 255, 255, 0.72);
+  --fg-link: #505050;
+  --gold: #787878;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
 
-  --board-bg: linear-gradient(145deg, #d8d7d4, #c8c7c4);
-  --board-cell-bg: rgba(60, 60, 60, 0.07);
-  --board-cell-border: rgba(60, 60, 60, 0.14);
-  --board-cell-depth: #404040;
-  --board-filled-bg: rgba(80, 80, 80, 0.14);
+  --board-bg: linear-gradient(145deg, #d4d4d4, #c8c8c8);
+  --board-cell-bg: rgba(40, 40, 40, 0.08);
+  --board-cell-border: rgba(40, 40, 40, 0.16);
+  --board-cell-depth: #282828;
+  --board-filled-bg: rgba(40, 40, 40, 0.14);
 
-  --bg-modal: linear-gradient(150deg, #e4e3e0 0%, #d8d7d4 100%);
-  --bg-overlay: rgba(20, 20, 20, 0.55);
+  --bg-modal: linear-gradient(150deg, #e0e0e0 0%, #d6d6d6 100%);
+  --bg-overlay: rgba(0, 0, 0, 0.60);
 
-  --tone-coral: #505050;
-  --tone-coral-hi: #707070;
-  --tone-coral-lo: #383838;
+  /* 5 evenly-spread greyscale tones — near-white hi for candy-style highlight */
+  --tone-coral: #1e1e1e;
+  --tone-coral-hi: #d2d2d2;
+  --tone-coral-lo: #0e0e0e;
 
-  --tone-gold: #888888;
-  --tone-gold-hi: #a8a8a8;
-  --tone-gold-lo: #686868;
+  --tone-gold: #424242;
+  --tone-gold-hi: #d9d9d9;
+  --tone-gold-lo: #2a2a2a;
 
-  --tone-mint: #6c6c6c;
-  --tone-mint-hi: #8c8c8c;
-  --tone-mint-lo: #505050;
+  --tone-mint: #666666;
+  --tone-mint-hi: #e0e0e0;
+  --tone-mint-lo: #4c4c4c;
 
-  --tone-sky: #b0b0b0;
-  --tone-sky-hi: #d0d0d0;
-  --tone-sky-lo: #909090;
+  --tone-sky: #8e8e8e;
+  --tone-sky-hi: #e8e8e8;
+  --tone-sky-lo: #727272;
 
-  --tone-orchid: #383838;
-  --tone-orchid-hi: #585858;
-  --tone-orchid-lo: #282828;
+  --tone-orchid: #ababab;
+  --tone-orchid-hi: #eeeeee;
+  --tone-orchid-lo: #909090;
 }
 
 /* Dev — hidden console easter egg */
@@ -3014,23 +3348,23 @@ h2 {
   --bg-overlay: rgba(60, 35, 0, 0.50);
 
   --tone-coral: #d4a017;
-  --tone-coral-hi: #f0cc66;
+  --tone-coral-hi: #fff8e0;
   --tone-coral-lo: #aa7800;
 
   --tone-gold: #e8880a;
-  --tone-gold-hi: #ffcc66;
+  --tone-gold-hi: #fff4d4;
   --tone-gold-lo: #c06800;
 
   --tone-mint: #c87800;
-  --tone-mint-hi: #eeaa44;
+  --tone-mint-hi: #fff0cc;
   --tone-mint-lo: #9a5800;
 
   --tone-sky: #f0c030;
-  --tone-sky-hi: #ffe080;
+  --tone-sky-hi: #fffce0;
   --tone-sky-lo: #cca020;
 
   --tone-orchid: #b87010;
-  --tone-orchid-hi: #e0a844;
+  --tone-orchid-hi: #ffeccc;
   --tone-orchid-lo: #8a5800;
 }
 
@@ -3118,6 +3452,7 @@ h2 {
 .theme-preview-bubble {
   position: absolute;
   inset: 0;
+  z-index: 0;
   border-radius: 28%;
   box-shadow:
     inset 0 2px 4px rgba(255, 255, 255, 0.55),
@@ -3191,7 +3526,7 @@ h2 {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 0;
+  z-index: 3;
   padding: 2rem 0.75rem 0.65rem;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);
   display: flex;
