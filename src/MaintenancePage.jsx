@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MAINTENANCE_COPY } from "./maintenance.js";
+import { MAINTENANCE_COPY, MAINTENANCE_RETURN_AT_UTC } from "./maintenance.js";
 import {
   isSoundEnabled,
   setSoundEnabled,
@@ -14,6 +14,67 @@ const SPLASH_DURATION_MS = 480;
 const POP_DURATION_MS = 360;
 const RESPAWN_DELAY_MS = 500;
 const BUMP_COOLDOWN_MS = 100;
+
+function formatCountdown(msRemaining) {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatLocalReturn(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function getMaintenanceReturnDetails(now) {
+  if (!MAINTENANCE_RETURN_AT_UTC) {
+    return {
+      primary: "",
+      secondary: "",
+    };
+  }
+
+  const returnAt = new Date(MAINTENANCE_RETURN_AT_UTC);
+
+  if (Number.isNaN(returnAt.getTime())) {
+    return {
+      primary: "",
+      secondary: "",
+    };
+  }
+
+  const msRemaining = returnAt.getTime() - now;
+
+  if (msRemaining <= 0) {
+    return {
+      primary: "Expected return: very soon",
+      secondary: `Target time: ${formatLocalReturn(returnAt)}`,
+    };
+  }
+
+  return {
+    primary: `Expected return in ${formatCountdown(msRemaining)}`,
+    secondary: `Your time: ${formatLocalReturn(returnAt)}`,
+  };
+}
 
 function getPixelConfig() {
   const mobile = window.innerWidth < 500;
@@ -245,7 +306,28 @@ function FloatingPixels({ soundEnabledRef }) {
 
 export default function MaintenancePage() {
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
+  const [now, setNow] = useState(() => Date.now());
   const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    if (!MAINTENANCE_RETURN_AT_UTC) {
+      return undefined;
+    }
+
+    const returnAt = new Date(MAINTENANCE_RETURN_AT_UTC);
+
+    if (Number.isNaN(returnAt.getTime())) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   function handleToggleSound() {
     const next = !soundEnabled;
@@ -254,6 +336,8 @@ export default function MaintenancePage() {
     soundEnabledRef.current = next;
     if (next) unlockAndTestSound();
   }
+
+  const maintenanceReturn = getMaintenanceReturnDetails(now);
 
   return (
     <div className="maintenance-page">
@@ -264,7 +348,10 @@ export default function MaintenancePage() {
           <p className="maintenance-eyebrow">{MAINTENANCE_COPY.eyebrow}</p>
           <h2 className="maintenance-title">{MAINTENANCE_COPY.title}</h2>
           <p className="maintenance-body">{MAINTENANCE_COPY.body}</p>
-          <p className="maintenance-note">{MAINTENANCE_COPY.note}</p>
+          <p className="maintenance-note">{maintenanceReturn.primary}</p>
+          {maintenanceReturn.secondary ? (
+            <p className="maintenance-note">{maintenanceReturn.secondary}</p>
+          ) : null}
           <button
             className="start-button"
             type="button"

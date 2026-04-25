@@ -1,14 +1,17 @@
 :root {
   color-scheme: light;
-  --bg-top: #dfc8ff;
-  --bg-bottom: #c0dcff;
-  --panel: rgba(255, 255, 255, 0.82);
-  --line: rgba(110, 185, 220, 0.7);
-  --text: #38106a;
-  --muted: #7a52a0;
+  --page-top: #dfc8ff;
+  --page-bottom: #c0dcff;
+  --bg-surface: rgba(255, 255, 255, 0.82);
+  --stroke: rgba(110, 185, 220, 0.7);
+  --fg: #38106a;
+  --stroke-muted: #7a52a0;
   --accent: #e060b0;
-  --accent2: #48bedd;
+  --accent-secondary: #48bedd;
   --gold: #f0c840;
+  --fg-secondary: #7a52a0;
+  --bg-interactive: rgba(255, 255, 255, 0.82);
+  --fg-link: #48bedd;
   --shadow: 0 6px 20px rgba(80, 40, 160, 0.16);
 
   /* Piece tone colours — swap these per theme */
@@ -38,10 +41,10 @@
   --board-bg: linear-gradient(145deg, rgba(225, 210, 255, 0.96), rgba(205, 185, 252, 0.93));
   --board-cell-bg: rgba(130, 80, 200, 0.15);
   --board-cell-border: rgba(110, 60, 180, 0.2);
-  --board-cell-tint: #3c1478;
+  --board-cell-depth: #3c1478;
   --board-filled-bg: rgba(80, 130, 190, 0.18);
-  --modal-bg: linear-gradient(150deg, #f5eeff 0%, #eaf4ff 100%);
-  --overlay-bg: rgba(30, 5, 70, 0.55);
+  --bg-modal: linear-gradient(150deg, #f5eeff 0%, #eaf4ff 100%);
+  --bg-overlay: rgba(30, 5, 70, 0.55);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --board-size: min(32rem, calc(100dvh - 14rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 24rem));
@@ -49,11 +52,11 @@
   font-family: "Press Start 2P", monospace;
   line-height: 1.5;
   font-weight: 400;
-  color: var(--text);
+  color: var(--fg);
   background:
     radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
     radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
-    linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    linear-gradient(160deg, var(--page-top) 0%, var(--page-bottom) 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -76,7 +79,7 @@ body,
 
 html,
 body {
-  background-color: var(--bg-bottom);
+  background-color: var(--page-bottom);
 }
 
 body {
@@ -89,7 +92,7 @@ body {
   background:
     radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
     radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
-    linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    linear-gradient(160deg, var(--page-top) 0%, var(--page-bottom) 100%);
 }
 
 body.is-dragging {
@@ -152,21 +155,21 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
-  color: color-mix(in srgb, var(--text) 42%, transparent);
+  color: color-mix(in srgb, var(--fg) 42%, transparent);
   font-size: 0.44rem;
   letter-spacing: 0.04em;
   text-align: center;
 }
 
 .site-footer-link {
-  color: color-mix(in srgb, var(--accent2) 62%, transparent);
+  color: color-mix(in srgb, var(--fg-link) 62%, transparent);
   text-decoration: none;
   transition: color 120ms ease;
 }
 
 .site-footer-link:hover,
 .site-footer-link:focus-visible {
-  color: color-mix(in srgb, var(--accent2) 95%, transparent);
+  color: color-mix(in srgb, var(--fg-link) 95%, transparent);
 }
 
 .site-footer-separator {
@@ -174,7 +177,7 @@ button {
 }
 
 .site-footer-version {
-  color: color-mix(in srgb, var(--text) 28%, transparent);
+  color: color-mix(in srgb, var(--fg) 28%, transparent);
 }
 
 .update-toast {
@@ -188,9 +191,9 @@ button {
   gap: 0.65rem;
   padding: 0.8rem 0.9rem;
   border-radius: 0.75rem;
-  border: 2px solid color-mix(in srgb, var(--accent2) 30%, transparent);
-  background: color-mix(in srgb, var(--modal-bg) 94%, var(--panel));
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent2) 12%, transparent), var(--shadow);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 30%, transparent);
+  background: color-mix(in srgb, var(--bg-modal) 94%, var(--bg-surface));
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent-secondary) 12%, transparent), var(--shadow);
 }
 
 .update-toast-copy {
@@ -203,11 +206,11 @@ button {
   font-family: "Press Start 2P", monospace;
   font-size: 0.48rem;
   letter-spacing: 0.06em;
-  color: var(--text);
+  color: var(--fg);
 }
 
 .update-toast-copy span {
-  color: var(--muted);
+  color: var(--fg-secondary);
   font-size: 0.74rem;
   line-height: 1.35;
 }
@@ -222,9 +225,9 @@ button {
   min-height: 2.2rem;
   padding: 0.55rem 0.85rem;
   border-radius: 0.5rem;
-  border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent);
-  background: color-mix(in srgb, var(--panel) 75%, transparent);
-  color: var(--text);
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 35%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 75%, transparent);
+  color: var(--fg);
   font-size: 0.56rem;
   letter-spacing: 0.05em;
   cursor: pointer;
@@ -238,9 +241,9 @@ button {
 }
 
 .update-toast-button--primary {
-  border-color: color-mix(in srgb, var(--accent2) 55%, transparent);
-  background: color-mix(in srgb, var(--accent2) 16%, transparent);
-  color: var(--accent2);
+  border-color: color-mix(in srgb, var(--accent-secondary) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
+  color: var(--accent-secondary);
 }
 
 h1,
@@ -267,7 +270,7 @@ h2 {
   font-size: 0.5rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--fg-secondary);
   font-family: "Press Start 2P", monospace;
 }
 
@@ -330,10 +333,10 @@ h2 {
 
 /* Score panel */
 .score-panel {
-  background: var(--panel);
-  border: 2px solid var(--line);
+  background: var(--bg-surface);
+  border: 2px solid var(--stroke);
   border-radius: 0.6rem;
-  box-shadow: 4px 4px 0 var(--line), var(--shadow);
+  box-shadow: 4px 4px 0 var(--stroke), var(--shadow);
   display: grid;
   align-items: center;
   grid-template-columns: minmax(0, 1fr);
@@ -351,7 +354,7 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  color: var(--accent2);
+  color: var(--fg-link);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   line-height: 1.35;
@@ -385,10 +388,10 @@ h2 {
   gap: 0.55rem;
   padding: 0 0.8rem;
   border-radius: 0.55rem;
-  border: 2px solid color-mix(in srgb, var(--accent2) 80%, transparent);
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent2) 22%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 80%, transparent);
+  background: var(--bg-interactive);
+  color: var(--fg);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent-secondary) 22%, transparent);
   cursor: pointer;
   transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease, color 120ms ease;
   justify-self: center;
@@ -403,13 +406,13 @@ h2 {
 .profile-trigger:hover,
 .profile-trigger:focus-visible {
   transform: translate(-1px, -1px);
-  border-color: var(--accent2);
+  border-color: var(--accent-secondary);
 }
 
 .profile-trigger.is-active {
-  background: color-mix(in srgb, var(--accent2) 14%, transparent);
-  border-color: var(--accent2);
-  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent-secondary) 14%, transparent);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
 }
 
 .theme-trigger {
@@ -435,12 +438,12 @@ h2 {
   max-width: 9.5rem;
   min-height: 1.65rem;
   border-radius: 0 0 0.6rem 0.6rem;
-  border: 2px solid color-mix(in srgb, var(--accent2) 58%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 58%, transparent);
   border-top: 0;
-  background: linear-gradient(180deg, color-mix(in srgb, white 20%, transparent), color-mix(in srgb, var(--accent2) 12%, transparent));
-  color: color-mix(in srgb, var(--text) 68%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, white 20%, transparent), color-mix(in srgb, var(--accent-secondary) 12%, transparent));
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   box-shadow:
-    0 3px 0 color-mix(in srgb, var(--accent2) 12%, transparent),
+    0 3px 0 color-mix(in srgb, var(--accent-secondary) 12%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
   font-size: 0.48rem;
   letter-spacing: 0.08em;
@@ -454,9 +457,9 @@ h2 {
 .scoreboard-trigger:hover,
 .scoreboard-trigger:focus-visible {
   transform: translateY(1px);
-  border-color: var(--accent2);
-  background: linear-gradient(180deg, color-mix(in srgb, white 26%, transparent), color-mix(in srgb, var(--accent2) 18%, transparent));
-  color: var(--accent2);
+  border-color: var(--accent-secondary);
+  background: linear-gradient(180deg, color-mix(in srgb, white 26%, transparent), color-mix(in srgb, var(--accent-secondary) 18%, transparent));
+  color: var(--accent-secondary);
 }
 
 .leaderboard-modal-overlay {
@@ -466,7 +469,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
-  background: var(--overlay-bg);
+  background: var(--bg-overlay);
   backdrop-filter: blur(6px);
 }
 
@@ -491,9 +494,9 @@ h2 {
   gap: 1rem;
   padding: 1.1rem 1rem 0;
   border-radius: 1rem;
-  border: 2px solid color-mix(in srgb, var(--muted) 45%, transparent);
-  background: var(--modal-bg);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--muted) 20%, transparent), var(--shadow);
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 45%, transparent);
+  background: var(--bg-modal);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--stroke-muted) 20%, transparent), var(--shadow);
 }
 
 .leaderboard-colour-strip {
@@ -513,7 +516,7 @@ h2 {
 }
 
 .leaderboard-modal h2 {
-  color: var(--text);
+  color: var(--fg);
   text-shadow: 2px 2px 0 var(--accent);
 }
 
@@ -521,10 +524,10 @@ h2 {
   min-height: 2rem;
   padding: 0 0.75rem;
   border-radius: 0.45rem;
-  border: 2px solid color-mix(in srgb, var(--muted) 50%, transparent);
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--muted) 15%, transparent);
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 50%, transparent);
+  background: var(--bg-interactive);
+  color: var(--fg);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--stroke-muted) 15%, transparent);
   font-size: 0.48rem;
   letter-spacing: 0.03em;
   cursor: pointer;
@@ -545,9 +548,9 @@ h2 {
 .leaderboard-tab {
   min-height: 2.45rem;
   border-radius: 0.55rem;
-  border: 2px solid color-mix(in srgb, var(--muted) 50%, transparent);
-  background: color-mix(in srgb, var(--panel) 75%, transparent);
-  color: var(--muted);
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 50%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 75%, transparent);
+  color: var(--fg-secondary);
   cursor: pointer;
   font-size: 0.54rem;
   letter-spacing: 0.05em;
@@ -589,7 +592,7 @@ h2 {
 .leaderboard-section + .leaderboard-section {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--stroke-muted) 18%, transparent);
 }
 
 .leaderboard-section--hero {
@@ -605,7 +608,7 @@ h2 {
 
 .leaderboard-disclaimer {
   margin: 0;
-  color: var(--muted);
+  color: var(--fg-secondary);
   font-size: 0.44rem;
   letter-spacing: 0.05em;
   line-height: 1.6;
@@ -647,16 +650,16 @@ h2 {
   padding: 0.75rem 0.5rem;
   border-radius: 0.6rem;
   text-align: center;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--muted) 10%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stroke-muted) 28%, transparent);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--stroke-muted) 10%, transparent);
 }
 
 .leaderboard-hero--global {
   width: 100%;
   padding: 0.95rem 0.85rem;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 85%, transparent), 3px 3px 0 color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
@@ -665,12 +668,12 @@ h2 {
 .leaderboard-podium-rank {
   font-size: 0.46rem;
   letter-spacing: 0.08em;
-  color: var(--accent2);
+  color: var(--fg-link);
 }
 
 .leaderboard-podium-score {
   font-size: clamp(0.82rem, 3vw, 1.05rem);
-  color: var(--text);
+  color: var(--fg);
 }
 
 .leaderboard-hero {
@@ -700,7 +703,7 @@ h2 {
 
 .leaderboard-hero-name {
   font-size: 0.72rem;
-  color: var(--text);
+  color: var(--fg);
 }
 
 .leaderboard-list {
@@ -720,21 +723,21 @@ h2 {
   align-items: center;
   padding: 0.6rem 0.75rem;
   border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--panel) 85%, transparent);
-  border: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--muted) 8%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stroke-muted) 25%, transparent);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--stroke-muted) 8%, transparent);
 }
 
 .leaderboard-rank {
   font-size: 0.42rem;
-  color: var(--accent2);
+  color: var(--fg-link);
   letter-spacing: 0.08em;
 }
 
 .leaderboard-score,
 .leaderboard-name {
   font-size: 0.74rem;
-  color: var(--text);
+  color: var(--fg);
 }
 
 .leaderboard-name {
@@ -745,7 +748,7 @@ h2 {
 
 .leaderboard-date {
   text-align: right;
-  color: color-mix(in srgb, var(--muted) 50%, transparent);
+  color: color-mix(in srgb, var(--fg-secondary) 50%, transparent);
   white-space: nowrap;
 }
 
@@ -755,14 +758,14 @@ h2 {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.78rem;
   line-height: 1.4;
-  color: var(--muted);
+  color: var(--fg-secondary);
 }
 
 .auth-panel {
-  background: var(--panel);
-  border: 2px solid var(--line);
+  background: var(--bg-surface);
+  border: 2px solid var(--stroke);
   border-radius: 0.6rem;
-  box-shadow: 4px 4px 0 var(--line), var(--shadow);
+  box-shadow: 4px 4px 0 var(--stroke), var(--shadow);
   display: grid;
   gap: 0.65rem;
   padding: 0.95rem 0.85rem;
@@ -795,7 +798,7 @@ h2 {
 
 .auth-copy,
 .auth-status {
-  color: var(--muted);
+  color: var(--fg-secondary);
 }
 
 .auth-error {
@@ -811,16 +814,16 @@ h2 {
   font-size: 0.5rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--fg-secondary);
   font-family: "Press Start 2P", monospace;
 }
 
 .auth-input {
   width: 100%;
-  border: 2px solid color-mix(in srgb, var(--accent2) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 90%, transparent);
   border-radius: 0.45rem;
-  background: color-mix(in srgb, var(--panel) 95%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  color: var(--fg);
   padding: 0.7rem 0.8rem;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
@@ -847,7 +850,7 @@ h2 {
 
 .auth-actions-divider {
   border: none;
-  border-top: 1px solid color-mix(in srgb, var(--muted) 30%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--stroke-muted) 30%, transparent);
   margin: 0.1rem 0;
 }
 
@@ -870,10 +873,10 @@ h2 {
 }
 
 .auth-secondary-button {
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  color: var(--text);
-  border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 90%, transparent);
+  color: var(--fg);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 75%, transparent);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 20%, transparent);
   font-size: 0.54rem;
   letter-spacing: 0.03em;
 }
@@ -912,12 +915,12 @@ h2 {
 
 .auth-identity strong {
   font-size: 0.82rem;
-  color: var(--text);
+  color: var(--fg);
 }
 
 .auth-identity span {
   font-size: 0.74rem;
-  color: var(--muted);
+  color: var(--fg-secondary);
   overflow-wrap: anywhere;
 }
 
@@ -944,8 +947,8 @@ h2 {
   padding: 0.55rem;
   border-radius: 0.6rem;
   background: var(--board-bg);
-  border: 3px solid var(--accent2);
-  box-shadow: 5px 5px 0 var(--accent2), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-tint) 12%, transparent);
+  border: 3px solid var(--accent-secondary);
+  box-shadow: 5px 5px 0 var(--accent-secondary), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent);
   touch-action: none;
 }
 
@@ -958,9 +961,9 @@ h2 {
   background: var(--board-cell-bg);
   border: 1px solid var(--board-cell-border);
   box-shadow:
-    inset 0 2px 4px color-mix(in srgb, var(--board-cell-tint) 22%, transparent),
-    inset 0 1px 2px color-mix(in srgb, var(--board-cell-tint) 12%, transparent),
-    inset 1px 0 2px color-mix(in srgb, var(--board-cell-tint) 8%, transparent);
+    inset 0 2px 4px color-mix(in srgb, var(--board-cell-depth) 22%, transparent),
+    inset 0 1px 2px color-mix(in srgb, var(--board-cell-depth) 12%, transparent),
+    inset 1px 0 2px color-mix(in srgb, var(--board-cell-depth) 8%, transparent);
   transition:
     transform 140ms ease,
     background-color 140ms ease,
@@ -982,9 +985,9 @@ h2 {
   background: var(--board-filled-bg);
   border-radius: 0.15rem;
   box-shadow:
-    inset 0 2px 4px color-mix(in srgb, var(--board-cell-tint) 22%, transparent),
-    inset 0 1px 2px color-mix(in srgb, var(--board-cell-tint) 12%, transparent),
-    inset 1px 0 2px color-mix(in srgb, var(--board-cell-tint) 8%, transparent);
+    inset 0 2px 4px color-mix(in srgb, var(--board-cell-depth) 22%, transparent),
+    inset 0 1px 2px color-mix(in srgb, var(--board-cell-depth) 12%, transparent),
+    inset 1px 0 2px color-mix(in srgb, var(--board-cell-depth) 8%, transparent);
 }
 
 /* Rounded bubble sits on top of the square well as a pseudo-element */
@@ -997,7 +1000,7 @@ h2 {
   box-shadow:
     inset 0 2px 5px rgba(255, 255, 255, 0.65),
     inset 0 -2px 4px rgba(0, 0, 0, 0.1),
-    0 2px 5px color-mix(in srgb, var(--board-cell-tint) 22%, transparent);
+    0 2px 5px color-mix(in srgb, var(--board-cell-depth) 22%, transparent);
   pointer-events: none;
 }
 
@@ -1226,9 +1229,9 @@ h2 {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  border: 2px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
+  border: 2px solid var(--stroke);
+  background: var(--bg-interactive);
+  color: var(--fg-secondary);
   cursor: pointer;
   transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease, color 140ms ease;
 }
@@ -1261,15 +1264,15 @@ h2 {
 .hero-theme-button {
   display: none;
   left: 2.6rem;
-  background: color-mix(in srgb, var(--accent2) 15%, transparent);
-  border-color: var(--accent2);
-  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
 }
 
 .sound-icon-button:hover,
 .sound-icon-button:focus-visible {
   transform: translateY(-1px);
-  border-color: var(--accent2);
+  border-color: var(--accent-secondary);
 }
 
 .hero-sound-button:hover,
@@ -1285,16 +1288,16 @@ h2 {
 }
 
 .sound-icon-button.is-active {
-  background: color-mix(in srgb, var(--accent2) 15%, transparent);
-  border-color: var(--accent2);
-  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
 }
 
 .hero-info-button {
   right: 2.6rem;
-  background: color-mix(in srgb, var(--accent2) 15%, transparent);
-  border-color: var(--accent2);
-  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
 }
 
 .hero-info-button:hover,
@@ -1318,7 +1321,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
-  background: var(--overlay-bg);
+  background: var(--bg-overlay);
   backdrop-filter: blur(3px);
 }
 
@@ -1339,13 +1342,13 @@ h2 {
   gap: 1rem;
   padding: 1.1rem 1rem 1rem;
   border-radius: 1rem;
-  border: 2px solid color-mix(in srgb, var(--line) 85%, transparent);
-  background: var(--modal-bg);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--line) 35%, transparent), var(--shadow);
+  border: 2px solid color-mix(in srgb, var(--stroke) 85%, transparent);
+  background: var(--bg-modal);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--stroke) 35%, transparent), var(--shadow);
 }
 
 .how-to-play-modal h2 {
-  color: var(--text);
+  color: var(--fg);
   text-shadow: 2px 2px 0 var(--accent);
 }
 
@@ -1379,20 +1382,20 @@ h2 {
 
 .how-to-play-step p {
   font-size: 0.5rem;
-  color: var(--text);
+  color: var(--fg);
   line-height: 1.7;
   letter-spacing: 0.02em;
 }
 
 .how-to-play-pts {
-  color: var(--accent2) !important;
+  color: var(--fg-link) !important;
 }
 
 .how-to-play-footer {
   font-size: 0.46rem;
-  color: color-mix(in srgb, var(--text) 58%, transparent);
+  color: color-mix(in srgb, var(--fg) 58%, transparent);
   text-align: center;
-  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--stroke) 55%, transparent);
   padding-top: 0.75rem;
   letter-spacing: 0.02em;
   line-height: 1.7;
@@ -1406,7 +1409,7 @@ h2 {
   list-style: none;
   border-radius: 0.5rem;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stroke) 55%, transparent);
 }
 
 .stats-modal .stats-row {
@@ -1415,23 +1418,23 @@ h2 {
   align-items: baseline;
   gap: 1rem;
   padding: 0.55rem 0.75rem;
-  background: color-mix(in srgb, var(--panel) 86%, white);
+  background: color-mix(in srgb, var(--bg-surface) 86%, white);
 }
 
 .stats-modal .stats-row + .stats-row {
-  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--stroke) 45%, transparent);
 }
 
 .stats-modal .stats-row dt {
   font-size: 0.5rem;
-  color: color-mix(in srgb, var(--text) 66%, transparent);
+  color: color-mix(in srgb, var(--fg) 66%, transparent);
   letter-spacing: 0.02em;
 }
 
 .stats-modal .stats-row dd {
   font-size: 0.55rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--fg);
   margin: 0;
 }
 
@@ -1494,8 +1497,8 @@ h2 {
   height: 4.2rem;
   background: var(--board);
   border-radius: 4px;
-  border: 2px solid color-mix(in srgb, var(--line) 85%, transparent);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--line) 35%, transparent);
+  border: 2px solid color-mix(in srgb, var(--stroke) 85%, transparent);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--stroke) 35%, transparent);
 }
 
 .mini-cell {
@@ -1523,9 +1526,9 @@ h2 {
 
 .how-to-play-badge {
   font-size: 0.56rem;
-  color: var(--text);
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--stroke-muted) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stroke-muted) 35%, transparent);
   border-radius: 0.3rem;
   padding: 0.2rem 0;
   text-align: center;
@@ -1552,7 +1555,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: var(--overlay-bg);
+  background: var(--bg-overlay);
   backdrop-filter: blur(4px);
 }
 
@@ -1571,10 +1574,10 @@ h2 {
   min-height: 2rem;
   padding: 0 0.65rem;
   border-radius: 0.4rem;
-  border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  color: var(--text);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 75%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 90%, transparent);
+  color: var(--fg);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 20%, transparent);
   font-size: 0.48rem;
   letter-spacing: 0.03em;
   cursor: pointer;
@@ -1591,7 +1594,7 @@ h2 {
   margin-top: 0.4rem;
   font-size: clamp(0.75rem, 3vw, 1.35rem);
   font-family: "Press Start 2P", monospace;
-  color: var(--text);
+  color: var(--fg);
 }
 
 /* Sidebar / Tray */
@@ -1618,9 +1621,9 @@ h2 {
   max-width: 100%;
   padding: 0.75rem;
   border-radius: 0.4rem;
-  border: 2px solid var(--line);
-  background: var(--panel);
-  box-shadow: 3px 3px 0 var(--line);
+  border: 2px solid var(--stroke);
+  background: var(--bg-interactive);
+  box-shadow: 3px 3px 0 var(--stroke);
   cursor: grab;
   overflow: hidden;
   transition:
@@ -1652,12 +1655,12 @@ h2 {
   position: relative;
   cursor: default;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--accent2) 55%, var(--line));
+  border-color: color-mix(in srgb, var(--accent-secondary) 55%, var(--stroke));
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, transparent), color-mix(in srgb, var(--panel) 84%, var(--board-bg))),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, transparent), color-mix(in srgb, var(--bg-surface) 84%, var(--board-bg))),
     radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 42%);
   box-shadow:
-    3px 3px 0 color-mix(in srgb, var(--accent2) 35%, var(--line)),
+    3px 3px 0 color-mix(in srgb, var(--accent-secondary) 35%, var(--stroke)),
     inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
   animation: trayLoadingPulse 900ms ease-in-out infinite;
 }
@@ -1678,14 +1681,14 @@ h2 {
 
 .tray-loading-cell {
   border-radius: 0.22rem;
-  background: color-mix(in srgb, var(--board-cell-bg) 72%, var(--panel));
+  background: color-mix(in srgb, var(--board-cell-bg) 72%, var(--bg-surface));
   border: 1px solid color-mix(in srgb, var(--board-cell-border) 68%, transparent);
   opacity: 0.45;
 }
 
 .tray-loading-cell.is-active {
-  background: linear-gradient(180deg, color-mix(in srgb, white 38%, var(--accent)), color-mix(in srgb, var(--accent) 62%, var(--accent2)));
-  border-color: color-mix(in srgb, white 28%, var(--accent2));
+  background: linear-gradient(180deg, color-mix(in srgb, white 38%, var(--accent)), color-mix(in srgb, var(--accent) 62%, var(--accent-secondary)));
+  border-color: color-mix(in srgb, white 28%, var(--accent-secondary));
   box-shadow:
     inset 0 1px 1px color-mix(in srgb, white 40%, transparent),
     0 0 12px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -1706,10 +1709,10 @@ h2 {
 
 .tray-status-button {
   cursor: pointer;
-  border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
-  color: var(--text);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 75%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 94%, transparent);
+  color: var(--fg);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 20%, transparent);
   transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease;
 }
 
@@ -1755,7 +1758,7 @@ h2 {
   border-radius: 0.6rem;
   border: 2px dashed transparent;
   background: transparent;
-  color: var(--muted);
+  color: var(--fg-secondary);
   font-size: 0.82rem;
   transition:
     max-height 0.2s ease,
@@ -1772,13 +1775,13 @@ h2 {
   opacity: 1;
   padding: 1rem 0.75rem;
   margin-top: 0.5rem;
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--panel) 55%, transparent);
+  border-color: var(--stroke);
+  background: color-mix(in srgb, var(--bg-interactive) 55%, transparent);
 }
 
 .drag-dismiss-zone.is-hovered {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-interactive));
   color: var(--accent);
 }
 
@@ -1846,7 +1849,7 @@ h2 {
   z-index: 999;
   pointer-events: none;
   will-change: transform;
-  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--board-cell-tint) 32%, transparent));
+  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--board-cell-depth) 32%, transparent));
 }
 
 /* Start overlay — absolute over the board-container */
@@ -1857,7 +1860,7 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 0.6rem;
-  background: var(--overlay-bg);
+  background: var(--bg-overlay);
   backdrop-filter: blur(2px);
   pointer-events: auto;
 }
@@ -2149,7 +2152,7 @@ h2 {
     align-items: start;
     justify-items: center;
     padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-    background: var(--overlay-bg);
+    background: var(--bg-overlay);
     backdrop-filter: blur(4px);
   }
 
@@ -2164,10 +2167,10 @@ h2 {
     min-height: 2rem;
     padding: 0 0.65rem;
     border-radius: 0.4rem;
-    border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
-    background: color-mix(in srgb, var(--panel) 90%, transparent);
-    color: var(--text);
-    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+    border: 2px solid color-mix(in srgb, var(--accent-secondary) 75%, transparent);
+    background: color-mix(in srgb, var(--bg-interactive) 90%, transparent);
+    color: var(--fg);
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 20%, transparent);
     font-size: 0.48rem;
     letter-spacing: 0.03em;
   }
@@ -2249,7 +2252,7 @@ h2 {
     align-items: start;
     justify-items: center;
     padding: max(3.3rem, calc(3.3rem + env(safe-area-inset-top))) max(0.5rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-    background: var(--overlay-bg);
+    background: var(--bg-overlay);
     backdrop-filter: blur(4px);
   }
 
@@ -2264,10 +2267,10 @@ h2 {
     min-height: 2rem;
     padding: 0 0.65rem;
     border-radius: 0.4rem;
-    border: 2px solid color-mix(in srgb, var(--accent2) 75%, transparent);
-    background: color-mix(in srgb, var(--panel) 90%, transparent);
-    color: var(--text);
-    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent2) 20%, transparent);
+    border: 2px solid color-mix(in srgb, var(--accent-secondary) 75%, transparent);
+    background: color-mix(in srgb, var(--bg-interactive) 90%, transparent);
+    color: var(--fg);
+    box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 20%, transparent);
     font-size: 0.48rem;
     letter-spacing: 0.03em;
   }
@@ -2283,14 +2286,14 @@ h2 {
     column-gap: 0.35rem;
     padding: 0.5rem 0.65rem;
     border-radius: 0.5rem;
-    box-shadow: 3px 3px 0 var(--line), var(--shadow);
+    box-shadow: 3px 3px 0 var(--stroke), var(--shadow);
   }
 
   .auth-panel {
     max-width: none;
     padding: 0.8rem 0.75rem;
     border-radius: 0.5rem;
-    box-shadow: 3px 3px 0 var(--line), var(--shadow);
+    box-shadow: 3px 3px 0 var(--stroke), var(--shadow);
   }
 
   .scoreboard-trigger {
@@ -2350,7 +2353,7 @@ h2 {
     padding: 0.4rem;
     border-radius: 0.5rem;
     border-width: 2px;
-    box-shadow: 3px 3px 0 var(--accent2), var(--shadow), inset 0 2px 6px rgba(40, 80, 150, 0.12);
+    box-shadow: 3px 3px 0 var(--accent-secondary), var(--shadow), inset 0 2px 6px rgba(40, 80, 150, 0.12);
   }
 
   .start-overlay {
@@ -2374,7 +2377,7 @@ h2 {
     min-height: 4rem;
     padding: 0.4rem;
     border-radius: 0.35rem;
-    box-shadow: 2px 2px 0 var(--line);
+    box-shadow: 2px 2px 0 var(--stroke);
   }
 
   .piece-button .piece-grid {
@@ -2461,7 +2464,7 @@ h2 {
     background:
       radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
       radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
-      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      linear-gradient(160deg, var(--page-top) 0%, var(--page-bottom) 100%);
     color: #fff;
   }
 
@@ -2587,7 +2590,7 @@ h2 {
   .piece-button {
     min-height: 4.1rem;
     padding: 0.4rem;
-    box-shadow: 2px 2px 0 var(--line);
+    box-shadow: 2px 2px 0 var(--stroke);
   }
 
   .piece-button .piece-grid {
@@ -2611,23 +2614,26 @@ h2 {
 [data-theme="classic-dark"] {
   color-scheme: dark;
 
-  --bg-top: #1e0a3c;
-  --bg-bottom: #0a1840;
+  --page-top: #1e0a3c;
+  --page-bottom: #0a1840;
   --bg-bloom-a: rgba(180, 60, 140, 0.18);
   --bg-bloom-b: rgba(40, 100, 200, 0.18);
-  --panel: rgba(28, 10, 58, 0.88);
-  --line: rgba(130, 190, 230, 0.25);
-  --text: #f0e8ff;
-  --muted: #b090d0;
+  --bg-surface: rgba(28, 10, 58, 0.88);
+  --stroke: rgba(130, 190, 230, 0.25);
+  --fg: #f0e8ff;
+  --stroke-muted: #b090d0;
+  --fg-secondary: #b090d0;
   --accent: #f070c0;
-  --accent2: #50d0f0;
+  --accent-secondary: #50d0f0;
+  --bg-interactive: rgba(28, 10, 58, 0.88);
+  --fg-link: #50d0f0;
   --board-bg: linear-gradient(145deg, rgba(50, 15, 90, 0.85), rgba(30, 8, 65, 0.92));
   --board-cell-bg: rgba(255, 255, 255, 0.04);
   --board-cell-border: rgba(180, 140, 255, 0.14);
-  --board-cell-tint: #1a0a40;
+  --board-cell-depth: #1a0a40;
   --board-filled-bg: rgba(30, 10, 80, 0.25);
-  --modal-bg: linear-gradient(150deg, #1a0a30 0%, #0e1030 100%);
-  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --bg-modal: linear-gradient(150deg, #1a0a30 0%, #0e1030 100%);
+  --bg-overlay: rgba(0, 0, 0, 0.7);
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 
   --tone-coral: #ff70a8;
@@ -2653,25 +2659,28 @@ h2 {
 
 /* Gen Y — unlock: play 100 games */
 [data-theme="gen-y"] {
-  --bg-top: #f5f0e8;
-  --bg-bottom: #ede5d5;
+  --page-top: #f5f0e8;
+  --page-bottom: #ede5d5;
   --bg-bloom-a: rgba(210, 170, 120, 0.2);
   --bg-bloom-b: rgba(180, 200, 160, 0.15);
-  --panel: rgba(255, 252, 245, 0.85);
-  --line: rgba(160, 130, 90, 0.4);
-  --text: #3a2a18;
-  --muted: #8b6848;
+  --bg-surface: rgba(255, 252, 245, 0.85);
+  --stroke: rgba(160, 130, 90, 0.4);
+  --fg: #3a2a18;
+  --stroke-muted: #8b6848;
+  --fg-secondary: #8b6848;
   --accent: #c07040;
-  --accent2: #7a9870;
+  --accent-secondary: #7a9870;
+  --bg-interactive: rgba(255, 252, 245, 0.85);
+  --fg-link: #7a9870;
   --gold: #c09030;
   --shadow: 0 6px 20px rgba(100, 70, 30, 0.14);
   --board-bg: linear-gradient(145deg, rgba(235, 220, 195, 0.95), rgba(218, 202, 176, 0.92));
   --board-cell-bg: rgba(160, 120, 80, 0.1);
   --board-cell-border: rgba(140, 100, 60, 0.18);
-  --board-cell-tint: #6b4820;
+  --board-cell-depth: #6b4820;
   --board-filled-bg: rgba(160, 120, 80, 0.15);
-  --modal-bg: linear-gradient(150deg, #faf6ee 0%, #f0ebe0 100%);
-  --overlay-bg: rgba(80, 50, 20, 0.5);
+  --bg-modal: linear-gradient(150deg, #faf6ee 0%, #f0ebe0 100%);
+  --bg-overlay: rgba(80, 50, 20, 0.5);
   --tone-coral: #e8c0a0;
   --tone-coral-hi: #fff4ed;
   --tone-coral-lo: #d4a880;
@@ -2693,25 +2702,28 @@ h2 {
 [data-theme="broadcast"] {
   color-scheme: dark;
 
-  --bg-top: #080810;
-  --bg-bottom: #050508;
+  --page-top: #080810;
+  --page-bottom: #050508;
   --bg-bloom-a: rgba(255, 30, 30, 0.1);
   --bg-bloom-b: rgba(0, 200, 100, 0.08);
-  --panel: rgba(18, 18, 26, 0.92);
-  --line: rgba(255, 255, 255, 0.12);
-  --text: #f0f0f4;
-  --muted: #888898;
+  --bg-surface: rgba(18, 18, 26, 0.92);
+  --stroke: rgba(255, 255, 255, 0.12);
+  --fg: #f0f0f4;
+  --stroke-muted: #888898;
+  --fg-secondary: #888898;
   --accent: #ff2244;
-  --accent2: #e8e8e8;
+  --accent-secondary: #e8e8e8;
+  --bg-interactive: rgba(18, 18, 26, 0.92);
+  --fg-link: #e8e8e8;
   --gold: #ffee00;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
   --board-bg: linear-gradient(145deg, #111118, #0a0a14);
   --board-cell-bg: rgba(255, 255, 255, 0.04);
   --board-cell-border: rgba(255, 255, 255, 0.08);
-  --board-cell-tint: #0a0a1a;
+  --board-cell-depth: #0a0a1a;
   --board-filled-bg: rgba(20, 20, 30, 0.35);
-  --modal-bg: linear-gradient(150deg, #14141e 0%, #0e0e18 100%);
-  --overlay-bg: rgba(0, 0, 0, 0.8);
+  --bg-modal: linear-gradient(150deg, #14141e 0%, #0e0e18 100%);
+  --bg-overlay: rgba(0, 0, 0, 0.8);
   --tone-coral: #ff2244;
   --tone-coral-hi: #ff8899;
   --tone-coral-lo: #cc0022;
@@ -2734,16 +2746,19 @@ h2 {
   color-scheme: light;
 
   /* App shell: GB plastic grey */
-  --bg-top: #c0bfb0;
-  --bg-bottom: #b0afa0;
+  --page-top: #c0bfb0;
+  --page-bottom: #b0afa0;
   --bg-bloom-a: rgba(50, 50, 40, 0.06);
   --bg-bloom-b: rgba(50, 50, 40, 0.04);
-  --panel: rgba(176, 175, 164, 0.65);
-  --line: rgba(40, 40, 30, 0.22);
-  --text: #0f380f;
-  --muted: #4a6830;
+  --bg-surface: rgba(176, 175, 164, 0.65);
+  --stroke: rgba(40, 40, 30, 0.22);
+  --fg: #0f380f;
+  --stroke-muted: #4a6830;
+  --fg-secondary: #4a6830;
   --accent: #0f380f;
-  --accent2: #4a4a3c;
+  --accent-secondary: #4a4a3c;
+  --bg-interactive: rgba(176, 175, 164, 0.65);
+  --fg-link: #4a4a3c;
   --gold: #306230;
   --shadow: 0 6px 20px rgba(40, 40, 30, 0.28);
 
@@ -2751,11 +2766,11 @@ h2 {
   --board-bg: linear-gradient(145deg, #9bbc0f, #8bac0f);
   --board-cell-bg: rgba(15, 56, 15, 0.06);
   --board-cell-border: rgba(15, 56, 15, 0.14);
-  --board-cell-tint: #0f380f;
+  --board-cell-depth: #0f380f;
   --board-filled-bg: rgba(15, 56, 15, 0.14);
 
-  --modal-bg: linear-gradient(150deg, #c4c3b4 0%, #b8b7a8 100%);
-  --overlay-bg: rgba(30, 30, 22, 0.68);
+  --bg-modal: linear-gradient(150deg, #c4c3b4 0%, #b8b7a8 100%);
+  --bg-overlay: rgba(30, 30, 22, 0.68);
 
   /* Piece tones: all clearly darker than the screen bg for high contrast */
   --tone-coral: #0f380f;
@@ -2784,25 +2799,28 @@ h2 {
 [data-theme="y2k"] {
   color-scheme: dark;
 
-  --bg-top: #080824;
-  --bg-bottom: #040420;
+  --page-top: #080824;
+  --page-bottom: #040420;
   --bg-bloom-a: rgba(0, 200, 255, 0.14);
   --bg-bloom-b: rgba(0, 255, 120, 0.09);
-  --panel: rgba(0, 15, 45, 0.88);
-  --line: rgba(0, 200, 255, 0.25);
-  --text: #d0e8ff;
-  --muted: #6090b0;
+  --bg-surface: rgba(0, 15, 45, 0.88);
+  --stroke: rgba(0, 200, 255, 0.25);
+  --fg: #d0e8ff;
+  --stroke-muted: #6090b0;
+  --fg-secondary: #6090b0;
   --accent: #00ff88;
-  --accent2: #00ccff;
+  --accent-secondary: #00ccff;
+  --bg-interactive: rgba(0, 15, 45, 0.88);
+  --fg-link: #00ccff;
   --gold: #c8d400;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   --board-bg: linear-gradient(145deg, rgba(0, 20, 60, 0.9), rgba(0, 10, 40, 0.95));
   --board-cell-bg: rgba(0, 100, 200, 0.08);
   --board-cell-border: rgba(0, 200, 255, 0.14);
-  --board-cell-tint: #002840;
+  --board-cell-depth: #002840;
   --board-filled-bg: rgba(0, 30, 60, 0.25);
-  --modal-bg: linear-gradient(150deg, #0c1028 0%, #080e20 100%);
-  --overlay-bg: rgba(0, 0, 20, 0.75);
+  --bg-modal: linear-gradient(150deg, #0c1028 0%, #080e20 100%);
+  --bg-overlay: rgba(0, 0, 20, 0.75);
   --tone-coral: #0088ff;
   --tone-coral-hi: #66ccff;
   --tone-coral-lo: #0055cc;
@@ -2824,27 +2842,30 @@ h2 {
 [data-theme="greige"] {
   color-scheme: light;
 
-  --bg-top: #e0dfdc;
-  --bg-bottom: #d0cfcc;
+  --page-top: #e0dfdc;
+  --page-bottom: #d0cfcc;
   --bg-bloom-a: rgba(80, 80, 80, 0.05);
   --bg-bloom-b: rgba(80, 80, 80, 0.03);
-  --panel: rgba(200, 199, 196, 0.70);
-  --line: rgba(60, 60, 60, 0.18);
-  --text: #2a2a2a;
-  --muted: #888888;
+  --bg-surface: rgba(200, 199, 196, 0.70);
+  --stroke: rgba(60, 60, 60, 0.18);
+  --fg: #2a2a2a;
+  --stroke-muted: #888888;
+  --fg-secondary: #888888;
   --accent: #505050;
-  --accent2: #909090;
+  --accent-secondary: #909090;
+  --bg-interactive: rgba(200, 199, 196, 0.70);
+  --fg-link: #909090;
   --gold: #606060;
   --shadow: 0 6px 20px rgba(60, 60, 60, 0.15);
 
   --board-bg: linear-gradient(145deg, #d8d7d4, #c8c7c4);
   --board-cell-bg: rgba(60, 60, 60, 0.07);
   --board-cell-border: rgba(60, 60, 60, 0.14);
-  --board-cell-tint: #404040;
+  --board-cell-depth: #404040;
   --board-filled-bg: rgba(80, 80, 80, 0.14);
 
-  --modal-bg: linear-gradient(150deg, #e4e3e0 0%, #d8d7d4 100%);
-  --overlay-bg: rgba(20, 20, 20, 0.55);
+  --bg-modal: linear-gradient(150deg, #e4e3e0 0%, #d8d7d4 100%);
+  --bg-overlay: rgba(20, 20, 20, 0.55);
 
   --tone-coral: #505050;
   --tone-coral-hi: #707070;
@@ -2871,27 +2892,30 @@ h2 {
 [data-theme="dev"] {
   color-scheme: dark;
 
-  --bg-top: #020503;
-  --bg-bottom: #07110a;
+  --page-top: #020503;
+  --page-bottom: #07110a;
   --bg-bloom-a: rgba(80, 255, 140, 0.12);
   --bg-bloom-b: rgba(90, 180, 255, 0.08);
-  --panel: rgba(8, 18, 11, 0.92);
-  --line: rgba(110, 255, 165, 0.16);
-  --text: #dfffe8;
-  --muted: #7fa88d;
+  --bg-surface: rgba(8, 18, 11, 0.92);
+  --stroke: rgba(110, 255, 165, 0.16);
+  --fg: #dfffe8;
+  --stroke-muted: #7fa88d;
+  --fg-secondary: #7fa88d;
   --accent: #5eff9a;
-  --accent2: #8ae1ff;
+  --accent-secondary: #8ae1ff;
+  --bg-interactive: rgba(8, 18, 11, 0.92);
+  --fg-link: #8ae1ff;
   --gold: #9dff6a;
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 
   --board-bg: linear-gradient(145deg, rgba(10, 16, 12, 0.96), rgba(18, 28, 20, 0.98));
   --board-cell-bg: rgba(135, 255, 180, 0.06);
   --board-cell-border: rgba(135, 255, 180, 0.18);
-  --board-cell-tint: #05110a;
+  --board-cell-depth: #05110a;
   --board-filled-bg: rgba(18, 42, 24, 0.3);
 
-  --modal-bg: linear-gradient(150deg, #06100a 0%, #0a1810 100%);
-  --overlay-bg: rgba(0, 0, 0, 0.8);
+  --bg-modal: linear-gradient(150deg, #06100a 0%, #0a1810 100%);
+  --bg-overlay: rgba(0, 0, 0, 0.8);
 
   --tone-coral: #5eff9a;
   --tone-coral-hi: #c9ffd9;
@@ -2918,25 +2942,28 @@ h2 {
 [data-theme="summit"] {
   color-scheme: light;
 
-  --bg-top: #f2f8ff;
-  --bg-bottom: #ddeeff;
+  --page-top: #f2f8ff;
+  --page-bottom: #ddeeff;
   --bg-bloom-a: rgba(100, 180, 240, 0.20);
   --bg-bloom-b: rgba(180, 220, 255, 0.15);
-  --panel: rgba(240, 250, 255, 0.92);
-  --line: rgba(40, 110, 180, 0.18);
-  --text: #0d2545;
-  --muted: #4a7aaa;
+  --bg-surface: rgba(240, 250, 255, 0.92);
+  --stroke: rgba(40, 110, 180, 0.18);
+  --fg: #0d2545;
+  --stroke-muted: #4a7aaa;
+  --fg-secondary: #4a7aaa;
   --accent: #2288cc;
-  --accent2: #55aadd;
+  --accent-secondary: #55aadd;
+  --bg-interactive: rgba(240, 250, 255, 0.92);
+  --fg-link: #55aadd;
   --gold: #2288cc;
   --shadow: 0 6px 20px rgba(20, 80, 150, 0.12);
   --board-bg: linear-gradient(145deg, rgba(90, 165, 225, 0.85), rgba(55, 135, 205, 0.90));
   --board-cell-bg: rgba(255, 255, 255, 0.18);
   --board-cell-border: rgba(255, 255, 255, 0.30);
-  --board-cell-tint: #1a5a9a;
+  --board-cell-depth: #1a5a9a;
   --board-filled-bg: rgba(255, 255, 255, 0.12);
-  --modal-bg: linear-gradient(150deg, #f5faff 0%, #e5f2ff 100%);
-  --overlay-bg: rgba(10, 40, 90, 0.45);
+  --bg-modal: linear-gradient(150deg, #f5faff 0%, #e5f2ff 100%);
+  --bg-overlay: rgba(10, 40, 90, 0.45);
 
   --tone-coral: #5aaae0;
   --tone-coral-hi: #9ccef4;
@@ -2963,25 +2990,28 @@ h2 {
 [data-theme="crown"] {
   color-scheme: light;
 
-  --bg-top: #fef9ed;
-  --bg-bottom: #f8edcc;
+  --page-top: #fef9ed;
+  --page-bottom: #f8edcc;
   --bg-bloom-a: rgba(210, 160, 20, 0.18);
   --bg-bloom-b: rgba(230, 180, 40, 0.12);
-  --panel: rgba(255, 251, 235, 0.90);
-  --line: rgba(160, 110, 10, 0.22);
-  --text: #3d2800;
-  --muted: #8a6520;
+  --bg-surface: rgba(255, 251, 235, 0.90);
+  --stroke: rgba(160, 110, 10, 0.22);
+  --fg: #3d2800;
+  --stroke-muted: #8a6520;
+  --fg-secondary: #8a6520;
   --accent: #c8880a;
-  --accent2: #e8a820;
+  --accent-secondary: #e8a820;
+  --bg-interactive: rgba(255, 251, 235, 0.90);
+  --fg-link: #e8a820;
   --gold: #c8880a;
   --shadow: 0 6px 20px rgba(100, 70, 0, 0.16);
   --board-bg: linear-gradient(145deg, rgba(210, 160, 30, 0.88), rgba(185, 135, 10, 0.92));
   --board-cell-bg: rgba(120, 80, 0, 0.08);
   --board-cell-border: rgba(150, 100, 0, 0.18);
-  --board-cell-tint: #7a5000;
+  --board-cell-depth: #7a5000;
   --board-filled-bg: rgba(140, 95, 0, 0.18);
-  --modal-bg: linear-gradient(150deg, #fdf6e3 0%, #f8edcc 100%);
-  --overlay-bg: rgba(60, 35, 0, 0.50);
+  --bg-modal: linear-gradient(150deg, #fdf6e3 0%, #f8edcc 100%);
+  --bg-overlay: rgba(60, 35, 0, 0.50);
 
   --tone-coral: #d4a017;
   --tone-coral-hi: #f0cc66;
@@ -3021,7 +3051,7 @@ h2 {
 .theme-card {
   position: relative;
   border-radius: 8px;
-  border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border: 2px solid color-mix(in srgb, var(--stroke) 80%, transparent);
   cursor: pointer;
   overflow: hidden;
   transition: border-color 100ms ease;
@@ -3032,7 +3062,7 @@ h2 {
 }
 
 .theme-card.is-locked:hover {
-  border-color: color-mix(in srgb, var(--muted) 30%, transparent);
+  border-color: color-mix(in srgb, var(--stroke-muted) 30%, transparent);
 }
 
 .theme-card.is-active {
@@ -3042,7 +3072,7 @@ h2 {
 .theme-card.is-locked {
   cursor: default;
   opacity: 0.68;
-  border-color: color-mix(in srgb, var(--muted) 30%, transparent);
+  border-color: color-mix(in srgb, var(--stroke-muted) 30%, transparent);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 
@@ -3135,14 +3165,14 @@ h2 {
   padding: 0.45rem 0.8rem;
   border-radius: 0.45rem;
   border: 2px solid rgba(255, 255, 255, 0.9);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-interactive) 88%, transparent);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.24);
   font: inherit;
   font-size: 0.62rem;
   line-height: 1.35;
   letter-spacing: 0.04em;
   text-align: center;
-  color: var(--text);
+  color: var(--fg);
   cursor: pointer;
   pointer-events: auto;
   transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease;
@@ -3190,7 +3220,7 @@ h2 {
     background:
       radial-gradient(circle at 12% 12%, var(--bg-bloom-a) 0%, transparent 42%),
       radial-gradient(circle at 88% 18%, var(--bg-bloom-b) 0%, transparent 38%),
-      linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      linear-gradient(160deg, var(--page-top) 0%, var(--page-bottom) 100%);
     min-height: var(--vvh, 100dvh);
   }
 
@@ -3300,23 +3330,23 @@ h2 {
   flex-direction: column;
   gap: 0.75rem;
   padding: 1.25rem 1rem;
-  background: var(--panel);
-  border: 2px solid var(--line);
+  background: var(--bg-surface);
+  border: 2px solid var(--stroke);
   border-radius: 0.75rem;
-  box-shadow: 4px 4px 0 var(--line), var(--shadow);
+  box-shadow: 4px 4px 0 var(--stroke), var(--shadow);
 }
 
 .maintenance-eyebrow {
   margin: 0;
   font-size: 0.5rem;
-  color: var(--muted);
+  color: var(--fg-secondary);
   line-height: 1.6;
 }
 
 .maintenance-title {
   margin: 0;
   font-size: clamp(0.65rem, 3vw, 0.85rem);
-  color: var(--text);
+  color: var(--fg);
   line-height: 1.6;
   letter-spacing: 0.03em;
 }
@@ -3324,13 +3354,13 @@ h2 {
 .maintenance-body {
   margin: 0;
   font-size: 0.55rem;
-  color: var(--text);
+  color: var(--fg);
   line-height: 1.9;
 }
 
 .maintenance-note {
   margin: 0;
   font-size: 0.5rem;
-  color: var(--muted);
+  color: var(--fg-secondary);
   line-height: 1.9;
 }

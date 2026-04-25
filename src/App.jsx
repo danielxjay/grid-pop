@@ -455,10 +455,10 @@ async function buildStatsCardBlob(displayName, stats, theme) {
 
   // Resolve theme-aware colors from live CSS vars + theme data
   const style = getComputedStyle(document.documentElement);
-  const bgTop = style.getPropertyValue('--bg-top').trim() || '#cfa8ff';
-  const bgBottom = style.getPropertyValue('--bg-bottom').trim() || '#9ecfff';
-  const textColor = style.getPropertyValue('--text').trim() || '#38106a';
-  const panelColor = style.getPropertyValue('--panel').trim() || 'rgba(255,255,255,0.82)';
+  const bgTop = style.getPropertyValue('--page-top').trim() || '#cfa8ff';
+  const bgBottom = style.getPropertyValue('--page-bottom').trim() || '#9ecfff';
+  const textColor = style.getPropertyValue('--fg').trim() || '#38106a';
+  const panelColor = style.getPropertyValue('--bg-surface').trim() || 'rgba(255,255,255,0.82)';
   const tones = theme?.tones ?? ["#ffb0cc", "#ffe480", "#90e8d0", "#60dcf0", "#dcd8d2"];
   const accent = tones[0];
 
