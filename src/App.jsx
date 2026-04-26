@@ -948,11 +948,18 @@ function LeaderboardModal({
           <div key="global-panel" className="leaderboard-panel">
             <section className="leaderboard-section leaderboard-section--hero">
               {globalLoading ? (
-                <div className="leaderboard-hero leaderboard-hero--global leaderboard-hero--skeleton" aria-hidden="true">
-                  <span className="leaderboard-hero-rank">&nbsp;</span>
-                  <strong className="leaderboard-hero-score">&nbsp;</strong>
-                  <span className="leaderboard-hero-name">&nbsp;</span>
-                </div>
+                <>
+                  <div className="leaderboard-hero leaderboard-hero--global leaderboard-hero--skeleton" aria-hidden="true">
+                    <span className="leaderboard-hero-rank">&nbsp;</span>
+                    <strong className="leaderboard-hero-score">&nbsp;</strong>
+                    <span className="leaderboard-hero-name">&nbsp;</span>
+                  </div>
+                  <div className="leaderboard-hero-spinner" aria-hidden="true">
+                    <span className="overlay-spinner-dot" />
+                    <span className="overlay-spinner-dot" />
+                    <span className="overlay-spinner-dot" />
+                  </div>
+                </>
               ) : null}
               {!globalLoading && globalTopRun ? (
                 <div className="leaderboard-hero leaderboard-hero--global">
@@ -1977,7 +1984,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       );
   const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
     ? "Reconnecting..."
-    : startPending
+    : startPending || startAuthPending || startProfilePending || startAccountPending
       ? "Starting your run..."
       : "";
   const showRunReconnectOverlay = Boolean(
@@ -3310,9 +3317,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
     nextTrayFetchInFlightRef.current = false;
-    prevBestScoreRef.current = Number.isFinite(Number(bestScoreBaseline))
-      ? Math.max(0, Number(bestScoreBaseline))
-      : displayedBestScore;
+    prevBestScoreRef.current = Math.max(
+      Number.isFinite(Number(bestScoreBaseline)) ? Math.max(0, Number(bestScoreBaseline)) : 0,
+      displayedBestScore,
+    );
     setGame({
       ...baseState,
       board: data.board,
@@ -4058,7 +4066,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       started ||
       resumePending ||
       !activeRunCheckDone ||
-      !activeRunDetected?.id
+      !activeRunDetected?.id ||
+      startAccountPending
     ) {
       return;
     }
@@ -4078,6 +4087,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     rankedReady,
     resumePending,
     resumeRun,
+    startAccountPending,
     started,
   ]);
 
@@ -4210,7 +4220,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                       <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
                     </>
                   ) : startOverlayPassiveMessage ? (
-                    <p className="start-resume-msg">{startOverlayPassiveMessage}</p>
+                    <div className="overlay-spinner" aria-label="Loading" role="status">
+                      <span className="overlay-spinner-dot" />
+                      <span className="overlay-spinner-dot" />
+                      <span className="overlay-spinner-dot" />
+                    </div>
                   ) : activeRunDetected && activeRunCheckDone ? (
                     <>
                       <p className="start-resume-msg">Pick up where you left off?</p>
@@ -4233,8 +4247,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 </div>
               ) : null}
               {resumedElsewhere ? (
-                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Game opened on another device">
-                  <p className="resumed-elsewhere-title">GridPop! was opened on another device</p>
+                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="GridPop! is open in another window">
+                  <p className="resumed-elsewhere-title">GridPop! is open in another window</p>
                   {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                   {!resumeRunGone && (
                     <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
