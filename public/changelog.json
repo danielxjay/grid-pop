@@ -1,7 +1,7 @@
 [
   {
     "version": "1.4",
-    "date": "2026-04-26",
+    "date": "",
     "changes": [
       "New accessibility themes for colourblind and low-vision players",
       "Clearer messaging when the game reconnects in the background",
@@ -10,17 +10,17 @@
   },
   {
     "version": "1.3",
-    "date": "2026-04-24",
+    "date": "",
     "changes": [
       "Clearing multiple lines at once now rewards a bigger bonus",
-      "Piece tray generation is now more balanced",
+      "Shape tray generation is now more balanced",
       "Resume a game from any device with account login",
       "Bug fixes"
     ]
   },
   {
     "version": "1.2",
-    "date": "2026-04-20",
+    "date": "",
     "changes": [
       "Dark mode added, plus unlockable themes. Complete challenges to earn them",
       "New stats screen with a shareable summary card",
@@ -29,7 +29,7 @@
   },
   {
     "version": "1.1",
-    "date": "2026-04-18",
+    "date": "",
     "changes": [
       "Account creation and login",
       "Ranked leaderboard",
