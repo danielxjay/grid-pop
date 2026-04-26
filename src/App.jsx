@@ -1942,16 +1942,18 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const playerHandleMessage = started
     ? (
         runReconnectActive || resumePending
-          ? "Reconnecting to your run..."
+          ? "Reconnecting..."
           : runSubmitting
             ? "Saving your score..."
             : ""
       )
     : (
-        startPending
+        pendingSameDeviceResume
+          ? "Reconnecting..."
+          : startPending
           ? "Starting your run..."
           : resumePending
-            ? "Reconnecting to your run..."
+            ? "Reconnecting..."
             : pendingRunRecoveryPending
               ? "Saving your last run..."
               : !startFailed
@@ -3287,11 +3289,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ...baseState,
       board: data.board,
       score: data.score ?? 0,
+      bestScore: data.bestScore ?? baseState.bestScore,
       moveCount: data.moveCount ?? 0,
       bestCombo: data.bestCombo ?? 0,
       bestMoveScore: data.bestMoveScore ?? 0,
       bestLinesCleared: data.bestLinesCleared ?? 0,
-      combo: 0,
+      combo: data.combo ?? 0,
       cleared: [],
       clearedTones: {},
     });
@@ -3539,6 +3542,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleRestart() {
+    if (runSubmitting) {
+      return;
+    }
     if (fillIntervalRef.current) {
       clearInterval(fillIntervalRef.current);
       fillIntervalRef.current = null;
@@ -4008,6 +4014,20 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const personalLoading = session ? accountRunsLoading : false;
   const personalError = session ? accountRunsError : "";
   const personalRunCount = session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length;
+  const detectedRunPreferredSession = activeRunDetected?.id ? loadActiveRunSession(activeRunDetected.id) : null;
+  const autoResumeDetectedRun = Boolean(activeRunCheckDone && activeRunDetected?.id && detectedRunPreferredSession);
+  const localActiveRunSession = !started && rankedReady ? loadActiveRunSession() : null;
+  const pendingSameDeviceResume = Boolean(
+    !started &&
+    rankedReady &&
+    localActiveRunSession?.runId &&
+    (!activeRunCheckDone || activeRunDetected?.id === localActiveRunSession.runId)
+  );
+  const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
+    ? "Reconnecting..."
+    : startPending
+      ? "Starting your run..."
+      : "";
   const showUpdatePrompt = updateReady && !updateDismissed && (!started || game.gameOver);
 
   useEffect(() => {
@@ -4021,7 +4041,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    const preferredSession = loadActiveRunSession(activeRunDetected.id);
+    const preferredSession = detectedRunPreferredSession;
 
     if (!preferredSession || autoResumeAttemptedRunIdRef.current === activeRunDetected.id) {
       return;
@@ -4032,6 +4052,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [
     activeRunCheckDone,
     activeRunDetected,
+    detectedRunPreferredSession,
     rankedReady,
     resumePending,
     resumeRun,
@@ -4166,15 +4187,17 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                       <button className="start-button" type="button" onClick={handleStartGame}>Retry</button>
                       <button className="start-local-button" type="button" onClick={startLocalGame}>Play Locally</button>
                     </>
+                  ) : startOverlayPassiveMessage ? (
+                    <p className="start-resume-msg">{startOverlayPassiveMessage}</p>
                   ) : activeRunDetected && activeRunCheckDone ? (
                     <>
-                      <p className="start-resume-msg">You have an unfinished run!</p>
+                      <p className="start-resume-msg">Pick up where you left off?</p>
                       {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                       <button className="start-button" type="button" onClick={handleContinueGame} disabled={resumePending || startBlocked}>
                         Continue
                       </button>
                       <button className="start-local-button" type="button" onClick={handleNewGame} disabled={resumePending || startBlocked}>
-                        New Game
+                        Start new
                       </button>
                     </>
                   ) : (
@@ -4188,8 +4211,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 </div>
               ) : null}
               {resumedElsewhere ? (
-                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Run picked up elsewhere">
-                  <p className="resumed-elsewhere-title">Picked up on another device</p>
+                <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Game opened on another device">
+                  <p className="resumed-elsewhere-title">GridPop! was opened on another device</p>
                   {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                   {!resumeRunGone && (
                     <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
@@ -4197,13 +4220,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     </button>
                   )}
                   <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
-                    Start fresh
+                    Start new
                   </button>
                 </div>
               ) : null}
               {showRunReconnectOverlay ? (
                 <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="Reconnect run">
-                  <p className="resumed-elsewhere-title">Connection interrupted</p>
+                  <p className="resumed-elsewhere-title">Lost connection</p>
                   <p className="resumed-elsewhere-body">{runReconnectOverlayMessage}</p>
                   {runReconnectActionRequired !== "resume-gone" ? (
                     <button className="start-button" type="button" onClick={handleReconnectRun} disabled={resumePending}>
@@ -4211,7 +4234,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     </button>
                   ) : null}
                   <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
-                    Start fresh
+                    Start new
                   </button>
                 </div>
               ) : null}
@@ -4225,7 +4248,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                   <div className="game-over-content">
                     {isNewBest && <p className="new-best-banner">✨ New Best! ✨</p>}
                     <p className="game-over-score">{game.score}</p>
-                    <button className="start-button" type="button" onClick={handleRestart} disabled={startPending || (!!session && !accountRunsReadyRef.current)}>
+                    <button className="start-button" type="button" onClick={handleRestart} disabled={runSubmitting || startPending || (!!session && !accountRunsReadyRef.current)}>
                       Play Again
                     </button>
                     {runSubmissionError ? (
