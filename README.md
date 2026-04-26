@@ -1,31 +1,72 @@
 # GridPop!
 
-GridPop! is a browser-based puzzle game built around quick, score-chasing board clears.
+A browser-based puzzle game built around quick, score-chasing board clears. Place pieces, complete lines, and chain clears for as long as you can.
 
-The game is built around an `8x8` board and a rotating tray of pieces. Players place shapes to complete rows and columns, clear space, and extend a run for the highest score possible.
+**[Play GridPop!](https://gridpop.app)** &nbsp;·&nbsp; Built by [@dxniel.jxy](https://threads.com/@dxniel.jxy)
+
+---
+
+## How to Play
+
+1. Pick a piece from the tray at the bottom.
+2. Drag or tap to place it on the 8×8 board.
+3. Fill a complete row or column to clear it.
+4. Chain multiple clears in a row to build a combo bonus.
+5. The run ends when no valid placements remain.
+
+**Controls**
+- **Mouse / Touch** — drag pieces onto the board
+- **Tap** — select a piece, then tap a valid cell to place it
+
+---
 
 ## Features
 
-- drag-and-drop and tap-based piece placement
-- score, best score, and combo tracking
-- animated clear and placement feedback
-- optional sound effects
-- responsive layouts for desktop, mobile, and landscape orientations
-- static deployment support via GitHub Pages
+- Ranked runs with a global top 10 leaderboard
+- Account login to track scores and resume runs across devices
+- 9 unlockable themes, earnable through gameplay challenges
+- Stats screen with shareable summary card
+- Works offline as an installable PWA
+- Sound effects with persistent preference
+- Responsive layout across mobile, landscape, and desktop
+
+### Themes
+
+Themes are earned in-game, not purchased. Two are free from the start, the rest are unlocked by completing challenges.
+
+| Theme | Unlock Condition |
+|---|---|
+| Classic | Free |
+| Classic Dark | Free |
+| Gen Y | Play 50 games |
+| DMG | Clear 4 or more lines in a single move |
+| Broadcast | Share your stats |
+| Y2K | Reach a best score of 20,000 |
+| Greige | Finish a run with a score under 500 |
+| Summit | Hold any global top 10 spot |
+| Crown | Hold the global #1 spot |
+
+Summit and Crown are live. They are revoked if you lose the qualifying position.
+
+---
 
 ## Tech Stack
 
-- React
-- Vite
-- Plain CSS
-- Local storage for best score persistence
+- **React 19** — UI and game state
+- **Vite** — build tooling
+- **Plain CSS** — no UI framework
+- **Supabase** — auth, ranked runs, and leaderboard
+- **Workbox / vite-plugin-pwa** — service worker and offline support
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 20+ recommended
+- Node.js 20+
 - npm
+- A Supabase project (optional. the game runs locally without one)
 
 ### Install
 
@@ -51,51 +92,50 @@ npm run build
 npm run preview
 ```
 
-## How To Play
+### Environment Variables
 
-1. Pick a piece from the tray.
-2. Position it on the board.
-3. Fill an entire row or column to clear it.
-4. Chain clears to keep your combo going.
-5. Survive as long as possible without running out of valid placements.
+To enable ranked runs and accounts, create a `.env` file:
 
-## Controls
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
+```
 
-- `Mouse / Touch`: drag and place pieces
-- `Click / Tap`: select pieces and interact with UI
-- `Sound button`: toggle sound effects on or off
+Without these, the game runs in guest mode. local scoring only and no leaderboard.
+
+---
 
 ## Project Structure
 
 ```text
 .
+├── public/
+│   └── changelog.json       # Player-facing version history
 ├── src/
-│   ├── App.jsx
-│   ├── game.js
-│   ├── main.jsx
-│   ├── sound.js
-│   └── styles.css
+│   ├── App.jsx              # Main UI, game flow, and session handling
+│   ├── game.js              # Board state, placement rules, and scoring
+│   ├── main.jsx             # App entry point and service worker registration
+│   ├── maintenance.js       # Maintenance mode flag
+│   ├── MaintenancePage.jsx  # Maintenance screen
+│   ├── sound.js             # Sound playback and preferences
+│   └── styles.css           # Layout, theming, and animations
 ├── index.html
-├── package.json
-└── vite.config.js
+├── vite.config.js
+└── package.json
 ```
 
-## Implementation Notes
-
-- `src/App.jsx` contains the main UI and interaction flow.
-- `src/game.js` contains board state, placement rules, preview logic, and score updates.
-- `src/sound.js` manages sound playback and persisted sound preferences.
-- `src/styles.css` contains layout, board styling, and gameplay animation rules.
-- Best score is stored in browser local storage.
+---
 
 ## Deployment
 
-This repo is set up for GitHub Pages via GitHub Actions.
+Deploys automatically to GitHub Pages on push to `main`.
 
-- Push to `main`
-- Ensure the repository Pages source is set to `GitHub Actions`
-- The workflow will build the Vite app and publish `dist`
+- Set the repository Pages source to **GitHub Actions**
+- The workflow builds the Vite app and publishes `dist/`
+- Set Supabase environment variables as repository secrets if ranked features are needed
+
+---
 
 ## License
 
-No license file is included yet. Add one before distributing or accepting outside contributions.
+No license is currently included. All rights reserved until further notice.
