@@ -1950,19 +1950,6 @@ h2 {
   letter-spacing: 0.04em;
 }
 
-.run-submitting-label {
-  margin: 0;
-  font-family: "Press Start 2P", monospace;
-  font-size: 0.48rem;
-  letter-spacing: 0.06em;
-  color: var(--gold);
-  text-shadow: 1px 1px 0 rgba(150, 80, 0, 0.4);
-}
-
-.run-submitting-label--hidden {
-  visibility: hidden;
-}
-
 .run-submission-retry {
   cursor: pointer;
   background: none;

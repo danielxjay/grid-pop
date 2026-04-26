@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { parseMoves, replayRun } from "./run-logic.ts";
+import { movesMatchPrefix, parseMoves, replayRun } from "./run-logic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +21,7 @@ type ActiveRunRow = {
   id: string;
   seed: string;
   moves: unknown;
+  device_token: string | null;
 };
 
 function getMoveCount(rawMoves: unknown) {
@@ -64,7 +65,7 @@ Deno.serve(async (req) => {
 
     const { data: activeRuns, error: runError } = await supabaseAdmin
       .from("runs")
-      .select("id, seed, moves")
+      .select("id, seed, moves, device_token")
       .eq("user_id", authData.user.id)
       .eq("status", "active")
       .order("started_at", { ascending: false });
@@ -74,8 +75,18 @@ Deno.serve(async (req) => {
       return json({ error: "Could not load your active run." }, { status: 500 });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const requestedRunId = typeof body?.runId === "string" ? body.runId : "";
+    const requestedDeviceToken =
+      typeof body?.deviceToken === "string" ? body.deviceToken : null;
+    const requestedMoves = parseMoves(body?.moves);
+
     const runs = (activeRuns ?? []) as ActiveRunRow[];
-    const run = runs.find((entry) => getMoveCount(entry.moves) > 0) ?? runs[0] ?? null;
+    const run =
+      (requestedRunId ? runs.find((entry) => entry.id === requestedRunId) : null) ??
+      runs.find((entry) => getMoveCount(entry.moves) > 0) ??
+      runs[0] ??
+      null;
 
     if (!run) {
       return json({ error: "No active run found." }, { status: 404 });
@@ -96,7 +107,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    const moves = parseMoves(run.moves) ?? [];
+    let moves = parseMoves(run.moves) ?? [];
+
+    if (requestedDeviceToken && run.device_token === requestedDeviceToken) {
+      if (requestedMoves) {
+        if (movesMatchPrefix(moves, requestedMoves)) {
+          if (requestedMoves.length > moves.length) {
+            const { error: syncError } = await supabaseAdmin
+              .from("runs")
+              .update({ moves: requestedMoves })
+              .eq("id", run.id)
+              .eq("status", "active")
+              .eq("device_token", requestedDeviceToken);
+
+            if (syncError) {
+              console.error("Same-device move sync failed.", syncError);
+              return json({ error: "Could not restore your saved game." }, { status: 500 });
+            }
+          }
+
+          moves = requestedMoves;
+        } else if (!movesMatchPrefix(requestedMoves, moves)) {
+          return json({ error: "Run state is out of sync. Reload to continue from the saved game." }, { status: 409 });
+        }
+      }
+    }
+
     const replay = replayRun(run.seed, moves, { requireGameOver: false });
 
     if (!replay.valid || !replay.game) {
@@ -118,7 +154,7 @@ Deno.serve(async (req) => {
 
       const { data: claimedRun, error: claimError } = await supabaseAdmin
         .from("runs")
-        .update({ status: "submitted", moves: run.moves, finished_at: new Date().toISOString() })
+        .update({ status: "submitted", moves, finished_at: new Date().toISOString() })
         .eq("id", run.id)
         .eq("status", "active")
         .select("id")
@@ -178,9 +214,23 @@ Deno.serve(async (req) => {
       return json({ gameEnded: true, score });
     }
 
+    if (requestedDeviceToken && run.device_token === requestedDeviceToken) {
+      return json({
+        runId: run.id,
+        deviceToken: requestedDeviceToken,
+        board: game.board,
+        tray: game.tray,
+        score: game.score,
+        moveCount: game.moveCount,
+        bestCombo: game.bestCombo,
+        bestMoveScore: game.bestMoveScore,
+        bestLinesCleared: game.bestLinesCleared,
+        moves,
+      });
+    }
+
     // Generate a new device token and atomically claim the run
     const deviceToken = crypto.randomUUID();
-
     const { data: claimedRun } = await supabaseAdmin
       .from("runs")
       .update({ device_token: deviceToken })

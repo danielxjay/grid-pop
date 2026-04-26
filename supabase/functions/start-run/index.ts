@@ -124,7 +124,11 @@ Deno.serve(async (req) => {
     }
 
     if (preservedRun && !confirmAbandon) {
-      return json({ code: "active_run_exists", moveCount: getMoveCount(preservedRun.moves) }, { status: 409 });
+      return json({
+        code: "active_run_exists",
+        runId: preservedRun.id,
+        moveCount: getMoveCount(preservedRun.moves),
+      }, { status: 409 });
     }
 
     const deviceToken = crypto.randomUUID();
