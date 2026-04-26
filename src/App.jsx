@@ -1609,6 +1609,9 @@ function loadActiveRunSession(expectedRunId = null) {
       runId: parsed.runId,
       deviceToken: parsed.deviceToken,
       moves: parsed.moves,
+      bestScoreBaseline: Number.isFinite(Number(parsed.bestScoreBaseline))
+        ? Math.max(0, Number(parsed.bestScoreBaseline))
+        : null,
       savedAt: Number.isFinite(Number(parsed.savedAt)) ? Number(parsed.savedAt) : 0,
     };
   } catch {
@@ -1616,7 +1619,7 @@ function loadActiveRunSession(expectedRunId = null) {
   }
 }
 
-function storeActiveRunSession(runId, moves, deviceToken) {
+function storeActiveRunSession(runId, moves, deviceToken, bestScoreBaseline = null) {
   if (!runId || !deviceToken || !Array.isArray(moves)) {
     return;
   }
@@ -1627,6 +1630,9 @@ function storeActiveRunSession(runId, moves, deviceToken) {
       runId,
       deviceToken,
       moves,
+      bestScoreBaseline: Number.isFinite(Number(bestScoreBaseline))
+        ? Math.max(0, Number(bestScoreBaseline))
+        : null,
       savedAt: Date.now(),
     }));
   } catch {}
@@ -3034,7 +3040,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   useEffect(() => {
     if (activeVerifiedRun?.id && deviceTokenRef.current) {
-      storeActiveRunSession(activeVerifiedRun.id, activeVerifiedRun.moves, deviceTokenRef.current);
+      storeActiveRunSession(
+        activeVerifiedRun.id,
+        activeVerifiedRun.moves,
+        deviceTokenRef.current,
+        prevBestScoreRef.current,
+      );
     }
   }, [activeVerifiedRun]);
 
@@ -3275,7 +3286,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function applyResumedRunState(data, options = {}) {
-    const { clearStartOverlay = false } = options;
+    const { clearStartOverlay = false, bestScoreBaseline = null } = options;
     deviceTokenRef.current = data.deviceToken ?? null;
     moveSyncInFlightRef.current = false;
     moveSyncStateRef.current = {
@@ -3299,6 +3310,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
     nextTrayFetchInFlightRef.current = false;
+    prevBestScoreRef.current = Number.isFinite(Number(bestScoreBaseline))
+      ? Math.max(0, Number(bestScoreBaseline))
+      : displayedBestScore;
     setGame({
       ...baseState,
       board: data.board,
@@ -3314,7 +3328,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     });
     setActiveVerifiedRun({ id: data.runId, moves: data.moves ?? [] });
     if (data.runId && data.deviceToken) {
-      storeActiveRunSession(data.runId, data.moves ?? [], data.deviceToken);
+      storeActiveRunSession(
+        data.runId,
+        data.moves ?? [],
+        data.deviceToken,
+        prevBestScoreRef.current,
+      );
     }
     if (clearStartOverlay) {
       setActiveRunDetected(null);
@@ -3408,7 +3427,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       deviceTokenRef.current = data.deviceToken ?? null;
       moveSyncStateRef.current = { runId: data.runId, moveCount: 0 };
       if (data.deviceToken) {
-        storeActiveRunSession(data.runId, [], data.deviceToken);
+        storeActiveRunSession(data.runId, [], data.deviceToken, prevBestScoreRef.current);
       }
       setTrayRevealToken((token) => token + 1);
       setGame(createGameState(displayedBestScore, { ranked: true, tray: data.tray }));
@@ -3532,7 +3551,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    applyResumedRunState(data, { clearStartOverlay });
+    applyResumedRunState(data, {
+      clearStartOverlay,
+      bestScoreBaseline: preferredSession?.bestScoreBaseline,
+    });
   });
 
   function handleContinueGame() {
