@@ -2912,6 +2912,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
+    navigator.serviceWorker?.getRegistration().then((reg) => reg?.update()).catch(() => {});
+
     setLocalRuns(recordRunScore(game.score, {
       bestCombo: game.bestCombo,
       bestMoveScore: game.bestMoveScore,
