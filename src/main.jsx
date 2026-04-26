@@ -37,7 +37,6 @@ function Root() {
     let updateSW = () => {};
 
     updateSW = registerSW({
-      immediate: true,
       onNeedRefresh() {
         setApplyUpdate(() => () => updateSW(true));
         setUpdateReady(true);
