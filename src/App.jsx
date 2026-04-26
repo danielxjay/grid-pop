@@ -1928,6 +1928,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
   const startNeedsDisplayName = Boolean(session?.user?.id && !profileLoading && !profile?.display_name);
   const startBlocked = Boolean(startPending || startAuthPending || startProfilePending || startAccountPending);
+  const detectedRunPreferredSession = activeRunDetected?.id ? loadActiveRunSession(activeRunDetected.id) : null;
+  const autoResumeDetectedRun = Boolean(activeRunCheckDone && activeRunDetected?.id && detectedRunPreferredSession);
+  const localActiveRunSession = !started && rankedReady ? loadActiveRunSession() : null;
+  const pendingSameDeviceResume = Boolean(
+    !started &&
+    rankedReady &&
+    localActiveRunSession?.runId &&
+    (!activeRunCheckDone || activeRunDetected?.id === localActiveRunSession.runId)
+  );
   const startBlockedMessage = startAuthPending || startProfilePending
     ? "Loading your account..."
     : startAccountPending
@@ -1960,6 +1969,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 ? startBlockedMessage
                 : ""
       );
+  const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
+    ? "Reconnecting..."
+    : startPending
+      ? "Starting your run..."
+      : "";
   const showRunReconnectOverlay = Boolean(
     started &&
     !game.gameOver &&
@@ -4014,20 +4028,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const personalLoading = session ? accountRunsLoading : false;
   const personalError = session ? accountRunsError : "";
   const personalRunCount = session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length;
-  const detectedRunPreferredSession = activeRunDetected?.id ? loadActiveRunSession(activeRunDetected.id) : null;
-  const autoResumeDetectedRun = Boolean(activeRunCheckDone && activeRunDetected?.id && detectedRunPreferredSession);
-  const localActiveRunSession = !started && rankedReady ? loadActiveRunSession() : null;
-  const pendingSameDeviceResume = Boolean(
-    !started &&
-    rankedReady &&
-    localActiveRunSession?.runId &&
-    (!activeRunCheckDone || activeRunDetected?.id === localActiveRunSession.runId)
-  );
-  const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
-    ? "Reconnecting..."
-    : startPending
-      ? "Starting your run..."
-      : "";
   const showUpdatePrompt = updateReady && !updateDismissed && (!started || game.gameOver);
 
   useEffect(() => {
