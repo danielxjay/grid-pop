@@ -159,7 +159,7 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const CLIENT_VERSION = "gridpop-web-1.2";
+const CLIENT_VERSION = "gridpop-web-1.4";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
@@ -743,6 +743,62 @@ function PlayerHandle({ displayName }) {
       <span className="player-handle-name">{displayName}</span>
       <span className="player-handle-sparkle" aria-hidden="true">✨</span>
     </p>
+  );
+}
+
+function ChangelogModal({ onClose }) {
+  const [entries, setEntries] = useState(null);
+
+  useEffect(() => {
+    fetch("/changelog.json")
+      .then((r) => r.json())
+      .then(setEntries)
+      .catch(() => setEntries([]));
+  }, []);
+
+  return (
+    <div
+      className="how-to-play-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Changelog"
+      onClick={onClose}
+    >
+      <div className="how-to-play-wrap" onClick={(e) => e.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close changelog">
+          Close
+        </button>
+        <div className="how-to-play-modal changelog-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>What&rsquo;s New</h2>
+          {entries === null ? (
+            <div className="overlay-spinner" aria-label="Loading" role="status">
+              <span className="overlay-spinner-dot" />
+              <span className="overlay-spinner-dot" />
+              <span className="overlay-spinner-dot" />
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="changelog-empty">No changelog available.</p>
+          ) : (
+            <div className="changelog-entries">
+              {entries.map((entry) => (
+                <div key={entry.version} className="changelog-entry">
+                  <div className="changelog-entry-header">
+                    <span className="changelog-version">v{entry.version}</span>
+                    <span className="changelog-date">{entry.date}</span>
+                  </div>
+                  <ul className="changelog-list">
+                    {entry.changes.map((change, i) => (
+                      <li key={i} className="changelog-item">{change}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1722,6 +1778,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
   const [devThemeUnlocked, setDevThemeUnlocked] = useState(() => {
     try {
@@ -4358,7 +4415,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             @dxniel.jxy
           </a>
           <span className="site-footer-separator" aria-hidden="true">·</span>
-          <span className="site-footer-version">v1.2</span>
+          <button
+            className="site-footer-version site-footer-version--button"
+            type="button"
+            onClick={() => setShowChangelog(true)}
+            aria-label="View changelog"
+          >
+            {CLIENT_VERSION.replace("gridpop-web-", "v")}
+          </button>
         </footer>
 
         {showUpdatePrompt ? (
@@ -4522,6 +4586,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         onTabChange={handleLeaderboardTabChange}
         open={leaderboardOpen}
       />
+
+      {showChangelog ? (
+        <ChangelogModal onClose={() => setShowChangelog(false)} />
+      ) : null}
 
       {showDragGhost ? (
         <div ref={dragGhostRef} className="drag-ghost" style={dragGhostStyle}>

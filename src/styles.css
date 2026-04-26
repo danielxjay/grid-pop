@@ -180,6 +180,66 @@ button {
   color: color-mix(in srgb, var(--fg) 28%, transparent);
 }
 
+.site-footer-version--button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.site-footer-version--button:hover {
+  color: color-mix(in srgb, var(--fg) 55%, transparent);
+}
+
+.changelog-modal {
+  max-height: min(32rem, calc(100dvh - 5rem));
+}
+
+.changelog-entries {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.changelog-entry-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.changelog-version {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.55rem;
+  color: var(--accent);
+}
+
+.changelog-date {
+  font-size: 0.7rem;
+  color: var(--fg-secondary);
+}
+
+.changelog-list {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.1rem;
+}
+
+.changelog-item {
+  font-size: 0.78rem;
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.changelog-empty {
+  font-size: 0.8rem;
+  color: var(--fg-secondary);
+  text-align: center;
+}
+
 .update-toast {
   position: fixed;
   left: 50%;

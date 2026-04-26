@@ -1,0 +1,39 @@
+[
+  {
+    "version": "1.4",
+    "date": "2026-04-26",
+    "changes": [
+      "New accessibility themes for colourblind and low-vision players",
+      "Clearer messaging when the game reconnects in the background",
+      "Chain bonus should no longer be lost on resume"
+    ]
+  },
+  {
+    "version": "1.3",
+    "date": "2026-04-24",
+    "changes": [
+      "Clearing multiple lines at once now rewards a bigger bonus",
+      "Piece tray generation is now more balanced",
+      "Resume a game from any device with account login",
+      "Bug fixes"
+    ]
+  },
+  {
+    "version": "1.2",
+    "date": "2026-04-20",
+    "changes": [
+      "Dark mode added, plus unlockable themes. Complete challenges to earn them",
+      "New stats screen with a shareable summary card",
+      "Bug fixes"
+    ]
+  },
+  {
+    "version": "1.1",
+    "date": "2026-04-18",
+    "changes": [
+      "Account creation and login",
+      "Ranked leaderboard",
+      "Bug fixes and performance improvements"
+    ]
+  }
+]
