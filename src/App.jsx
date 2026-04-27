@@ -1,7 +1,9 @@
-import { startTransition, useEffect, useEffectEvent, useRef, useState } from "react";
+import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import {
   GRID_SIZE,
+  RUN_HISTORY_STORAGE_KEY,
+  STORAGE_KEY,
   loadRunHistory,
   recordRunScore,
   TRAY_SIZE,
@@ -20,6 +22,7 @@ import {
   togglePieceSelection,
 } from "./game.js";
 import {
+  getSoundVolume,
   isSoundEnabled,
   playClearSound,
   playFillCellSound,
@@ -28,6 +31,7 @@ import {
   playPlaceSound,
   primeSound,
   setSoundEnabled,
+  setSoundVolume,
   unlockAndTestSound,
 } from "./sound.js";
 import { hasSupabaseConfig, supabase } from "./supabase.js";
@@ -108,6 +112,14 @@ const THEMES = [
     ],
   },
   {
+    key: "fn-80z", name: "FN 80Z", unlock: "Score 80,000+",
+    grid: [
+      [1, 0, 0, 2, 0, 0, 3, 0],
+      [1, 1, 0, 2, 2, 0, 3, 3],
+      [0, 1, 4, 0, 2, 5, 0, 3],
+    ],
+  },
+  {
     key: "dev", name: "Dev", unlock: "Caught poking around", secret: true,
     grid: [
       [1, 0, 2, 0, 3, 0, 4, 0],
@@ -134,6 +146,7 @@ const THEMES = [
 ];
 
 const FREE_THEME_KEYS = new Set(THEMES.filter((theme) => theme.free).map((theme) => theme.key));
+const ACCESSIBLE_THEME_KEYS = new Set(["tinted", "tinted-plus-plus"]);
 
 function getUnlockedThemes(stats, profile, globalRuns = [], userId = null, devThemeUnlocked = false) {
   const unlocked = new Set(["classic", "tinted", "tinted-plus-plus", "classic-dark"]);
@@ -141,6 +154,7 @@ function getUnlockedThemes(stats, profile, globalRuns = [], userId = null, devTh
   if (stats?.bestLinesCleared >= 4) unlocked.add("dmg");
   if (profile?.has_shared_stats) unlocked.add("broadcast");
   if (stats?.bestScore >= 20000) unlocked.add("y2k");
+  if (stats?.bestScore >= 80000) unlocked.add("fn-80z");
   if (stats?.hasLowScore) unlocked.add("washed");
   if (devThemeUnlocked || profile?.dev_theme_unlocked || profile?.theme === "dev") unlocked.add("dev");
   // Conditional themes — only available while the live condition is met
@@ -159,7 +173,8 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const CLIENT_VERSION = "gridpop-web-1.4";
+const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.4";
+const CLIENT_VERSION = "gridpop-web-1.5";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
@@ -171,8 +186,61 @@ const PENDING_RUN_KEY = "gridpop-pending-run";
 const ACTIVE_RUN_SESSION_KEY = "gridpop-active-run";
 const ACTIVE_RUN_SESSION_VERSION = 1;
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
+const LAST_SEEN_VERSION_STORAGE_KEY = "gridpop-last-seen-version";
+const SEEN_THEME_UNLOCKS_STORAGE_KEY = "gridpop-seen-theme-unlocks";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
+const RETURNING_PLAYER_STORAGE_KEYS = [
+  STORAGE_KEY,
+  RUN_HISTORY_STORAGE_KEY,
+  "gridpop-theme",
+  "gridpop-volume",
+  "gridpop-stickiness",
+  "gridpop-show-accessible",
+  "gridpop-confirm-placement",
+  "gridpop-crt-filter",
+  PENDING_RUN_KEY,
+  ACTIVE_RUN_SESSION_KEY,
+];
+
+function hasReturningPlayerState() {
+  try {
+    return RETURNING_PLAYER_STORAGE_KEYS.some((key) => localStorage.getItem(key) !== null);
+  } catch {
+    return false;
+  }
+}
+
+function loadLastSeenVersion() {
+  try {
+    const stored = localStorage.getItem(LAST_SEEN_VERSION_STORAGE_KEY);
+    if (stored) {
+      return stored;
+    }
+
+    return hasReturningPlayerState() ? PREVIOUS_CLIENT_VERSION : CLIENT_VERSION;
+  } catch {
+    return CLIENT_VERSION;
+  }
+}
+
+function loadSeenThemeUnlocks() {
+  try {
+    const stored = localStorage.getItem(SEEN_THEME_UNLOCKS_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    return new Set(parsed.filter((key) => typeof key === "string"));
+  } catch {
+    return null;
+  }
+}
 
 function normalizeEmail(value) {
   return value
@@ -304,6 +372,14 @@ function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOve
   );
 }
 
+function CogIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" clipRule="evenodd" d="M8.09 2.19a2 2 0 0 1 3.82 0l.15.57a6 6 0 0 1 1.04.6l.57-.16a2 2 0 0 1 2.7 2.7l-.16.57a6 6 0 0 1 .6 1.04l.57.15a2 2 0 0 1 0 3.82l-.57.15a6 6 0 0 1-.6 1.04l.16.57a2 2 0 0 1-2.7 2.7l-.57-.16a6 6 0 0 1-1.04.6l-.15.57a2 2 0 0 1-3.82 0l-.15-.57a6 6 0 0 1-1.04-.6l-.57.16a2 2 0 0 1-2.7-2.7l.16-.57a6 6 0 0 1-.6-1.04l-.57-.15a2 2 0 0 1 0-3.82l.57-.15a6 6 0 0 1 .6-1.04l-.16-.57a2 2 0 0 1 2.7-2.7l.57.16a6 6 0 0 1 1.04-.6l.15-.57ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    </svg>
+  );
+}
+
 function SpeakerIcon({ on }) {
   return (
     <svg viewBox="0 0 20 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -392,9 +468,26 @@ function SignOutIcon() {
   );
 }
 
-function ScorePanel({ score, bestScore, combo }) {
+function TrophyIcon() {
   return (
-    <section className="score-panel">
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 4h8v3.5a4 4 0 0 1-8 0V4Z" />
+      <path d="M6 5H3.5v1.5A3.5 3.5 0 0 0 7 10" />
+      <path d="M14 5h2.5v1.5A3.5 3.5 0 0 1 13 10" />
+      <path d="M10 11.5V15" />
+      <path d="M7 16h6" />
+    </svg>
+  );
+}
+
+function ScorePanel({ score, bestScore, combo, onClick }) {
+  return (
+    <button
+      className="score-panel score-panel--button"
+      type="button"
+      onClick={onClick}
+      aria-label="Open this device scores"
+    >
       <div className="score-stat">
         <p className="section-label">Run Score</p>
         <strong className="score-value">{score}</strong>
@@ -407,7 +500,7 @@ function ScorePanel({ score, bestScore, combo }) {
         <p className="section-label">Chain Bonus</p>
         <strong className="score-value">x{Math.max(1, combo + 1)}</strong>
       </div>
-    </section>
+    </button>
   );
 }
 
@@ -699,7 +792,7 @@ function HowToPlayModal({ onClose }) {
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Drop</strong>
                 <p>Drag a shape from the tray onto the grid. Each coloured square is a poxel and every poxel you place scores points.</p>
-                <p className="how-to-play-pts">10 pts per poxel</p>
+                <p className="how-to-play-pts">15 pts per poxel</p>
               </div>
             </div>
             <div className="how-to-play-step">
@@ -707,7 +800,7 @@ function HowToPlayModal({ onClose }) {
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Pop</strong>
                 <p>Fill a full row or column of poxels and the whole line pops. Pop multiple lines in one move to trigger a burst bonus.</p>
-                <p className="how-to-play-pts">120 pts per line, plus extra for bursts</p>
+                <p className="how-to-play-pts">180 pts per line, plus extra for bursts</p>
               </div>
             </div>
             <div className="how-to-play-step">
@@ -810,30 +903,31 @@ function PlayerHandleStatus({ message }) {
   return <p className="player-handle player-handle--status">{message}</p>;
 }
 
-function ProfileTrigger({ active, onClick }) {
+function MenuTrigger({ active, onClick }) {
   return (
     <button
       className={`profile-trigger${active ? " is-active" : ""}`}
       type="button"
       onClick={onClick}
-      aria-label={active ? "Close profile panel" : "Open profile panel"}
+      aria-label={active ? "Close menu" : "Open menu"}
     >
-      <UserIcon />
-      <span>Profile</span>
+      <CogIcon />
+      <span>Menu</span>
     </button>
   );
 }
 
-function ThemeTrigger({ active, mobile = false, onClick }) {
+function ThemeTrigger({ active, hasUnread = false, mobile = false, onClick }) {
   if (mobile) {
     return (
       <button
-        className="sound-icon-button hero-theme-button is-active"
+        className={`sound-icon-button hero-theme-button${active ? " is-active" : ""}`}
         type="button"
         onClick={onClick}
-        aria-label={active ? "Close themes" : "Open themes"}
+        aria-label={active ? "Close themes" : hasUnread ? "Open themes, new theme unlocked" : "Open themes"}
       >
         <PaletteIcon />
+        {hasUnread ? <span className="ui-dot-badge" aria-hidden="true" /> : null}
       </button>
     );
   }
@@ -843,18 +937,20 @@ function ThemeTrigger({ active, mobile = false, onClick }) {
       className={`theme-trigger${active ? " is-active" : ""}`}
       type="button"
       onClick={onClick}
-      aria-label={active ? "Close themes" : "Open themes"}
+      aria-label={active ? "Close themes" : hasUnread ? "Open themes, new theme unlocked" : "Open themes"}
     >
       <PaletteIcon />
       <span>Themes</span>
+      {hasUnread ? <span className="ui-dot-badge" aria-hidden="true" /> : null}
     </button>
   );
 }
 
 function ScoreboardTrigger({ onClick }) {
   return (
-    <button className="scoreboard-trigger" type="button" onClick={onClick}>
-      Scoreboard
+    <button className="scoreboard-trigger" type="button" onClick={onClick} aria-label="Open global leaderboard">
+      <TrophyIcon />
+      <span>Leaderboard</span>
     </button>
   );
 }
@@ -887,24 +983,25 @@ function LeaderboardModal({
   const bestPersonalRun = personalTopRuns[0] ?? null;
   const globalTopRun = globalRuns[0] ?? null;
   const globalRemainingRuns = globalRuns.slice(1);
+  const modalTitle = globalEnabled && activeTab === "global" ? "Leaderboard" : "Scores";
 
   return (
     <div
       className="leaderboard-modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Scoreboard"
+      aria-label={modalTitle}
       onClick={onClose}
     >
       <div className="leaderboard-modal-wrap" onClick={(event) => event.stopPropagation()}>
-        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close scoreboard">
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label={`Close ${modalTitle.toLowerCase()}`}>
           Close
         </button>
         <section className="leaderboard-modal">
           <div className="leaderboard-colour-strip" aria-hidden="true" />
-          <h2>Scoreboard</h2>
+          <h2>{modalTitle}</h2>
 
-        <div className="leaderboard-tabs" role="tablist" aria-label="Scoreboard sections">
+        <div className="leaderboard-tabs" role="tablist" aria-label="Score sections">
           <button
             className={`leaderboard-tab${activeTab === "personal" ? " is-active" : ""}`}
             type="button"
@@ -1104,7 +1201,15 @@ function getThemeUnlockHint(theme) {
   return theme.unlock;
 }
 
-function ThemeModal({ activeTheme, signedIn, unlockedThemes, onGuestSignIn, onSelect, onClose }) {
+function ThemeModal({ activeTheme, showAccessibleThemes, signedIn, unlockedThemes, onGuestSignIn, onSelect, onClose }) {
+  const visibleThemes = THEMES.filter(
+    (theme) =>
+      (!theme.secret || unlockedThemes.has(theme.key)) &&
+      (showAccessibleThemes || !ACCESSIBLE_THEME_KEYS.has(theme.key) || activeTheme === theme.key)
+  );
+  const equippedTheme = visibleThemes.find((t) => t.key === activeTheme) ?? null;
+  const otherThemes = visibleThemes.filter((t) => t.key !== activeTheme);
+
   return (
     <div
       className="how-to-play-overlay"
@@ -1120,61 +1225,185 @@ function ThemeModal({ activeTheme, signedIn, unlockedThemes, onGuestSignIn, onSe
         <section className="how-to-play-modal">
           <div className="leaderboard-colour-strip" aria-hidden="true" />
           <h2>Themes</h2>
-          <div className="theme-picker">
-            {THEMES.filter((theme) => !theme.secret || unlockedThemes.has(theme.key)).map((theme) => {
-              const isUnlocked = unlockedThemes.has(theme.key);
-              const isActive = activeTheme === theme.key;
-              const cardClassName = `theme-card${isActive ? " is-active" : ""}${!isUnlocked ? " is-locked" : ""}${!isUnlocked && !signedIn ? " is-guest-locked" : ""}`;
-              const cardPreview = (
-                <ThemePreviewBoard themeKey={theme.key} grid={theme.grid} />
-              );
-              const cardLabel = (
+
+          {equippedTheme && (
+            <div className="theme-picker">
+              <button className="theme-card is-active" type="button" disabled aria-label={`${equippedTheme.name} theme, currently equipped`}>
+                <ThemePreviewBoard themeKey={equippedTheme.key} grid={equippedTheme.grid} />
                 <div className="theme-card-label">
-                  <span className="theme-card-name">{theme.name}{isActive ? " ✓" : ""}</span>
-                  <span className="theme-card-hint">
-                    {getThemeUnlockHint(theme)}
-                  </span>
+                  <span className="theme-card-name">{equippedTheme.name}</span>
+                  <span className="theme-card-hint theme-card-hint--equipped">Equipped</span>
                 </div>
-              );
+              </button>
+            </div>
+          )}
 
-              if (!isUnlocked && !signedIn) {
-                return (
-                  <div key={theme.key} className={cardClassName} role="group" aria-label={`${theme.name} theme locked`}>
-                    {cardPreview}
-                    <div className="theme-card-obscured-layer" aria-hidden="true" />
-                    <div className="theme-card-lock-overlay theme-card-lock-overlay--guest">
-                      <LockIcon />
-                      <button className="theme-card-lock-cta-button" type="button" onClick={onGuestSignIn}>
-                        Sign in to view
-                      </button>
+          {otherThemes.length > 0 && (
+            <>
+              <div className="theme-picker-divider" aria-hidden="true" />
+              <p className="theme-picker-section-label">Switch theme</p>
+              <div className="theme-picker">
+                {otherThemes.map((theme) => {
+                  const isUnlocked = unlockedThemes.has(theme.key);
+                  const cardClassName = `theme-card${!isUnlocked ? " is-locked" : ""}${!isUnlocked && !signedIn ? " is-guest-locked" : ""}`;
+                  const cardPreview = <ThemePreviewBoard themeKey={theme.key} grid={theme.grid} />;
+                  const cardLabel = (
+                    <div className="theme-card-label">
+                      <span className="theme-card-name">{theme.name}</span>
+                      <span className="theme-card-hint">{getThemeUnlockHint(theme)}</span>
                     </div>
-                    {cardLabel}
-                  </div>
-                );
-              }
+                  );
 
-              return (
-                <button
-                  key={theme.key}
-                  className={cardClassName}
-                  type="button"
-                  disabled={!isUnlocked}
-                  onClick={() => isUnlocked && onSelect(theme.key)}
-                >
-                  {cardPreview}
-                  {!isUnlocked && (
-                    <div className="theme-card-lock-overlay">
-                      <LockIcon />
-                    </div>
-                  )}
-                  {cardLabel}
-                </button>
-              );
-            })}
-          </div>
+                  if (!isUnlocked && !signedIn) {
+                    return (
+                      <div key={theme.key} className={cardClassName} role="group" aria-label={`${theme.name} theme locked`}>
+                        {cardPreview}
+                        <div className="theme-card-obscured-layer" aria-hidden="true" />
+                        <div className="theme-card-lock-overlay theme-card-lock-overlay--guest">
+                          <LockIcon />
+                          <button className="theme-card-lock-cta-button" type="button" onClick={onGuestSignIn}>
+                            Sign in to view
+                          </button>
+                        </div>
+                        {cardLabel}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={theme.key}
+                      className={cardClassName}
+                      type="button"
+                      disabled={!isUnlocked}
+                      onClick={() => isUnlocked && onSelect(theme.key)}
+                    >
+                      {cardPreview}
+                      {!isUnlocked && (
+                        <div className="theme-card-lock-overlay">
+                          <LockIcon />
+                        </div>
+                      )}
+                      {cardLabel}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </section>
       </div>
     </div>
+  );
+}
+
+function SettingsPanel({
+  soundVolume,
+  onVolumeChange,
+  gridStickiness,
+  onStickinessChange,
+  showAccessibleThemes,
+  onShowAccessibleThemesChange,
+  confirmPlacement,
+  onConfirmPlacementChange,
+  crtFilterLevel,
+  onCrtFilterLevelChange,
+}) {
+  return (
+    <section className="settings-panel">
+      <p className="section-label">Settings</p>
+
+      <div className="settings-group">
+        <p className="settings-group-label">Audio</p>
+        <div className="settings-row">
+          <label className="settings-row-label" htmlFor="setting-volume">Volume</label>
+          <div className="settings-row-control">
+            <span className="settings-volume-icon" aria-hidden="true">
+              <SpeakerIcon on={false} />
+            </span>
+            <input
+              id="setting-volume"
+              className="settings-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={soundVolume}
+              onChange={(e) => onVolumeChange(Number(e.target.value))}
+            />
+            <span className="settings-volume-icon" aria-hidden="true">
+              <SpeakerIcon on />
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-group">
+        <p className="settings-group-label">Controls</p>
+        <div className="settings-row">
+          <span className="settings-row-label">Grid Snap</span>
+          <div className="settings-row-control">
+            <div className="settings-segmented" role="group" aria-label="Grid snap strength">
+              {STICKINESS_LEVELS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`settings-segmented-btn${gridStickiness === value ? " is-active" : ""}`}
+                  onClick={() => onStickinessChange(value)}
+                  aria-pressed={gridStickiness === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={confirmPlacement}
+          className={`settings-toggle-row${confirmPlacement ? " is-on" : ""}`}
+          onClick={() => onConfirmPlacementChange(!confirmPlacement)}
+        >
+          <span className="settings-toggle-label">Confirm before placing</span>
+          <span className="settings-toggle" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="settings-group">
+        <p className="settings-group-label">Display</p>
+        <div className="settings-row">
+          <span className="settings-row-label">CRT Filter</span>
+          <div className="settings-row-control">
+            <div className="settings-segmented" role="group" aria-label="CRT filter strength">
+              {CRT_FILTER_LEVELS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`settings-segmented-btn${crtFilterLevel === value ? " is-active" : ""}`}
+                  onClick={() => onCrtFilterLevelChange(value)}
+                  aria-pressed={crtFilterLevel === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showAccessibleThemes}
+          className={`settings-toggle-row${showAccessibleThemes ? " is-on" : ""}`}
+          onClick={() => onShowAccessibleThemesChange(!showAccessibleThemes)}
+        >
+          <span className="settings-toggle-label">Show accessible themes</span>
+          <span className="settings-toggle" aria-hidden="true" />
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1187,6 +1416,7 @@ function AuthPanel({
   authReady,
   displayNameDraft,
   editingProfile,
+  focusEmail,
   hasConfig,
   onCodeChange,
   onCancelEditProfile,
@@ -1215,7 +1445,7 @@ function AuthPanel({
       ) : null}
       {hasConfig && authReady && !session && !otpSentTo ? (
         <form className="auth-form" onSubmit={onRequestCode}>
-          <p className="auth-copy">Sign in to create your player profile.</p>
+          <p className="auth-copy">Enter your email to receive a sign-in code.</p>
           <label className="auth-field">
             <span className="auth-label">Email</span>
             <input
@@ -1226,6 +1456,7 @@ function AuthPanel({
               placeholder="you@example.com"
               autoComplete="email"
               maxLength={EMAIL_LENGTH_LIMIT}
+              autoFocus={focusEmail}
               required
             />
           </label>
@@ -1265,7 +1496,7 @@ function AuthPanel({
         <div className="auth-form">
           <div className="auth-identity">
             <strong>{profile?.display_name ?? "Choose a display name"}</strong>
-            <span>{session.user.email}</span>
+            <span>{maskEmail(session.user.email)}</span>
           </div>
           {profileLoading ? null : profile?.display_name && !editingProfile ? (
             <>
@@ -1290,7 +1521,7 @@ function AuthPanel({
               <p className="auth-copy">
                 {profile?.display_name
                   ? "Update your public display name."
-                  : "Set a public display name for your player profile."}
+                  : "Enter a display name for the global leaderboard."}
               </p>
               <form className="auth-form auth-form-inline" onSubmit={onSaveProfile}>
                 <label className="auth-field">
@@ -1300,7 +1531,7 @@ function AuthPanel({
                     type="text"
                     value={displayNameDraft}
                     onChange={(event) => onDisplayNameChange("profile", event.target.value)}
-                    placeholder="Grid wizard"
+                    placeholder="e.g. PoxelPopper67"
                     maxLength={PROFILE_NAME_LIMIT}
                     required
                   />
@@ -1319,9 +1550,11 @@ function AuthPanel({
                   </button>
                 ) : null}
               </form>
-              <button className="auth-secondary-button" type="button" onClick={onSignOut} disabled={profilePending}>
-                Sign Out
-              </button>
+              {!editingProfile ? (
+                <button className="auth-secondary-button" type="button" onClick={onSignOut} disabled={profilePending}>
+                  Sign Out
+                </button>
+              ) : null}
             </>
           )}
         </div>
@@ -1407,7 +1640,13 @@ function Tray({
     return (
       <div className="tray" aria-live="polite" aria-busy={nextTrayPending}>
         {Array.from({ length: TRAY_SIZE }, (_, index) => (
-          <button key={`awaiting-${index}`} className="piece-button piece-button--loading" type="button" disabled aria-hidden="true" />
+          <button key={`awaiting-${index}`} className="piece-button piece-button--loading" type="button" disabled aria-hidden="true">
+            <span className="tray-spinner" aria-hidden="true">
+              <span className="tray-spinner-dot" />
+              <span className="tray-spinner-dot" />
+              <span className="tray-spinner-dot" />
+            </span>
+          </button>
         ))}
         {nextTrayError ? (
           <button className="tray-status-button" type="button" onClick={onRetryNextTray} disabled={nextTrayPending || interactionLocked}>
@@ -1442,7 +1681,13 @@ function Tray({
             onPointerDown={(event) => onStartDrag(piece, event)}
             disabled={gameOver || interactionLocked || !started || !isRevealed}
           >
-            {isRevealed ? <PieceGrid piece={piece} /> : null}
+            {isRevealed ? <PieceGrid piece={piece} /> : (
+              <span className="tray-spinner" aria-hidden="true">
+                <span className="tray-spinner-dot" />
+                <span className="tray-spinner-dot" />
+                <span className="tray-spinner-dot" />
+              </span>
+            )}
           </button>
         );
       })}
@@ -1457,12 +1702,16 @@ function Board({
   clearedSet,
   clearedTones,
   interactionLocked,
+  lockedPreviewPath,
+  lockedPreviewSet,
+  lockedPreviewTone,
   previewClearSet,
   previewTone,
   started,
   onBoardMove,
   onBoardLeave,
   onCellClick,
+  onLockedPreviewPointerDown,
 }) {
   // Determine which rows/cols are fully cleared so we can stagger per-axis
   const clearedRows = new Set();
@@ -1493,18 +1742,22 @@ function Board({
         const col = index % GRID_SIZE;
         const stored = board[index];
         const isWillClear = previewClearSet.has(index) && Boolean(previewTone);
-        const effectiveTone = isWillClear ? previewTone : (stored?.tone ?? clearedTones[index]);
+        const isLockedPreview = !stored && lockedPreviewSet?.has(index) && Boolean(lockedPreviewTone);
+        const effectiveTone = isWillClear ? previewTone : isLockedPreview ? lockedPreviewTone : (stored?.tone ?? clearedTones[index]);
 
         const cellStyle = clearedSet.has(index)
           ? buildClearAnimationStyle(row, col, clearedRows, clearedCols)
-          : undefined;
+          : isWillClear
+            ? { "--rumble-offset": `${Math.round(getSeededValue(row * 17 + col * 31 + 1, 5) * 800)}ms` }
+            : undefined;
 
         return (
           <button
             key={`${row}-${col}`}
             className={[
               "board-cell",
-              effectiveTone ? `is-filled tone-${effectiveTone}` : "",
+              effectiveTone && !isLockedPreview ? `is-filled tone-${effectiveTone}` : "",
+              isLockedPreview ? `is-locked-preview tone-${effectiveTone}` : "",
               stored?.isFill ? "is-game-fill" : "",
               isWillClear ? "will-clear" : "",
               clearedSet.has(index) ? "was-cleared" : "",
@@ -1515,10 +1768,16 @@ function Board({
             type="button"
             aria-label={`Board cell ${row + 1}, ${col + 1}`}
             onClick={() => onCellClick(row, col)}
+            onPointerDown={isLockedPreview && onLockedPreviewPointerDown ? onLockedPreviewPointerDown : undefined}
             disabled={!started || interactionLocked}
           />
         );
       })}
+      {lockedPreviewPath && (
+        <svg className="locked-preview-svg" aria-hidden="true">
+          <path d={lockedPreviewPath} />
+        </svg>
+      )}
     </div>
   );
 }
@@ -1526,6 +1785,14 @@ function Board({
 function getSeededValue(seed, offset) {
   const value = Math.sin(seed * 12.9898 + offset * 78.233) * 43758.5453;
   return value - Math.floor(value);
+}
+
+function maskEmail(email) {
+  if (!email) return "";
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"•".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
 }
 
 function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
@@ -1551,9 +1818,120 @@ function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
 
 const DRAG_GHOST_LIFT_REM = 0.9;
 const DROP_SNAP_SLOP_CELLS = 0.38;
+const TRAY_DRAG_START_SLOP_PX = 12;
+
+const STICKINESS_LEVELS = [
+  { value: 0,    label: "Off"        },
+  { value: 0.3,  label: "Light"      },
+  { value: 0.6,  label: "Standard"   },
+  { value: 0.92, label: "Aggressive" },
+];
+
+const CRT_FILTER_LEVELS = [
+  { value: "off", label: "Off" },
+  { value: "soft", label: "Soft" },
+  { value: "vivid", label: "Vivid" },
+];
 
 function getGhostTransform(clientX, clientY) {
   return `translate3d(${clientX}px, ${clientY}px, 0) translate(-50%, calc(-100% - ${DRAG_GHOST_LIFT_REM}rem))`;
+}
+
+// Build an SVG path string tracing the outer perimeter of a polyomino shape.
+// Convex corners get rounded arcs matching poxel bubble border-radius.
+// Returns path in board-padding-box space — coordinates match cell positions
+// directly because the SVG lives inside the board element (position: relative).
+function buildShapeOutlinePath(cells, placedRow, placedCol, boardEl) {
+  if (!boardEl) return null;
+
+  const styles = window.getComputedStyle(boardEl);
+  const paddingLeft = parseFloat(styles.paddingLeft || "0");
+  const paddingTop  = parseFloat(styles.paddingTop  || "0");
+  const gap = parseFloat(styles.gap || styles.rowGap || "0");
+
+  // boardEl.clientLeft = left border width (exact integer, no string parsing needed).
+  // boardRect.width is the full border-box width; subtract both borders and both
+  // paddings to get the CSS-grid content area used to size each cell.
+  const boardRect = boardEl.getBoundingClientRect();
+  const borderW = boardEl.clientLeft; // same as borderRight for a symmetric border
+  const contentWidth = boardRect.width - 2 * borderW - 2 * paddingLeft;
+  const cellSizePx = (contentWidth - gap * (GRID_SIZE - 1)) / GRID_SIZE;
+  const stepPx = cellSizePx + gap;
+  const halfGap = gap / 2;
+  const R = cellSizePx * 0.28; // matches border-radius: 28%
+  const Rg = R / stepPx;
+
+  // SVG is position:absolute;inset:0 inside the board (position:relative).
+  // Its origin = board's padding edge.  Cell at col C has left = paddingLeft + C*stepPx.
+  // Vertex (gx,gy) sits halfGap OUTSIDE each exterior cell edge.
+  const vx = (gx) => paddingLeft + gx * stepPx - halfGap;
+  const vy = (gy) => paddingTop  + gy * stepPx - halfGap;
+
+  // Occupied set
+  const occupied = new Set();
+  for (const [dx, dy] of cells) occupied.add(`${placedRow + dy},${placedCol + dx}`);
+  const has = (r, c) => occupied.has(`${r},${c}`);
+
+  // Directed exterior edges (CW traversal, interior on the right).
+  // Cell (r,c) has corners: TL=(c,r) TR=(c+1,r) BR=(c+1,r+1) BL=(c,r+1)
+  const adj = new Map();
+  const addEdge = (from, to) => adj.set(`${from[0]},${from[1]}`, { from, to });
+  for (const key of occupied) {
+    const [r, c] = key.split(',').map(Number);
+    if (!has(r - 1, c)) addEdge([c, r],     [c + 1, r]);      // top → east
+    if (!has(r, c + 1)) addEdge([c + 1, r], [c + 1, r + 1]); // right → south
+    if (!has(r + 1, c)) addEdge([c + 1, r + 1], [c, r + 1]); // bottom → west
+    if (!has(r, c - 1)) addEdge([c, r + 1], [c, r]);          // left → north
+  }
+
+  // Walk closed loops
+  const visited = new Set();
+  const loops = [];
+  for (const [startKey] of adj) {
+    if (visited.has(startKey)) continue;
+    const loop = [];
+    let curKey = startKey;
+    while (!visited.has(curKey) && adj.has(curKey)) {
+      visited.add(curKey);
+      const { from, to } = adj.get(curKey);
+      loop.push(from);
+      curKey = `${to[0]},${to[1]}`;
+    }
+    if (loop.length >= 3) loops.push(loop);
+  }
+
+  // Build SVG path
+  let d = '';
+  for (const loop of loops) {
+    const n = loop.length;
+    const verts = loop.map((v, i) => {
+      const prev = loop[(i - 1 + n) % n];
+      const next = loop[(i + 1) % n];
+      const inDx = v[0] - prev[0], inDy = v[1] - prev[1];
+      const outDx = next[0] - v[0], outDy = next[1] - v[1];
+      const cross = inDx * outDy - inDy * outDx; // >0 = CW turn = convex
+      return { v, inDx, inDy, outDx, outDy, convex: cross > 0 };
+    });
+
+    // Start at departure point of last vertex
+    const last = verts[n - 1];
+    const sx = last.convex ? vx(last.v[0] + last.outDx * Rg) : vx(last.v[0]);
+    const sy = last.convex ? vy(last.v[1] + last.outDy * Rg) : vy(last.v[1]);
+    d += `M ${sx} ${sy} `;
+
+    for (const { v, inDx, inDy, outDx, outDy, convex } of verts) {
+      if (convex) {
+        const ax = vx(v[0] - inDx * Rg), ay = vy(v[1] - inDy * Rg);
+        const dpx = vx(v[0] + outDx * Rg), dpy = vy(v[1] + outDy * Rg);
+        d += `L ${ax} ${ay} A ${R} ${R} 0 0 1 ${dpx} ${dpy} `;
+      } else {
+        d += `L ${vx(v[0])} ${vy(v[1])} `;
+      }
+    }
+    d += 'Z ';
+  }
+
+  return d.trim() || null;
 }
 
 function getBoardCellMetrics(boardElement) {
@@ -1561,35 +1939,43 @@ function getBoardCellMetrics(boardElement) {
     return null;
   }
 
-  const rect = boardElement.getBoundingClientRect();
-  const styles = window.getComputedStyle(boardElement);
-  const paddingLeft = Number.parseFloat(styles.paddingLeft || "0");
-  const paddingTop = Number.parseFloat(styles.paddingTop || "0");
-  const paddingX = paddingLeft * 2;
-  const gap = Number.parseFloat(styles.gap || styles.rowGap || "0");
-  const usableWidth = rect.width - paddingX;
-  const cellSize = (usableWidth - gap * (GRID_SIZE - 1)) / GRID_SIZE;
-  const step = cellSize + gap;
-  const gridLeft = rect.left + paddingLeft;
-  const gridTop = rect.top + paddingTop;
+  // Measure actual rendered cell positions directly from the DOM instead of
+  // deriving them from board padding/border/gap formulas. CSS grid uses
+  // browser-internal floating-point that doesn't round-trip through computed
+  // styles, so any formula-based stepPx accumulates error across rows/cols.
+  const allCells = boardElement.querySelectorAll(".board-cell");
+  if (allCells.length < GRID_SIZE + 1) {
+    return null;
+  }
+
+  const r0 = allCells[0].getBoundingClientRect();
+  const r1 = allCells[1].getBoundingClientRect();
+  const rN = allCells[GRID_SIZE].getBoundingClientRect();
+
+  const gridLeft = r0.left;
+  const gridTop  = r0.top;
+  const stepX    = r1.left - r0.left;   // exact horizontal pitch
+  const stepY    = rN.top  - r0.top;    // exact vertical pitch
+  const cellW    = r0.width;
+  const gapX     = stepX - cellW;
+
   const rootFontSize = Number.parseFloat(
     window.getComputedStyle(document.documentElement).fontSize || "16"
   );
 
   return {
-    rect,
-    paddingLeft,
-    paddingTop,
     gridLeft,
     gridTop,
-    gridRight: gridLeft + cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
-    gridBottom: gridTop + cellSize * GRID_SIZE + gap * (GRID_SIZE - 1),
-    stepPx: step,
-    gapPx: gap,
-    cellSizePx: cellSize,
+    gridRight:  gridLeft + (GRID_SIZE - 1) * stepX + cellW,
+    gridBottom: gridTop  + (GRID_SIZE - 1) * stepY + r0.height,
+    stepX,
+    stepY,
+    stepPx:     stepX,   // for slop/bounds checks — X ≈ Y on a square grid
+    gapPx:      gapX,
+    cellSizePx: cellW,
     rootFontSize,
-    cellSizeRem: cellSize / rootFontSize,
-    gapRem: gap / rootFontSize,
+    cellSizeRem: cellW / rootFontSize,
+    gapRem:     gapX / rootFontSize,
   };
 }
 
@@ -1612,8 +1998,8 @@ function getGhostBounds(metrics, piece, clientX, clientY) {
 
 function getSnappedPlacement(metrics, piece, clientX, clientY) {
   const ghostBounds = getGhostBounds(metrics, piece, clientX, clientY);
-  const rawCol = Math.round((ghostBounds.left - metrics.gridLeft) / metrics.stepPx);
-  const rawRow = Math.round((ghostBounds.top - metrics.gridTop) / metrics.stepPx);
+  const rawCol = Math.round((ghostBounds.left - metrics.gridLeft) / metrics.stepX);
+  const rawRow = Math.round((ghostBounds.top  - metrics.gridTop)  / metrics.stepY);
 
   return {
     ghostBounds,
@@ -1742,10 +2128,44 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
   const [drag, setDrag] = useState(null);
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
+  const [soundVolume, setSoundVolumeState] = useState(() => getSoundVolume());
+  const lastNonZeroVolumeRef = useRef(getSoundVolume() > 0 ? getSoundVolume() : 1);
+  const [gridStickiness, setGridStickiness] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem("gridpop-stickiness") ?? "0");
+      // Snap stored value to the nearest discrete level (handles old float values)
+      const nearest = STICKINESS_LEVELS.reduce((best, lvl) =>
+        Math.abs(lvl.value - stored) < Math.abs(best.value - stored) ? lvl : best
+      );
+      return nearest.value;
+    } catch { return 0; }
+  });
+  const gridStickinessRef = useRef(gridStickiness);
+  const [showAccessibleThemes, setShowAccessibleThemes] = useState(() => {
+    try { return localStorage.getItem("gridpop-show-accessible") !== "false"; } catch { return true; }
+  });
+  const [crtFilterLevel, setCrtFilterLevel] = useState(() => {
+    try {
+      const stored = localStorage.getItem("gridpop-crt-filter");
+      if (stored === "true") return "soft";
+      return CRT_FILTER_LEVELS.some((level) => level.value === stored) ? stored : "off";
+    } catch { return "off"; }
+  });
+  const [confirmPlacement, setConfirmPlacement] = useState(() => {
+    try { return localStorage.getItem("gridpop-confirm-placement") === "true"; } catch { return false; }
+  });
+  const confirmPlacementRef = useRef(confirmPlacement);
+  const [lockedPreview, setLockedPreview] = useState(null);
+  const [lockedPreviewPath, setLockedPreviewPath] = useState(null);
   const [started, setStarted] = useState(false);
   const [gameOverPhase, setGameOverPhase] = useState(null); // null | 'filling' | 'overlay'
   const [fillCells, setFillCells] = useState([]);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [displayedScore, setDisplayedScore] = useState(0);
+  const [scoreFinished, setScoreFinished] = useState(false);
+  const [statsRevealed, setStatsRevealed] = useState(0);
+  const [showPlayAgain, setShowPlayAgain] = useState(false);
+  const [showNewBestBanner, setShowNewBestBanner] = useState(false);
   const [authReady, setAuthReady] = useState(() => !hasSupabaseConfig);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -1775,10 +2195,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [leaderboardTab, setLeaderboardTab] = useState("personal");
   const [showDesktopAuthPanel, setShowDesktopAuthPanel] = useState(false);
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
+  const [authAutoFocus, setAuthAutoFocus] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [lastSeenVersion, setLastSeenVersion] = useState(() => loadLastSeenVersion());
+  const [seenThemeUnlocks, setSeenThemeUnlocks] = useState(() => loadSeenThemeUnlocks());
   const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
   const [devThemeUnlocked, setDevThemeUnlocked] = useState(() => {
     try {
@@ -1819,7 +2242,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const dragGhostRef = useRef(null);
   const dismissZoneRef = useRef(null);
   const dragPointerRef = useRef({ x: 0, y: 0 });
+  const dragIntentRef = useRef(null);
+  const lockedDragStartedRef = useRef(false);
   const pickupSoundPlayedRef = useRef(false);
+  const trayDragClickSuppressRef = useRef(false);
+  const sliderSoundThrottleRef = useRef(0);
+  const authOverlayPointerStartedOnBackdropRef = useRef(false);
   const previewSoundRef = useRef({ key: null, at: 0 });
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
@@ -1958,6 +2386,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [activeTheme, devThemeUnlocked]);
 
   useEffect(() => {
+    if (crtFilterLevel === "off") {
+      document.documentElement.removeAttribute("data-crt-filter");
+      return;
+    }
+
+    document.documentElement.setAttribute("data-crt-filter", crtFilterLevel);
+  }, [crtFilterLevel]);
+
+  useEffect(() => {
     if (!devThemeUnlocked || profile?.dev_theme_unlocked) {
       return;
     }
@@ -1981,8 +2418,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     runDeviceCheckInFlightRef.current = true;
 
     try {
-      const { data } = await supabase.from("runs").select("device_token").eq("id", runId).single();
-      if (data && deviceTokenRef.current && data.device_token !== deviceTokenRef.current) {
+      const { data, error } = await supabase.from("runs").select("device_token").eq("id", runId).maybeSingle();
+      if (error) {
+        return;
+      }
+      // Run was abandoned by another device starting fresh, or device token changed.
+      if (!data || (deviceTokenRef.current && data.device_token !== deviceTokenRef.current)) {
         setResumedElsewhere(true);
       }
     } finally {
@@ -2063,12 +2504,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [updateReady]);
 
   useEffect(() => {
-    document.body.classList.toggle("is-dragging", drag !== null);
+    document.body.classList.toggle("is-dragging", Boolean(drag?.armed));
 
     return () => {
       document.body.classList.remove("is-dragging");
     };
-  }, [drag]);
+  }, [drag?.armed]);
 
   useEffect(() => {
     if (game.bestScore > 0) {
@@ -3028,6 +3469,70 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [game.gameOver]);
 
   useEffect(() => {
+    if (gameOverPhase !== 'overlay') {
+      setDisplayedScore(0);
+      setScoreFinished(false);
+      setStatsRevealed(0);
+      setShowPlayAgain(false);
+      setShowNewBestBanner(false);
+      return;
+    }
+
+    const target = game.score;
+    const prevBest = prevBestScoreRef.current;
+    const newBestThreshold = prevBest > 0 ? prevBest : target;
+    const DURATION = 1200;
+    const startTime = performance.now();
+    let newBestFired = false;
+    let rafId;
+    const timerIds = [];
+
+    function easeOut(t) { return 1 - (1 - t) ** 3; }
+
+    function onCountDone() {
+      setScoreFinished(true);
+      if (isNewBest && !newBestFired) setShowNewBestBanner(true);
+      timerIds.push(
+        setTimeout(() => setStatsRevealed(1), 100),
+        setTimeout(() => setStatsRevealed(2), 230),
+        setTimeout(() => setStatsRevealed(3), 360),
+        setTimeout(() => setShowPlayAgain(true), 620),
+      );
+    }
+
+    if (target === 0) {
+      setDisplayedScore(0);
+      if (isNewBest) setShowNewBestBanner(true);
+      onCountDone();
+      return () => { timerIds.forEach(clearTimeout); };
+    }
+
+    function countUp(now) {
+      const t = Math.min((now - startTime) / DURATION, 1);
+      const value = Math.round(easeOut(t) * target);
+      setDisplayedScore(value);
+
+      if (isNewBest && !newBestFired && value >= newBestThreshold) {
+        newBestFired = true;
+        setShowNewBestBanner(true);
+      }
+
+      if (t < 1) {
+        rafId = requestAnimationFrame(countUp);
+      } else {
+        onCountDone();
+      }
+    }
+
+    rafId = requestAnimationFrame(countUp);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      timerIds.forEach(clearTimeout);
+    };
+  }, [gameOverPhase, game.score, isNewBest]);
+
+  useEffect(() => {
     if (game.cleared.length === 0) {
       return undefined;
     }
@@ -3040,6 +3545,58 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [game.cleared]);
 
   const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked);
+  const unlockNotifiableThemeKeys = [...unlockedThemes].filter((key) => !FREE_THEME_KEYS.has(key));
+  const hasUnreadChangelog = lastSeenVersion !== CLIENT_VERSION;
+  const hasUnreadThemes = seenThemeUnlocks !== null && unlockNotifiableThemeKeys.some((key) => !seenThemeUnlocks.has(key));
+
+  useEffect(() => {
+    if (seenThemeUnlocks !== null) {
+      return;
+    }
+
+    const baselineSeen = new Set(unlockNotifiableThemeKeys);
+    setSeenThemeUnlocks(baselineSeen);
+    try {
+      localStorage.setItem(SEEN_THEME_UNLOCKS_STORAGE_KEY, JSON.stringify([...baselineSeen]));
+    } catch {}
+  }, [seenThemeUnlocks, unlockNotifiableThemeKeys]);
+
+  useEffect(() => {
+    if (!showThemeModal || seenThemeUnlocks === null) {
+      return;
+    }
+
+    let changed = false;
+    const nextSeen = new Set(seenThemeUnlocks);
+    for (const key of unlockNotifiableThemeKeys) {
+      if (nextSeen.has(key)) {
+        continue;
+      }
+
+      nextSeen.add(key);
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    setSeenThemeUnlocks(nextSeen);
+    try {
+      localStorage.setItem(SEEN_THEME_UNLOCKS_STORAGE_KEY, JSON.stringify([...nextSeen]));
+    } catch {}
+  }, [seenThemeUnlocks, showThemeModal, unlockNotifiableThemeKeys]);
+
+  useEffect(() => {
+    if (!showChangelog || lastSeenVersion === CLIENT_VERSION) {
+      return;
+    }
+
+    setLastSeenVersion(CLIENT_VERSION);
+    try {
+      localStorage.setItem(LAST_SEEN_VERSION_STORAGE_KEY, CLIENT_VERSION);
+    } catch {}
+  }, [lastSeenVersion, showChangelog]);
 
   useEffect(() => {
     // Don't enforce theme restrictions before account stats are ready — avoids revoking
@@ -3153,7 +3710,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    const { ghostBounds, row, col } = getSnappedPlacement(metrics, piece, clientX, clientY);
+    const { ghostBounds, row: rawRow, col: rawCol } = getSnappedPlacement(metrics, piece, clientX, clientY);
     const slopPx = metrics.stepPx * DROP_SNAP_SLOP_CELLS;
 
     if (
@@ -3170,6 +3727,21 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         });
       }
       return;
+    }
+
+    // Apply stickiness hysteresis: only move to a new cell once the raw position
+    // has travelled far enough past the boundary from the last snapped position.
+    let row = rawRow;
+    let col = rawCol;
+    const stickiness = gridStickinessRef.current;
+    if (stickiness > 0 && livePreviewRef.current) {
+      const lastRow = livePreviewRef.current.row;
+      const lastCol = livePreviewRef.current.col;
+      const rawColF = (ghostBounds.left - metrics.gridLeft) / metrics.stepX;
+      const rawRowF = (ghostBounds.top  - metrics.gridTop)  / metrics.stepY;
+      const threshold = 0.5 + stickiness * 0.45;
+      if (Math.abs(rawColF - lastCol) < threshold) col = Math.max(0, Math.min(GRID_SIZE - piece.bounds.width, lastCol));
+      if (Math.abs(rawRowF - lastRow) < threshold) row = Math.max(0, Math.min(GRID_SIZE - piece.bounds.height, lastRow));
     }
 
     const preview = buildPreview(game.board, piece, row, col);
@@ -3244,20 +3816,69 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    if (drag && !pickupSoundPlayedRef.current) {
-      primeSound();
-      playPickupSound();
-      pickupSoundPlayedRef.current = true;
-    }
-
     if (drag) {
+      let dragArmed = drag.armed;
+      if (!dragArmed) {
+        const intent = dragIntentRef.current;
+        const dx = event.clientX - (intent?.startX ?? event.clientX);
+        const dy = event.clientY - (intent?.startY ?? event.clientY);
+        const slop = intent?.pointerType === "mouse" ? 10 : TRAY_DRAG_START_SLOP_PX;
+
+        if (dx * dx + dy * dy <= slop * slop) {
+          return;
+        }
+
+        dragArmed = true;
+        trayDragClickSuppressRef.current = true;
+        if (intent) {
+          dragIntentRef.current = { ...intent, armed: true };
+        }
+
+        setGame((current) => (
+          current.selectedPieceId === drag.pieceId
+            ? current
+            : {
+                ...current,
+                selectedPieceId: drag.pieceId,
+              }
+        ));
+        setDrag((current) => (
+          current?.pieceId === drag.pieceId
+            ? { ...current, armed: true }
+            : current
+        ));
+      }
+
+      if (!pickupSoundPlayedRef.current) {
+        primeSound();
+        playPickupSound();
+        pickupSoundPlayedRef.current = true;
+      }
+
       dragPointerRef.current = {
         x: event.clientX,
         y: event.clientY,
       };
 
       if (dragGhostRef.current) {
-        dragGhostRef.current.style.transform = getGhostTransform(event.clientX, event.clientY);
+        let ghostX = event.clientX;
+        let ghostY = event.clientY;
+        const stickiness = gridStickinessRef.current;
+        if (stickiness > 0 && livePreviewRef.current && dragBoardMetricsRef.current) {
+          const metrics = dragBoardMetricsRef.current;
+          const { row, col } = livePreviewRef.current;
+          // Use the ghost element's actual rendered dimensions so the snap target
+          // is derived from the same pixel values that the CSS transform uses for
+          // translate(-50%, -100% - LIFT). Any rem-rounding difference between
+          // the ghost cells and the board cells would otherwise cause vertical drift.
+          const ghostRect = dragGhostRef.current.getBoundingClientRect();
+          const liftPx = DRAG_GHOST_LIFT_REM * metrics.rootFontSize;
+          const snappedX = metrics.gridLeft + col * metrics.stepX + ghostRect.width / 2;
+          const snappedY = metrics.gridTop  + row * metrics.stepY + ghostRect.height + liftPx;
+          ghostX = event.clientX + stickiness * (snappedX - event.clientX);
+          ghostY = event.clientY + stickiness * (snappedY - event.clientY);
+        }
+        dragGhostRef.current.style.transform = getGhostTransform(ghostX, ghostY);
       }
 
       queuePreviewFromPoint(event.clientX, event.clientY, drag);
@@ -3277,14 +3898,34 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     previewSoundRef.current.key = null;
     dismissZoneRef.current?.classList.remove("is-hovered");
     cancelQueuedPreview();
+
+    const dragArmed = drag.armed || dragIntentRef.current?.armed;
+    dragIntentRef.current = null;
+    if (!dragArmed) {
+      setDrag(null);
+      dragBoardMetricsRef.current = null;
+      livePreviewRef.current = null;
+      return;
+    }
+
     runPreviewAtPoint(event.clientX, event.clientY, drag);
     const pieceId = drag.pieceId;
     const preview = livePreviewRef.current;
     setDrag(null);
     dragBoardMetricsRef.current = null;
     livePreviewRef.current = null;
+    window.setTimeout(() => {
+      trayDragClickSuppressRef.current = false;
+    }, 0);
 
     if (preview?.valid && preview.pieceId === pieceId) {
+      if (confirmPlacementRef.current) {
+        // Lock the preview — player must tap the board to confirm placement
+        setLockedPreview(preview);
+        startTransition(() => setGame((current) => setPreview(current, preview)));
+        return;
+      }
+
       const nextGame = applyPlacement(game, pieceId, preview.row, preview.col);
       primeSound();
       playPlaceSound();
@@ -3335,6 +3976,120 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       window.cancelAnimationFrame(previewFrameRef.current);
     }
   }, []);
+
+  // Compute the SVG outline path for the locked preview using actual measured cell
+  // positions — avoids all CSS formula errors by reading directly from the DOM.
+  useLayoutEffect(() => {
+    if (!lockedPreview?.valid || !boardRef.current) {
+      setLockedPreviewPath(null);
+      return;
+    }
+
+    const piece = findPiece(game.tray, lockedPreview.pieceId);
+    if (!piece) {
+      setLockedPreviewPath(null);
+      return;
+    }
+
+    const boardEl = boardRef.current;
+    const allCells = boardEl.querySelectorAll('.board-cell');
+    if (allCells.length < GRID_SIZE + 1) {
+      setLockedPreviewPath(null);
+      return;
+    }
+
+    // Measure the actual rendered positions of two reference cells to get exact
+    // origin, step, and cell size — no formula, no float accumulation.
+    const boardRect = boardEl.getBoundingClientRect();
+    // SVG origin = board's padding edge = inside the border
+    const svgOriginX = boardRect.left + boardEl.clientLeft;
+    const svgOriginY = boardRect.top  + boardEl.clientTop;
+
+    const r0 = allCells[0].getBoundingClientRect();             // cell (row=0, col=0)
+    const r1 = allCells[1].getBoundingClientRect();             // cell (row=0, col=1)
+    const r8 = allCells[GRID_SIZE].getBoundingClientRect();     // cell (row=1, col=0)
+
+    const originX = r0.left - svgOriginX;   // paddingLeft in SVG space
+    const originY = r0.top  - svgOriginY;   // paddingTop  in SVG space
+    const stepX   = r1.left - r0.left;      // cellSize + gapX
+    const stepY   = r8.top  - r0.top;       // cellSize + gapY
+    const cellW   = r0.width;
+    const halfGapX = (stepX - cellW) / 2;
+    const halfGapY = (stepY - r0.height) / 2;
+    const R  = cellW * 0.28;
+    const RgX = R / stepX;
+    const RgY = R / stepY;
+
+    const vx = (gx) => originX + gx * stepX - halfGapX;
+    const vy = (gy) => originY + gy * stepY - halfGapY;
+
+    // Build occupied set
+    const occupied = new Set();
+    for (const [dx, dy] of piece.shape.cells) {
+      occupied.add(`${lockedPreview.row + dy},${lockedPreview.col + dx}`);
+    }
+    const has = (r, c) => occupied.has(`${r},${c}`);
+
+    // Directed exterior edges (CW traversal)
+    const adj = new Map();
+    const addEdge = (from, to) => adj.set(`${from[0]},${from[1]}`, { from, to });
+    for (const key of occupied) {
+      const [r, c] = key.split(',').map(Number);
+      if (!has(r - 1, c)) addEdge([c, r],     [c + 1, r]);
+      if (!has(r, c + 1)) addEdge([c + 1, r], [c + 1, r + 1]);
+      if (!has(r + 1, c)) addEdge([c + 1, r + 1], [c, r + 1]);
+      if (!has(r, c - 1)) addEdge([c, r + 1], [c, r]);
+    }
+
+    // Walk closed loops
+    const visited = new Set();
+    const loops = [];
+    for (const [startKey] of adj) {
+      if (visited.has(startKey)) continue;
+      const loop = [];
+      let curKey = startKey;
+      while (!visited.has(curKey) && adj.has(curKey)) {
+        visited.add(curKey);
+        const { from, to } = adj.get(curKey);
+        loop.push(from);
+        curKey = `${to[0]},${to[1]}`;
+      }
+      if (loop.length >= 3) loops.push(loop);
+    }
+
+    // Build SVG path with rounded convex corners
+    let d = '';
+    for (const loop of loops) {
+      const n = loop.length;
+      const verts = loop.map((v, i) => {
+        const prev = loop[(i - 1 + n) % n];
+        const next = loop[(i + 1) % n];
+        const inDx = v[0] - prev[0], inDy = v[1] - prev[1];
+        const outDx = next[0] - v[0], outDy = next[1] - v[1];
+        const cross = inDx * outDy - inDy * outDx;
+        return { v, inDx, inDy, outDx, outDy, convex: cross > 0 };
+      });
+
+      const last = verts[n - 1];
+      const sx = last.convex ? vx(last.v[0] + last.outDx * RgX) : vx(last.v[0]);
+      const sy = last.convex ? vy(last.v[1] + last.outDy * RgY) : vy(last.v[1]);
+      d += `M ${sx} ${sy} `;
+
+      for (const { v, inDx, inDy, outDx, outDy, convex } of verts) {
+        if (convex) {
+          const ax = vx(v[0] - inDx * RgX), ay = vy(v[1] - inDy * RgY);
+          const dpx = vx(v[0] + outDx * RgX), dpy = vy(v[1] + outDy * RgY);
+          d += `L ${ax} ${ay} A ${R} ${R} 0 0 1 ${dpx} ${dpy} `;
+        } else {
+          d += `L ${vx(v[0])} ${vy(v[1])} `;
+        }
+      }
+      d += 'Z ';
+    }
+
+    setLockedPreviewPath(d.trim() || null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedPreview]);
 
   function startLocalGame() {
     setStartFailed(false);
@@ -3437,6 +4192,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setGameOverPhase(null);
     setFillCells([]);
     setIsNewBest(false);
+    setLockedPreview(null);
     setRunSubmitting(false);
     setRunSubmissionError("");
     setNextTrayPending(false);
@@ -3640,7 +4396,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleStartFresh() {
-    setResumedElsewhere(false);
     handleNewGame();
   }
 
@@ -3655,19 +4410,84 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     beginNextGame();
   }
 
-  function handleToggleSound() {
-    const nextEnabled = !soundEnabled;
-    setSoundEnabled(nextEnabled);
-    setSoundEnabledState(nextEnabled);
+  function handleVolumeChange(value) {
+    const v = Math.max(0, Math.min(1, value));
+    if (v > 0) lastNonZeroVolumeRef.current = v;
+    setSoundVolumeState(v);
+    setSoundVolume(v);
+    try { localStorage.setItem("gridpop-volume", String(v)); } catch {}
+    // Throttled crackle on slider drag — same sound as dragging a piece over the grid
+    const now = Date.now();
+    if (now - sliderSoundThrottleRef.current > 80) {
+      sliderSoundThrottleRef.current = now;
+      primeSound();
+      playPreviewMoveSound();
+    }
+  }
 
-    if (nextEnabled) {
+  function handleStickinessChange(value) {
+    const v = Math.max(0, Math.min(1, value));
+    gridStickinessRef.current = v;
+    setGridStickiness(v);
+    try { localStorage.setItem("gridpop-stickiness", String(v)); } catch {}
+    primeSound();
+    playPlaceSound();
+  }
+
+  function handleShowAccessibleThemesChange(checked) {
+    setShowAccessibleThemes(checked);
+    try { localStorage.setItem("gridpop-show-accessible", String(checked)); } catch {}
+    primeSound();
+    playPlaceSound();
+  }
+
+  function handleCrtFilterLevelChange(value) {
+    const nextLevel = CRT_FILTER_LEVELS.some((level) => level.value === value) ? value : "off";
+    setCrtFilterLevel(nextLevel);
+    try { localStorage.setItem("gridpop-crt-filter", nextLevel); } catch {}
+    primeSound();
+    playPlaceSound();
+  }
+
+  function handleConfirmPlacementChange(checked) {
+    confirmPlacementRef.current = checked;
+    setConfirmPlacement(checked);
+    if (!checked) {
+      setLockedPreview(null);
+      setGame((current) => clearPreview(current));
+    }
+    try { localStorage.setItem("gridpop-confirm-placement", String(checked)); } catch {}
+    primeSound();
+    playPlaceSound();
+  }
+
+  function handleToggleSound() {
+    const isMuted = !soundEnabled || soundVolume === 0;
+    if (isMuted) {
+      const restoreVolume = lastNonZeroVolumeRef.current;
+      setSoundEnabled(true);
+      setSoundEnabledState(true);
+      handleVolumeChange(restoreVolume);
       unlockAndTestSound();
+    } else {
+      setSoundEnabled(false);
+      setSoundEnabledState(false);
     }
   }
 
   function handleSelectPiece(pieceId) {
+    if (trayDragClickSuppressRef.current) {
+      trayDragClickSuppressRef.current = false;
+      return;
+    }
+
     if (!started || drag || runInteractionLocked) {
       return;
+    }
+
+    if (lockedPreview) {
+      setLockedPreview(null);
+      setGame((current) => clearPreview(current));
     }
 
     primeSound();
@@ -3680,33 +4500,70 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    event.preventDefault();
-    pickupSoundPlayedRef.current = true;
-    primeSound();
-    playPickupSound();
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
 
-    setGame((current) => (
-      current.selectedPieceId === piece.id
-        ? current
-        : {
-            ...current,
-            selectedPieceId: piece.id,
-          }
-    ));
+    if (lockedPreview) {
+      setLockedPreview(null);
+      setGame((current) => clearPreview(current));
+    }
 
+    pickupSoundPlayedRef.current = false;
     dragPointerRef.current = {
       x: event.clientX,
       y: event.clientY,
+    };
+    dragIntentRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      pointerType: event.pointerType,
+      armed: false,
     };
     dragBoardMetricsRef.current = getBoardCellMetrics(boardRef.current);
 
     const nextDrag = {
       pieceId: piece.id,
+      armed: false,
     };
 
     previewSoundRef.current.key = null;
     setDrag(nextDrag);
-    queuePreviewFromPoint(event.clientX, event.clientY, nextDrag);
+  }
+
+  // Deferred drag start for locked-preview cells — only initiates drag once the
+  // pointer has moved beyond SLOP pixels, so a tap-to-confirm doesn't accidentally
+  // lift and mis-place the piece due to touch jitter.
+  function handleLockedPreviewPointerDown(piece, event) {
+    const SLOP = 8;
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    function onMove(e) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (dx * dx + dy * dy > SLOP * SLOP) {
+        cleanup();
+        lockedDragStartedRef.current = true;
+        // Use original touch position so ghost aligns with where the finger landed,
+        // not the slop-threshold point (which is 8px off).
+        handleStartDrag(piece, { clientX: startX, clientY: startY, preventDefault() {} });
+      }
+    }
+
+    function onUp() {
+      cleanup();
+    }
+
+    function cleanup() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   function handleBoardMove(event) {
@@ -3729,7 +4586,38 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleCellClick(row, col) {
-    if (!started || !game.selectedPieceId || game.gameOver || runInteractionLocked) {
+    if (!started || game.gameOver || runInteractionLocked) {
+      return;
+    }
+
+    // Click fired after a locked-preview drag started — ignore it
+    if (lockedDragStartedRef.current) {
+      lockedDragStartedRef.current = false;
+      return;
+    }
+
+    // Confirm-before-placing: any board tap commits the locked preview position
+    if (lockedPreview) {
+      if (lockedPreview.valid) {
+        const nextGame = applyPlacement(game, lockedPreview.pieceId, lockedPreview.row, lockedPreview.col);
+        if (nextGame !== game) {
+          primeSound();
+          playPlaceSound();
+          if (nextGame.cleared.length > 0) {
+            window.setTimeout(() => { playClearSound(); }, 50);
+          }
+          recordVerifiedMove(lockedPreview.pieceId, lockedPreview.row, lockedPreview.col);
+        }
+        setLockedPreview(null);
+        setGame(nextGame);
+      } else {
+        setLockedPreview(null);
+        setGame((current) => ({ ...clearPreview(current), selectedPieceId: null }));
+      }
+      return;
+    }
+
+    if (!game.selectedPieceId) {
       return;
     }
 
@@ -3898,6 +4786,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   async function handleThemeSelect(key) {
     if (!unlockedThemes.has(key)) return;
+    primeSound();
+    playPlaceSound();
     setActiveTheme(key);
     setShowThemeModal(false);
     try { localStorage.setItem("gridpop-theme", key); } catch {}
@@ -3915,7 +4805,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     if (!hasSupabaseConfig) {
       return;
     }
-
+    primeSound();
+    playPlaceSound();
     setAuthError("");
     setAuthMessage("");
 
@@ -3958,25 +4849,59 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleToggleMobileAuthPanel() {
+    setAuthAutoFocus(false);
     resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
     setShowMobileAuthPanel((current) => !current);
   }
 
   function handleCloseMobileAuthPanel() {
+    setAuthAutoFocus(false);
     resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
     setShowMobileAuthPanel(false);
   }
 
   function handleToggleDesktopAuthPanel() {
+    setAuthAutoFocus(false);
     resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
     setShowDesktopAuthPanel((current) => !current);
+  }
+
+  function handleCloseDesktopAuthPanel() {
+    setAuthAutoFocus(false);
+    resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
+    setShowDesktopAuthPanel(false);
+  }
+
+  function handleAuthOverlayPointerDown(event) {
+    authOverlayPointerStartedOnBackdropRef.current = event.target === event.currentTarget;
+  }
+
+  function handleMobileAuthOverlayClick(event) {
+    if (authOverlayPointerStartedOnBackdropRef.current && event.target === event.currentTarget) {
+      handleCloseMobileAuthPanel();
+    }
+    authOverlayPointerStartedOnBackdropRef.current = false;
+  }
+
+  function handleDesktopAuthOverlayClick(event) {
+    if (authOverlayPointerStartedOnBackdropRef.current && event.target === event.currentTarget) {
+      handleCloseDesktopAuthPanel();
+    }
+    authOverlayPointerStartedOnBackdropRef.current = false;
   }
 
   function handleOpenLeaderboard(tab = "personal") {
     resetProfilePanelState();
-    if (tab === "global" && soundEnabled) {
-      primeSound();
-    }
+    primeSound();
+    playPlaceSound();
     if (tab === "personal") {
       setPersonalVisibleCount(0);
     }
@@ -3993,28 +4918,27 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     if (nextTab === leaderboardTab) {
       return;
     }
-
-    if (soundEnabled) {
-      primeSound();
-      playPickupSound();
-    }
-
+    primeSound();
+    playPlaceSound();
     if (nextTab === "personal") {
       setPersonalVisibleCount(0);
     }
     if (nextTab === "global") {
       setGlobalVisibleCount(0);
     }
-
     setLeaderboardTab(nextTab);
   }
 
   function handleCloseLeaderboard() {
+    primeSound();
+    playPlaceSound();
     setLeaderboardOpen(false);
   }
 
   function handleShowStats() {
     resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
     setShowDesktopAuthPanel(false);
     setShowMobileAuthPanel(false);
     setShowStats(true);
@@ -4022,12 +4946,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   function handleOpenThemes() {
     resetProfilePanelState();
+    primeSound();
+    playPlaceSound();
     setShowDesktopAuthPanel(false);
     setShowMobileAuthPanel(false);
     setShowThemeModal(true);
   }
 
-  function handleOpenAuthPrompt() {
+  function handleOpenAuthPrompt({ autoFocus = false } = {}) {
+    setAuthAutoFocus(autoFocus);
     resetProfilePanelState();
     setShowThemeModal(false);
     if (window.matchMedia("(max-width: 980px)").matches) {
@@ -4041,13 +4968,51 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   function handleToggleThemeModal() {
     if (showThemeModal) {
-      setShowThemeModal(false);
+      handleCloseThemeModal();
       return;
     }
     handleOpenThemes();
   }
 
+  function handleCloseThemeModal() {
+    primeSound();
+    playPlaceSound();
+    setShowThemeModal(false);
+  }
+
+  function handleOpenHowToPlay() {
+    primeSound();
+    playPlaceSound();
+    setShowHowToPlay(true);
+  }
+
+  function handleCloseHowToPlay() {
+    primeSound();
+    playPlaceSound();
+    setShowHowToPlay(false);
+  }
+
+  function handleOpenChangelog() {
+    primeSound();
+    playPlaceSound();
+    setShowChangelog(true);
+  }
+
+  function handleCloseStats() {
+    primeSound();
+    playPlaceSound();
+    setShowStats(false);
+  }
+
+  function handleCloseChangelog() {
+    primeSound();
+    playPlaceSound();
+    setShowChangelog(false);
+  }
+
   function handleEditProfile() {
+    primeSound();
+    playPlaceSound();
     setDisplayNameDraft(profile?.display_name ?? "");
     setEditingProfile(true);
     setAuthError("");
@@ -4055,6 +5020,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleCancelEditProfile() {
+    primeSound();
+    playPlaceSound();
     setDisplayNameDraft(profile?.display_name ?? "");
     setEditingProfile(false);
     setAuthError("");
@@ -4093,8 +5060,21 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
   }
 
+  // Derive locked preview cell set for board highlighting
+  const lockedPreviewSet = new Set();
+  let lockedPreviewTone = null;
+  let lockedPreviewPiece = null;
+  if (lockedPreview?.valid) {
+    lockedPreviewPiece = findPiece(game.tray, lockedPreview.pieceId);
+    if (lockedPreviewPiece) {
+      lockedPreviewTone = lockedPreviewPiece.tone;
+      for (const [dx, dy] of lockedPreviewPiece.shape.cells) {
+        lockedPreviewSet.add(toIndex(lockedPreview.row + dy, lockedPreview.col + dx));
+      }
+    }
+  }
   const dragPiece = drag ? findPiece(game.tray, drag.pieceId) : null;
-  const showDragGhost = Boolean(dragPiece);
+  const showDragGhost = Boolean(dragPiece && drag?.armed);
   const dragGhostMetrics = dragPiece ? dragBoardMetricsRef.current : null;
   const dragGhostStyle = {
     transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
@@ -4199,26 +5179,26 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             }`}
             type="button"
             onClick={handleToggleMobileAuthPanel}
-            aria-label={showMobileAuthPanel ? "Close sign in panel" : "Open sign in panel"}
+            aria-label={showMobileAuthPanel ? "Close menu" : "Open menu"}
           >
-            <UserIcon />
+            <CogIcon />
           </button>
-          <ThemeTrigger active={showThemeModal} mobile onClick={handleToggleThemeModal} />
+          <ThemeTrigger active={showThemeModal} hasUnread={hasUnreadThemes} mobile onClick={handleToggleThemeModal} />
           <button
-            className="sound-icon-button hero-info-button"
+            className={`sound-icon-button hero-info-button${showHowToPlay ? " is-active" : ""}`}
             type="button"
-            onClick={() => setShowHowToPlay(true)}
+            onClick={handleOpenHowToPlay}
             aria-label="How to play"
           >
             <span className="info-icon-letter" aria-hidden="true">i</span>
           </button>
           <button
-            className={`sound-icon-button hero-sound-button${soundEnabled ? " is-active" : ""}`}
+            className={`sound-icon-button hero-sound-button${soundEnabled && soundVolume > 0 ? " is-active" : ""}`}
             type="button"
             onClick={handleToggleSound}
-            aria-label={soundEnabled ? "Mute sound" : "Enable sound"}
+            aria-label={soundEnabled && soundVolume > 0 ? "Mute sound" : "Enable sound"}
           >
-            <SpeakerIcon on={soundEnabled} />
+            <SpeakerIcon on={soundEnabled && soundVolume > 0} />
           </button>
           <h1>GridPop!</h1>
         </header>
@@ -4230,8 +5210,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 score={game.score}
                 bestScore={displayedBestScore}
                 combo={game.combo}
+                onClick={() => handleOpenLeaderboard("personal")}
               />
-              <ScoreboardTrigger onClick={() => handleOpenLeaderboard("personal")} />
+              <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />
             </div>
             <div className="mobile-player-handle">
               {playerHandleMessage ? (
@@ -4241,8 +5222,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               )}
             </div>
             <div className="desktop-auth-panel">
-              <ProfileTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
-              <ThemeTrigger active={showThemeModal} onClick={handleToggleThemeModal} />
+              <MenuTrigger active={showDesktopAuthPanel} onClick={handleToggleDesktopAuthPanel} />
+              <ThemeTrigger active={showThemeModal} hasUnread={hasUnreadThemes} onClick={handleToggleThemeModal} />
             </div>
           </aside>
 
@@ -4259,16 +5240,20 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             <div className="board-container">
               <Board
                 boardRef={boardRef}
+                lockedPreviewPath={lockedPreviewPath}
                 board={displayBoard}
                 clearedSet={clearedSet}
                 clearedTones={game.clearedTones}
                 interactionLocked={runInteractionLocked}
+                lockedPreviewSet={lockedPreviewSet}
+                lockedPreviewTone={lockedPreviewTone}
                 previewClearSet={previewClearSet}
                 previewTone={previewTone}
                 started={started}
                 onBoardMove={handleBoardMove}
                 onBoardLeave={handleBoardLeave}
                 onCellClick={handleCellClick}
+                onLockedPreviewPointerDown={lockedPreviewPiece ? (e) => handleLockedPreviewPointerDown(lockedPreviewPiece, e) : undefined}
               />
               {!started ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
@@ -4308,6 +5293,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               {resumedElsewhere ? (
                 <div className="start-overlay resumed-elsewhere-overlay" role="dialog" aria-modal="true" aria-label="GridPop! is open in another window">
                   <p className="resumed-elsewhere-title">GridPop! is open in another window</p>
+                  {game.score > 0 ? <p className="resumed-elsewhere-score">{game.score.toLocaleString()}</p> : null}
                   {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
                   {!resumeRunGone && (
                     <button className="start-button" type="button" onClick={handleResumeHere} disabled={resumePending}>
@@ -4335,44 +5321,83 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               ) : null}
               {gameOverPhase === 'overlay' ? (
                 <div
-                  className={`start-overlay game-over-overlay${isNewBest ? ' is-new-best' : ''}`}
+                  className={`start-overlay game-over-overlay${showNewBestBanner ? ' is-new-best' : ''}`}
                   role="dialog"
                   aria-modal="true"
                   aria-label="Game over"
                 >
                   <div className="game-over-content">
-                    {isNewBest && <p className="new-best-banner">✨ New Best! ✨</p>}
-                    <p className="game-over-score">{game.score}</p>
-                    <button className="start-button" type="button" onClick={handleRestart} disabled={runSubmitting || startPending || (!!session && !accountRunsReadyRef.current)}>
-                      Play Again
-                    </button>
-                    {runSubmissionError ? (
-                      <button
-                        className="leaderboard-empty run-submission-retry"
-                        type="button"
-                        onClick={() => {
-                          if (!activeVerifiedRun?.id) {
-                            if (!session?.user?.id) {
-                              handleOpenAuthPrompt();
-                            }
-                            return;
-                          }
-                          runSubmissionInFlightRef.current.delete(activeVerifiedRun.id);
-                          syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
-                          setRunSubmissionError("");
-                          setFinishRunAttempt((n) => n + 1);
-                        }}
-                      >
-                        {runSubmissionError}
+                    <div className="game-over-score-group">
+                      {showNewBestBanner && <p className="new-best-banner">✨ New Best! ✨</p>}
+                      <p className={`game-over-score${scoreFinished ? ' is-done' : ''}`}>{displayedScore}</p>
+                    </div>
+                    <div className="game-over-mid">
+                      <div className="game-over-divider" />
+                      <div className="game-over-stats">
+                        <div className={`game-over-stat${statsRevealed >= 1 ? ' is-revealed' : ''}`}>
+                          <span className="game-over-stat-value">{game.moveCount}</span>
+                          <span className="game-over-stat-label">shapes played</span>
+                        </div>
+                        <div className={`game-over-stat${statsRevealed >= 2 ? ' is-revealed' : ''}`}>
+                          <span className="game-over-stat-value">x{game.bestCombo + 1}</span>
+                          <span className="game-over-stat-label">highest chain</span>
+                        </div>
+                        {game.bestLinesCleared > 0 && (
+                          <div className={`game-over-stat${statsRevealed >= 3 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">{game.bestLinesCleared} {game.bestLinesCleared === 1 ? 'line' : 'lines'}</span>
+                            <span className="game-over-stat-label">biggest burst</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`game-over-actions${showPlayAgain ? ' is-visible' : ''}`}>
+                      <button className="start-button" type="button" onClick={handleRestart} disabled={runSubmitting || startPending || (!!session && !accountRunsReadyRef.current)}>
+                        Play Again
                       </button>
-                    ) : null}
+                      {runSubmissionError ? (
+                        <button
+                          className="leaderboard-empty run-submission-retry"
+                          type="button"
+                          onClick={() => {
+                            if (!activeVerifiedRun?.id) {
+                              if (!session?.user?.id) {
+                                handleOpenAuthPrompt();
+                              }
+                              return;
+                            }
+                            runSubmissionInFlightRef.current.delete(activeVerifiedRun.id);
+                            syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
+                            setRunSubmissionError("");
+                            setFinishRunAttempt((n) => n + 1);
+                          }}
+                        >
+                          {runSubmissionError}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+                  {!session && hasSupabaseConfig ? (
+                    <div className={`game-over-footer${showPlayAgain ? ' is-visible' : ''}`}>
+                      <ul className="game-over-signin-benefits">
+                        <li>Global Leaderboard</li>
+                        <li>Unlockable Themes</li>
+                        <li>Sync Across Devices</li>
+                      </ul>
+                      <button
+                        className="game-over-signin-cta"
+                        type="button"
+                        onClick={() => handleOpenAuthPrompt({ autoFocus: true })}
+                      >
+                        Create your player profile
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
           </section>
 
-          <aside className={`sidebar${drag ? " is-drag-active" : ""}`}>
+          <aside className={`sidebar${drag?.armed ? " is-drag-active" : ""}`}>
             <Tray
               tray={game.tray}
               selectedPieceId={game.selectedPieceId}
@@ -4418,10 +5443,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           <button
             className="site-footer-version site-footer-version--button"
             type="button"
-            onClick={() => setShowChangelog(true)}
-            aria-label="View changelog"
+            onClick={handleOpenChangelog}
+            aria-label={hasUnreadChangelog ? `View changelog for new in version ${CLIENT_VERSION.replace("gridpop-web-", "")}` : "View changelog"}
           >
-            {CLIENT_VERSION.replace("gridpop-web-", "v")}
+            <span>{CLIENT_VERSION.replace("gridpop-web-", "v")}</span>
+            {hasUnreadChangelog ? <span className="ui-pill-badge">New!</span> : null}
           </button>
         </footer>
 
@@ -4456,7 +5482,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           role="dialog"
           aria-modal="true"
           aria-label="Player account"
-          onClick={handleCloseMobileAuthPanel}
+          onPointerDown={handleAuthOverlayPointerDown}
+          onClick={handleMobileAuthOverlayClick}
         >
           <div className="mobile-auth-sheet" onClick={(event) => event.stopPropagation()}>
             <button
@@ -4467,6 +5494,18 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             >
               Close
             </button>
+            <SettingsPanel
+              soundVolume={soundVolume}
+              onVolumeChange={handleVolumeChange}
+              gridStickiness={gridStickiness}
+              onStickinessChange={handleStickinessChange}
+              showAccessibleThemes={showAccessibleThemes}
+              onShowAccessibleThemesChange={handleShowAccessibleThemesChange}
+              confirmPlacement={confirmPlacement}
+              onConfirmPlacementChange={handleConfirmPlacementChange}
+              crtFilterLevel={crtFilterLevel}
+              onCrtFilterLevelChange={handleCrtFilterLevelChange}
+            />
             <AuthPanel
               authCode={authCode}
               authEmail={authEmail}
@@ -4492,6 +5531,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               profileLoading={profileLoading}
               profilePending={profilePending}
               session={session}
+              focusEmail={authAutoFocus}
             />
           </div>
         </div>
@@ -4503,17 +5543,30 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           role="dialog"
           aria-modal="true"
           aria-label="Player account"
-          onClick={handleToggleDesktopAuthPanel}
+          onPointerDown={handleAuthOverlayPointerDown}
+          onClick={handleDesktopAuthOverlayClick}
         >
           <div className="desktop-auth-dialog" onClick={(event) => event.stopPropagation()}>
             <button
               className="desktop-auth-close"
               type="button"
-              onClick={handleToggleDesktopAuthPanel}
+              onClick={handleCloseDesktopAuthPanel}
               aria-label="Close sign in panel"
             >
               Close
             </button>
+            <SettingsPanel
+              soundVolume={soundVolume}
+              onVolumeChange={handleVolumeChange}
+              gridStickiness={gridStickiness}
+              onStickinessChange={handleStickinessChange}
+              showAccessibleThemes={showAccessibleThemes}
+              onShowAccessibleThemesChange={handleShowAccessibleThemesChange}
+              confirmPlacement={confirmPlacement}
+              onConfirmPlacementChange={handleConfirmPlacementChange}
+              crtFilterLevel={crtFilterLevel}
+              onCrtFilterLevelChange={handleCrtFilterLevelChange}
+            />
             <AuthPanel
               authCode={authCode}
               authEmail={authEmail}
@@ -4539,26 +5592,28 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               profileLoading={profileLoading}
               profilePending={profilePending}
               session={session}
+              focusEmail={authAutoFocus}
             />
           </div>
         </div>
       ) : null}
 
-      {showHowToPlay ? <HowToPlayModal onClose={() => setShowHowToPlay(false)} /> : null}
+      {showHowToPlay ? <HowToPlayModal onClose={handleCloseHowToPlay} /> : null}
       {showThemeModal ? (
         <ThemeModal
           activeTheme={activeTheme}
+          showAccessibleThemes={showAccessibleThemes}
           signedIn={Boolean(session?.user?.id)}
           unlockedThemes={unlockedThemes}
           onGuestSignIn={handleOpenAuthPrompt}
           onSelect={handleThemeSelect}
-          onClose={() => setShowThemeModal(false)}
+          onClose={handleCloseThemeModal}
         />
       ) : null}
       {showStats ? (
         <StatsModal
           displayName={profile?.display_name ?? ""}
-          onClose={() => setShowStats(false)}
+          onClose={handleCloseStats}
           onShare={handleStatsShare}
           stats={aggregateStats}
           theme={THEMES.find(t => t.key === activeTheme) ?? THEMES[0]}
@@ -4588,7 +5643,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       />
 
       {showChangelog ? (
-        <ChangelogModal onClose={() => setShowChangelog(false)} />
+        <ChangelogModal onClose={handleCloseChangelog} />
       ) : null}
 
       {showDragGhost ? (

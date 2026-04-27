@@ -1,6 +1,16 @@
 let audioContext = null;
 let enabled = true;
 let warmedUp = false;
+let masterGainNode = null;
+
+let volume = (() => {
+  try {
+    const stored = localStorage.getItem("gridpop-volume");
+    if (stored === null) return 1;
+    const v = Number(stored);
+    return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 1;
+  } catch { return 1; }
+})();
 
 // --- Audio context ---
 
@@ -10,6 +20,15 @@ function getAudioContext() {
   if (!Ctor) return null;
   if (audioContext === null) audioContext = new Ctor();
   return audioContext;
+}
+
+function getMasterGain(ctx) {
+  if (!masterGainNode || masterGainNode.context !== ctx) {
+    masterGainNode = ctx.createGain();
+    masterGainNode.gain.value = volume;
+    masterGainNode.connect(ctx.destination);
+  }
+  return masterGainNode;
 }
 
 function getPlayableContext() {
@@ -55,7 +74,7 @@ function makeVelcro(ctx, duration) {
 }
 
 // --- Core noise player ---
-// Routes buffer through optional HPF → BPF → LPF → gain envelope → destination
+// Routes buffer through optional HPF → BPF → LPF → gain envelope → master gain
 
 function playNoise(ctx, buffer, { hpf, bpf, bpfQ = 1, lpf, attack, decay, gain, t }) {
   const src = ctx.createBufferSource();
@@ -92,7 +111,7 @@ function playNoise(ctx, buffer, { hpf, bpf, bpfQ = 1, lpf, attack, decay, gain, 
   chain.push(env);
 
   for (let i = 0; i < chain.length - 1; i++) chain[i].connect(chain[i + 1]);
-  chain[chain.length - 1].connect(ctx.destination);
+  chain[chain.length - 1].connect(getMasterGain(ctx));
 
   src.start(t);
   src.stop(t + attack + decay + 0.02);
@@ -110,7 +129,7 @@ export function primeSound() {
   gain.gain.setValueAtTime(0.00001, now);
   gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.03);
   osc.connect(gain);
-  gain.connect(context.destination);
+  gain.connect(getMasterGain(context));
   osc.start(now);
   osc.stop(now + 0.03);
   warmedUp = true;
@@ -120,11 +139,22 @@ export function isSoundEnabled() {
   return enabled;
 }
 
+export function getSoundVolume() {
+  return volume;
+}
+
 export function setSoundEnabled(nextEnabled) {
   enabled = nextEnabled;
   if (enabled) {
     warmedUp = false;
     primeSound();
+  }
+}
+
+export function setSoundVolume(nextVolume) {
+  volume = Math.max(0, Math.min(1, nextVolume));
+  if (masterGainNode) {
+    masterGainNode.gain.value = volume;
   }
 }
 
@@ -153,7 +183,7 @@ export function playPickupSound() {
   env.gain.linearRampToValueAtTime(0.52, t + 0.009);
   env.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
   osc.connect(env);
-  env.connect(ctx.destination);
+  env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.14);
 
@@ -186,7 +216,7 @@ export function playPlaceSound() {
   env.gain.linearRampToValueAtTime(0.58, t + 0.011);
   env.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
   osc.connect(env);
-  env.connect(ctx.destination);
+  env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.18);
 
@@ -339,7 +369,7 @@ export function playFillCellSound() {
   env.gain.linearRampToValueAtTime(0.38, t + 0.004);
   env.gain.exponentialRampToValueAtTime(0.0001, t + 0.048);
   osc.connect(env);
-  env.connect(ctx.destination);
+  env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.055);
 

@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.5",
+    "date": "",
+    "changes": [
+      "New game menu with audio, controls, and display settings",
+      "Full volume control, sticky grid tunings, and confirm before placing",
+      "CRT filter modes, plus a new unlockable FN 80Z theme and tweaked DMG theme",
+      "Game over screen shows additional stats",
+      "Bug fixes and UI tweaks"
+    ]
+  },
+  {
     "version": "1.4",
     "date": "",
     "changes": [
