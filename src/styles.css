@@ -1486,7 +1486,6 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   grid-template-columns: repeat(8, 1fr);
   gap: var(--board-gap);
   width: 100%;
-  aspect-ratio: 1;
   padding: 0.55rem;
   overflow: hidden;
   border-radius: 0.6rem;
@@ -1634,7 +1633,6 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-radius: var(--pop-radius, 28%);
     background: var(--cell-bg, rgba(200, 200, 200, 0.8));
     border-width: 0px;
-    filter: brightness(1.12) saturate(1.2);
   }
   10% {
     transform: scale(1.12);
@@ -1642,7 +1640,6 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-radius: 50%;
     background: var(--cell-bg, rgba(200, 200, 200, 0.8));
     border-width: 0px;
-    filter: brightness(1.15) saturate(1.25);
   }
   20% {
     transform: scale(0.84);
@@ -1650,7 +1647,6 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-radius: 52%;
     background: color-mix(in srgb, var(--tone-fill) 25%, white 75%);
     border-width: 1.25px;
-    filter: brightness(1.2) saturate(0.9);
   }
   32% {
     transform: scale(1.16);
@@ -1658,7 +1654,6 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-radius: 50%;
     background: transparent;
     border-width: 0.55px;
-    filter: brightness(1) saturate(1);
   }
   48% {
     transform: scale(1.28);
@@ -2172,11 +2167,19 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
 
 .desktop-auth-dialog {
   width: min(100%, 24rem);
+  max-height: calc(100dvh - 2rem);
   display: grid;
   gap: 0.45rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.1rem 0.35rem 0.45rem 0.1rem;
+  scrollbar-gutter: stable;
 }
 
 .desktop-auth-close {
+  position: sticky;
+  top: 0.1rem;
+  z-index: 1;
   justify-self: end;
   min-height: 2rem;
   padding: 0 0.65rem;

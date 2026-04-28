@@ -2,6 +2,8 @@ let audioContext = null;
 let enabled = true;
 let warmedUp = false;
 let masterGainNode = null;
+const clearSoundBufferBanks = new WeakMap();
+const CLEAR_SOUND_BANK_SIZE = 10;
 
 let volume = (() => {
   try {
@@ -73,6 +75,24 @@ function makeVelcro(ctx, duration) {
   return buf;
 }
 
+function pickBuffer(buffers) {
+  return buffers[Math.floor(Math.random() * buffers.length)];
+}
+
+function getClearSoundBuffers(ctx) {
+  let banks = clearSoundBufferBanks.get(ctx);
+  if (!banks) {
+    banks = {
+      shortVelcro: Array.from({ length: CLEAR_SOUND_BANK_SIZE }, () => makeVelcro(ctx, 0.16)),
+      peelVelcro: Array.from({ length: CLEAR_SOUND_BANK_SIZE }, () => makeVelcro(ctx, 0.09)),
+      midGranular: Array.from({ length: CLEAR_SOUND_BANK_SIZE }, () => makeGranular(ctx, 0.08, 0.28)),
+      peelGranular: Array.from({ length: CLEAR_SOUND_BANK_SIZE }, () => makeGranular(ctx, 0.11, 0.48)),
+    };
+    clearSoundBufferBanks.set(ctx, banks);
+  }
+  return banks;
+}
+
 // --- Core noise player ---
 // Routes buffer through optional HPF → BPF → LPF → gain envelope → master gain
 
@@ -125,6 +145,7 @@ export function primeSound() {
   const now = context.currentTime + 0.001;
   const osc = context.createOscillator();
   const gain = context.createGain();
+  getClearSoundBuffers(context);
   osc.frequency.value = 220;
   gain.gain.setValueAtTime(0.00001, now);
   gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.03);
@@ -237,6 +258,7 @@ export function playClearSound() {
   if (!enabled) return;
   const { context: ctx, startAt } = getPlayableContext();
   if (!ctx) return;
+  const buffers = getClearSoundBuffers(ctx);
 
   // Random number of bursts with randomised timing, pitch and intensity
   const burstCount = 3 + Math.floor(Math.random() * 3); // 3–5 bursts
@@ -250,7 +272,7 @@ export function playClearSound() {
     const decayTime = 0.055 + Math.random() * 0.06;      // variable length
 
     // Muffled sticky body (low-passed to keep it dull and chewy)
-    playNoise(ctx, makeVelcro(ctx, decayTime + 0.04), {
+    playNoise(ctx, pickBuffer(buffers.shortVelcro), {
       hpf: 180,
       bpf: bpfFreq,
       bpfQ: 1.4 + Math.random() * 0.8,
@@ -263,7 +285,7 @@ export function playClearSound() {
 
     // Subtle mid crackle only (no ultra-highs — keeps it muffled)
     if (Math.random() > 0.35) {
-      playNoise(ctx, makeGranular(ctx, 0.08, 0.28), {
+      playNoise(ctx, pickBuffer(buffers.midGranular), {
         hpf: 1200,
         bpf: 2400 + Math.random() * 800,
         bpfQ: 1.6,
@@ -278,7 +300,7 @@ export function playClearSound() {
 
   // Sticker-peel layer — fast high crackle rip sitting on top of the muffled base
   // Two quick bursts: the initial peel grab then the adhesive release
-  playNoise(ctx, makeGranular(ctx, 0.11, 0.48), {
+  playNoise(ctx, pickBuffer(buffers.peelGranular), {
     hpf: 2800,
     bpf: 4800,
     bpfQ: 2.6,
@@ -288,7 +310,7 @@ export function playClearSound() {
     t: startAt + 0.008,
   });
 
-  playNoise(ctx, makeVelcro(ctx, 0.09), {
+  playNoise(ctx, pickBuffer(buffers.peelVelcro), {
     hpf: 3500,
     bpf: 6000,
     bpfQ: 3.2,
