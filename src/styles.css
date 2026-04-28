@@ -112,6 +112,11 @@ body.is-dragging {
   overscroll-behavior: none;
 }
 
+html.is-game-interactive,
+body.is-game-interactive {
+  overscroll-behavior: none;
+}
+
 /* Retro pixel grid */
 body::before {
   content: "";
@@ -257,6 +262,10 @@ button {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.9rem;
   overflow: visible;
+}
+
+.app-shell.is-game-interactive {
+  overscroll-behavior: none;
 }
 
 .hero {
@@ -569,6 +578,14 @@ h2 {
   display: grid;
   justify-items: center;
   align-content: start;
+}
+
+.app-shell.is-game-interactive .playfield,
+.app-shell.is-game-interactive .board-container,
+.app-shell.is-game-interactive .sidebar,
+.app-shell.is-game-interactive .tray,
+.app-shell.is-game-interactive .drag-dismiss-zone {
+  touch-action: none;
 }
 
 .playfield-header {

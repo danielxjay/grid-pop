@@ -183,6 +183,15 @@ const FINISH_RUN_RETRY_DELAYS_MS = [800, 2000];
 const PENDING_RUN_RECOVERY_RETRY_DELAYS_MS = [1000];
 const RUN_DEVICE_POLL_INTERVAL_MS = 15000;
 const PENDING_RUN_KEY = "gridpop-pending-run";
+const GRID_AXIS_INDICES = Array.from({ length: GRID_SIZE }, (_, index) => index);
+const BOARD_CELL_INDICES = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => index);
+const TRAY_SLOT_INDICES = Array.from({ length: TRAY_SIZE }, (_, index) => index);
+const GLOBAL_LEADERBOARD_PLACEHOLDER_INDICES = Array.from(
+  { length: Math.max(0, GLOBAL_LEADERBOARD_LIMIT - 1) },
+  (_, index) => index
+);
+const PIECE_GRID_INDICES_CACHE = new Map();
+const SHAPE_OCCUPIED_CACHE = new WeakMap();
 const ACTIVE_RUN_SESSION_KEY = "gridpop-active-run";
 const ACTIVE_RUN_SESSION_VERSION = 1;
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
@@ -329,7 +338,7 @@ function sleep(ms) {
 
 function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOverride = null }) {
   const { width, height } = piece.bounds;
-  const occupied = new Set(piece.shape.cells.map(([dx, dy]) => `${dx}:${dy}`));
+  const occupied = getShapeOccupiedCells(piece.shape);
   const baseCellSize = cellSizeOverride ?? (compact ? 0.95 : 1.1);
   const gapSize = gapSizeOverride ?? (compact ? 0.12 : 0.08);
   const maxWidth =
@@ -356,7 +365,7 @@ function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOve
         "--piece-gap": `${gapSize}rem`,
       }}
     >
-      {Array.from({ length: width * height }, (_, index) => {
+      {getPieceGridIndices(width, height).map((index) => {
         const row = Math.floor(index / width);
         const col = index % width;
         const filled = occupied.has(`${col}:${row}`);
@@ -370,6 +379,25 @@ function PieceGrid({ piece, compact = false, cellSizeOverride = null, gapSizeOve
       })}
     </div>
   );
+}
+
+function getPieceGridIndices(width, height) {
+  const key = `${width}:${height}`;
+  let indices = PIECE_GRID_INDICES_CACHE.get(key);
+  if (!indices) {
+    indices = Array.from({ length: width * height }, (_, index) => index);
+    PIECE_GRID_INDICES_CACHE.set(key, indices);
+  }
+  return indices;
+}
+
+function getShapeOccupiedCells(shape) {
+  let occupied = SHAPE_OCCUPIED_CACHE.get(shape);
+  if (!occupied) {
+    occupied = new Set(shape.cells.map(([dx, dy]) => `${dx}:${dy}`));
+    SHAPE_OCCUPIED_CACHE.set(shape, occupied);
+  }
+  return occupied;
 }
 
 function CogIcon() {
@@ -1152,7 +1180,7 @@ function LeaderboardModal({
             <section className="leaderboard-section leaderboard-section--global-list">
               {globalLoading ? (
                 <ol className="leaderboard-list leaderboard-list-global leaderboard-list--loading">
-                  {Array.from({ length: Math.max(0, GLOBAL_LEADERBOARD_LIMIT - 1) }, (_, i) => (
+                  {GLOBAL_LEADERBOARD_PLACEHOLDER_INDICES.map((i) => (
                     <li key={i} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
                       <span className="leaderboard-rank">&nbsp;</span>
                       <span className="leaderboard-score">&nbsp;</span>
@@ -1660,7 +1688,7 @@ function Tray({
   if (awaitingTray) {
     return (
       <div className="tray" aria-live="polite" aria-busy={nextTrayPending}>
-        {Array.from({ length: TRAY_SIZE }, (_, index) => (
+        {TRAY_SLOT_INDICES.map((index) => (
           <button key={`awaiting-${index}`} className="piece-button piece-button--loading" type="button" disabled aria-hidden="true">
             <span className="tray-spinner" aria-hidden="true">
               <span className="tray-spinner-dot" />
@@ -1680,7 +1708,7 @@ function Tray({
 
   return (
     <div className="tray" aria-label="Available shapes">
-      {Array.from({ length: TRAY_SIZE }, (_, index) => {
+      {TRAY_SLOT_INDICES.map((index) => {
         const piece = started ? tray[index] : null;
 
         if (!piece) {
@@ -1738,13 +1766,13 @@ function Board({
   const clearedRows = new Set();
   const clearedCols = new Set();
   if (clearedSet.size > 0) {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      if (Array.from({ length: GRID_SIZE }, (_, c) => toIndex(r, c)).every((i) => clearedSet.has(i))) {
+    for (const r of GRID_AXIS_INDICES) {
+      if (GRID_AXIS_INDICES.every((c) => clearedSet.has(toIndex(r, c)))) {
         clearedRows.add(r);
       }
     }
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (Array.from({ length: GRID_SIZE }, (_, r) => toIndex(r, c)).every((i) => clearedSet.has(i))) {
+    for (const c of GRID_AXIS_INDICES) {
+      if (GRID_AXIS_INDICES.every((r) => clearedSet.has(toIndex(r, c)))) {
         clearedCols.add(c);
       }
     }
@@ -1758,7 +1786,7 @@ function Board({
       onPointerMove={onBoardMove}
       onPointerLeave={onBoardLeave}
     >
-      {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
+      {BOARD_CELL_INDICES.map((index) => {
         const row = Math.floor(index / GRID_SIZE);
         const col = index % GRID_SIZE;
         const stored = board[index];
@@ -1771,20 +1799,17 @@ function Board({
           : isWillClear
             ? { "--rumble-offset": `${Math.round(getSeededValue(row * 17 + col * 31 + 1, 5) * 800)}ms` }
             : undefined;
+        let cellClassName = "board-cell";
+        if (effectiveTone && !isLockedPreview) cellClassName += ` is-filled tone-${effectiveTone}`;
+        if (isLockedPreview) cellClassName += ` is-locked-preview tone-${effectiveTone}`;
+        if (stored?.isFill) cellClassName += " is-game-fill";
+        if (isWillClear) cellClassName += " will-clear";
+        if (clearedSet.has(index)) cellClassName += " was-cleared";
 
         return (
           <button
             key={`${row}-${col}`}
-            className={[
-              "board-cell",
-              effectiveTone && !isLockedPreview ? `is-filled tone-${effectiveTone}` : "",
-              isLockedPreview ? `is-locked-preview tone-${effectiveTone}` : "",
-              stored?.isFill ? "is-game-fill" : "",
-              isWillClear ? "will-clear" : "",
-              clearedSet.has(index) ? "was-cleared" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            className={cellClassName}
             style={cellStyle}
             type="button"
             aria-label={`Board cell ${row + 1}, ${col + 1}`}
@@ -2531,6 +2556,17 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       document.body.classList.remove("is-dragging");
     };
   }, [drag?.armed]);
+
+  useEffect(() => {
+    const interactive = started && !game.gameOver;
+    document.documentElement.classList.toggle("is-game-interactive", interactive);
+    document.body.classList.toggle("is-game-interactive", interactive);
+
+    return () => {
+      document.documentElement.classList.remove("is-game-interactive");
+      document.body.classList.remove("is-game-interactive");
+    };
+  }, [game.gameOver, started]);
 
   useEffect(() => {
     if (game.bestScore > 0) {
@@ -5101,12 +5137,16 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
   };
   const accountBestScore = accountTopRuns[0]?.score ?? 0;
-  const localTopRuns = [...localRuns]
-    .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
-    .slice(0, PERSONAL_TOP_RUN_LIMIT);
-  const localRunNumbers = Object.fromEntries(
-    localRuns.map((run, index) => [String(run.id), Math.max(1, localRuns.length - index)])
-  );
+  const localTopRuns = session
+    ? []
+    : [...localRuns]
+      .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+      .slice(0, PERSONAL_TOP_RUN_LIMIT);
+  const localRunNumbers = session
+    ? {}
+    : Object.fromEntries(
+      localRuns.map((run, index) => [String(run.id), Math.max(1, localRuns.length - index)])
+    );
   const displayedBestScore = session
     ? Math.max(game.score, accountBestScore)
     : game.bestScore;
@@ -5192,7 +5232,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   return (
     <>
-      <div className="app-shell">
+      <div className={`app-shell${started && !game.gameOver ? " is-game-interactive" : ""}`}>
         <header className="hero">
           <button
             className={`sound-icon-button hero-auth-button${
