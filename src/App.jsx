@@ -756,7 +756,7 @@ function StatsModal({ displayName, onClose, onShare, stats, theme }) {
   );
 }
 
-function HowToPlayModal({ onClose }) {
+function HowToPlayModal({ onClose, onOpenChangelog, hasUnreadChangelog }) {
   const placeGrid = [
     [null,    null,     null,     null   ],
     ["sky",   null,     null,     null   ],
@@ -799,7 +799,7 @@ function HowToPlayModal({ onClose }) {
               <MiniBoard grid={clearGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Pop</strong>
-                <p>Fill a full row or column of poxels and the whole line pops. Pop multiple lines in one move to trigger a burst bonus.</p>
+                <p>Fill a row or column with poxels and the whole line pops. Pop multiple lines in one move to trigger a "burst" bonus.</p>
                 <p className="how-to-play-pts">180 pts per line, plus extra for bursts</p>
               </div>
             </div>
@@ -811,13 +811,34 @@ function HowToPlayModal({ onClose }) {
               </div>
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Chain Bonus</strong>
-                <p>Clear lines on back-to-back placements to grow your chain bonus multiplier.</p>
-                <p className="how-to-play-pts">Each clear in a row adds ×1</p>
+                <p>Pop lines back-to-back to grow your chain bonus multiplier.</p>
+                <p className="how-to-play-pts">Each line popped in a row adds ×1</p>
               </div>
             </div>
           </div>
           <p className="how-to-play-footer">
-            The game ends when no piece in the tray can fit on the grid.
+            The game ends when no shape in the tray can fit on the grid.
+          </p>
+          <p className="how-to-play-credit">
+            Made by{" "}
+            <a
+              className="site-footer-link"
+              href="https://www.threads.com/@dxniel.jxy"
+              target="_blank"
+              rel="noreferrer"
+            >
+              @dxniel.jxy
+            </a>
+            {" · "}
+            <button
+              className="site-footer-version site-footer-version--button"
+              type="button"
+              onClick={onOpenChangelog}
+              aria-label={hasUnreadChangelog ? `View changelog for new in version ${CLIENT_VERSION.replace("gridpop-web-", "")}` : "View changelog"}
+            >
+              <span>{CLIENT_VERSION.replace("gridpop-web-", "v")}</span>
+              {hasUnreadChangelog ? <span className="ui-pill-badge">New!</span> : null}
+            </button>
           </p>
         </section>
       </div>
@@ -1311,7 +1332,7 @@ function SettingsPanel({
 }) {
   return (
     <section className="settings-panel">
-      <p className="section-label">Settings</p>
+      <h2>Settings</h2>
 
       <div className="settings-group">
         <p className="settings-group-label">Audio</p>
@@ -5598,7 +5619,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         </div>
       ) : null}
 
-      {showHowToPlay ? <HowToPlayModal onClose={handleCloseHowToPlay} /> : null}
+      {showHowToPlay ? <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} /> : null}
       {showThemeModal ? (
         <ThemeModal
           activeTheme={activeTheme}
