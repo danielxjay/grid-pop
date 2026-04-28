@@ -440,8 +440,8 @@ button {
   min-height: 2.2rem;
   padding: 0.55rem 0.85rem;
   border-radius: 0.5rem;
-  border: 2px solid color-mix(in srgb, var(--stroke-muted) 35%, transparent);
-  background: color-mix(in srgb, var(--bg-interactive) 75%, transparent);
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 45%, transparent);
+  background: transparent;
   color: var(--fg);
   font-size: 0.56rem;
   letter-spacing: 0.05em;
@@ -456,9 +456,9 @@ button {
 }
 
 .update-toast-button--primary {
-  border-color: color-mix(in srgb, var(--accent-secondary) 55%, transparent);
-  background: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
-  color: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+  background: var(--accent-secondary);
+  color: #fff;
 }
 
 h1,

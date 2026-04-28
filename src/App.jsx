@@ -5475,13 +5475,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         {showUpdatePrompt ? (
           <div className="update-toast" role="status" aria-live="polite">
             <div className="update-toast-copy">
-              <strong>Update Available</strong>
-              <span>A newer version of GridPop is ready.</span>
+              <strong>Please reload</strong>
+              <span>GridPop! update available</span>
             </div>
             <div className="update-toast-actions">
-              <button className="update-toast-button update-toast-button--primary" type="button" onClick={onApplyUpdate}>
-                Reload
-              </button>
               <button
                 className="update-toast-button"
                 type="button"
@@ -5491,6 +5488,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 }}
               >
                 Later
+              </button>
+              <button className="update-toast-button update-toast-button--primary" type="button" onClick={onApplyUpdate}>
+                Reload
               </button>
             </div>
           </div>
