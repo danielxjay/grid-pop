@@ -5161,6 +5161,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const showUpdatePrompt = updateReady && !updateDismissed && (!started || game.gameOver);
 
   useEffect(() => {
+    if (started) setUpdateDismissed(false);
+  }, [started]);
+
+  useEffect(() => {
     if (
       !rankedReady ||
       started ||
@@ -5524,7 +5528,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 type="button"
                 onClick={() => {
                   setUpdateDismissed(true);
-                  onDismissUpdate();
                 }}
               >
                 Later
