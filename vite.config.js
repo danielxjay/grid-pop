@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     basicSsl(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["favicon.ico", "favicon.svg", "og.png", "apple-icon-*.png", "favicon-*.png"],
       manifest: {
         name: "GridPop!",

@@ -1444,6 +1444,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   width: 100%;
   aspect-ratio: 1;
   padding: 0.55rem;
+  overflow: hidden;
   border-radius: 0.6rem;
   background: var(--board-bg);
   border: 3px solid var(--accent-secondary);
