@@ -287,6 +287,11 @@ button {
   text-align: center;
 }
 
+.site-footer.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .site-footer-link {
   color: color-mix(in srgb, var(--fg-link) 62%, transparent);
   text-decoration: none;

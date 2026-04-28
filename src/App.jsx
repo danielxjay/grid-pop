@@ -5490,7 +5490,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           </aside>
         </main>
 
-        <footer className="site-footer">
+        <footer className={`site-footer${showUpdatePrompt ? " is-hidden" : ""}`}>
           <span>Made by </span>
           <a
             className="site-footer-link"
