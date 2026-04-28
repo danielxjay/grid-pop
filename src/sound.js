@@ -4,6 +4,8 @@ let warmedUp = false;
 let masterGainNode = null;
 const clearSoundBufferBanks = new WeakMap();
 const CLEAR_SOUND_BANK_SIZE = 10;
+const previewMoveBufferBanks = new WeakMap();
+const PREVIEW_MOVE_BANK_SIZE = 12;
 
 let volume = (() => {
   try {
@@ -93,6 +95,15 @@ function getClearSoundBuffers(ctx) {
   return banks;
 }
 
+function getPreviewMoveBuffers(ctx) {
+  let buffers = previewMoveBufferBanks.get(ctx);
+  if (!buffers) {
+    buffers = Array.from({ length: PREVIEW_MOVE_BANK_SIZE }, () => makeGranular(ctx, 0.04, 0.44));
+    previewMoveBufferBanks.set(ctx, buffers);
+  }
+  return buffers;
+}
+
 // --- Core noise player ---
 // Routes buffer through optional HPF → BPF → LPF → gain envelope → master gain
 
@@ -146,6 +157,7 @@ export function primeSound() {
   const osc = context.createOscillator();
   const gain = context.createGain();
   getClearSoundBuffers(context);
+  getPreviewMoveBuffers(context);
   osc.frequency.value = 220;
   gain.gain.setValueAtTime(0.00001, now);
   gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.03);
@@ -360,9 +372,10 @@ export function playPreviewMoveSound() {
   const { context: ctx, startAt } = getPlayableContext();
   if (!ctx) return;
   const t = startAt;
+  const buffers = getPreviewMoveBuffers(ctx);
 
   // Quick high crackle — a tiny slice of the clear rip sound
-  playNoise(ctx, makeGranular(ctx, 0.04, 0.44), {
+  playNoise(ctx, pickBuffer(buffers), {
     hpf: 2600,
     bpf: 4600,
     bpfQ: 2.6,
