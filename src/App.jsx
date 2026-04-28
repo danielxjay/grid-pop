@@ -173,8 +173,8 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.4";
-const CLIENT_VERSION = "gridpop-web-1.5";
+const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.5";
+const CLIENT_VERSION = "gridpop-web-1.5.1";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
@@ -1022,6 +1022,7 @@ function LeaderboardModal({
   personalVisibleCount,
   signedIn,
   onClose,
+  onGuestSignIn,
   onTabChange,
   open,
 }) {
@@ -1074,9 +1075,14 @@ function LeaderboardModal({
         </div>
 
         {globalEnabled && activeTab === "global" ? (
-          <p className="leaderboard-disclaimer">
-            Only runs started whilst signed in count towards the global board.
-          </p>
+          <div className="leaderboard-disclaimer">
+            <p>Only runs started whilst signed in count towards the global board.</p>
+            {!signedIn ? (
+              <button className="leaderboard-disclaimer-cta" type="button" onClick={onGuestSignIn}>
+                Don&apos;t miss out: create a profile
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {!globalEnabled || activeTab === "personal" ? (
@@ -1618,6 +1624,7 @@ function AuthPanel({
 function Tray({
   tray,
   selectedPieceId,
+  draggedPieceId,
   gameOver,
   interactionLocked,
   started,
@@ -1718,11 +1725,12 @@ function Tray({
         }
 
         const isRevealed = revealedPieceIds.has(piece.id);
+        const isDragged = draggedPieceId === piece.id;
 
         return (
           <button
             key={piece.id}
-            className={`piece-button${selectedPieceId === piece.id ? " is-selected" : ""}${isRevealed ? " piece-button--reveal" : " piece-button--loading"}`}
+            className={`piece-button${selectedPieceId === piece.id ? " is-selected" : ""}${isDragged ? " is-being-dragged" : ""}${isRevealed ? " piece-button--reveal" : " piece-button--loading"}`}
             type="button"
             data-piece-id={piece.id}
             aria-label={`${piece.shape.name} piece`}
@@ -1863,6 +1871,7 @@ function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
 }
 
 const DRAG_GHOST_LIFT_REM = 0.9;
+const DRAG_GHOST_LIFT_CSS_VAR = "--drag-ghost-lift-rem";
 const DROP_SNAP_SLOP_CELLS = 0.38;
 const TRAY_DRAG_START_SLOP_PX = 12;
 
@@ -1879,8 +1888,19 @@ const CRT_FILTER_LEVELS = [
   { value: "vivid", label: "Vivid" },
 ];
 
-function getGhostTransform(clientX, clientY) {
-  return `translate3d(${clientX}px, ${clientY}px, 0) translate(-50%, calc(-100% - ${DRAG_GHOST_LIFT_REM}rem))`;
+function getDragGhostLiftRem() {
+  if (typeof window === "undefined") {
+    return DRAG_GHOST_LIFT_REM;
+  }
+
+  const value = Number.parseFloat(
+    window.getComputedStyle(document.documentElement).getPropertyValue(DRAG_GHOST_LIFT_CSS_VAR)
+  );
+  return Number.isFinite(value) ? value : DRAG_GHOST_LIFT_REM;
+}
+
+function getGhostTransform(clientX, clientY, liftRem = DRAG_GHOST_LIFT_REM) {
+  return `translate3d(${clientX}px, ${clientY}px, 0) translate(-50%, calc(-100% - ${liftRem}rem))`;
 }
 
 // Build an SVG path string tracing the outer perimeter of a polyomino shape.
@@ -2020,6 +2040,7 @@ function getBoardCellMetrics(boardElement) {
     gapPx:      gapX,
     cellSizePx: cellW,
     rootFontSize,
+    ghostLiftRem: getDragGhostLiftRem(),
     cellSizeRem: cellW / rootFontSize,
     gapRem:     gapX / rootFontSize,
   };
@@ -2030,7 +2051,7 @@ function getGhostBounds(metrics, piece, clientX, clientY) {
     piece.bounds.width * metrics.cellSizePx + Math.max(0, piece.bounds.width - 1) * metrics.gapPx;
   const pieceHeightPx =
     piece.bounds.height * metrics.cellSizePx + Math.max(0, piece.bounds.height - 1) * metrics.gapPx;
-  const liftPx = DRAG_GHOST_LIFT_REM * metrics.rootFontSize;
+  const liftPx = metrics.ghostLiftRem * metrics.rootFontSize;
   const left = clientX - pieceWidthPx / 2;
   const top = clientY - pieceHeightPx - liftPx;
 
@@ -2280,6 +2301,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [trayRevealToken, setTrayRevealToken] = useState(0);
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [dragDismissHovered, setDragDismissHovered] = useState(false);
   const accountRunsFetchInFlightRef = useRef(false);
   const accountRunsReadyRef = useRef(false);
   const globalFetchInFlightRef = useRef(false);
@@ -2298,6 +2320,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
   const dragBoardMetricsRef = useRef(null);
+  const dragDismissHoveredRef = useRef(false);
   const livePreviewRef = useRef(game.preview);
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
@@ -2310,6 +2333,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const runDeviceCheckInFlightRef = useRef(false);
   const themeObserverBypassRef = useRef(false);
   const autoResumeAttemptedRunIdRef = useRef(null);
+
+  function setDragDismissHover(nextHovered) {
+    if (dragDismissHoveredRef.current === nextHovered) {
+      return;
+    }
+
+    dragDismissHoveredRef.current = nextHovered;
+    setDragDismissHovered(nextHovered);
+  }
 
   function resetRunRecoveryState() {
     setMoveSyncReconnectPending(false);
@@ -2504,7 +2536,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         ? "Set a display name before starting."
         : "";
   const runReconnectActive = moveSyncReconnectPending || nextTrayReconnectPending;
-  const runInteractionLocked = Boolean(started && (runReconnectActive || runReconnectActionRequired || resumePending));
+  const gameplayBlocked = Boolean(
+    started && !game.gameOver && (
+      resumedElsewhere ||
+      runReconnectActive ||
+      runReconnectActionRequired ||
+      resumePending
+    )
+  );
+  const runInteractionLocked = gameplayBlocked;
   const playerHandleMessage = started
     ? (
         runReconnectActive || resumePending
@@ -3751,6 +3791,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       const isOverZone = clientX >= zoneRect.left && clientX <= zoneRect.right &&
                          clientY >= zoneRect.top  && clientY <= zoneRect.bottom;
       dismissZone.classList.toggle("is-hovered", isOverZone);
+      setDragDismissHover(isOverZone);
       if (isOverZone) {
         previewSoundRef.current.key = null;
         if (livePreviewRef.current !== null) {
@@ -3759,6 +3800,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
         return;
       }
+    } else {
+      setDragDismissHover(false);
     }
 
     const metrics = activeDrag ? (dragBoardMetricsRef.current ?? getBoardCellMetrics(boardElement)) : getBoardCellMetrics(boardElement);
@@ -3861,6 +3904,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
     dismissZoneRef.current?.classList.remove("is-hovered");
+    setDragDismissHover(false);
     cancelQueuedPreview();
     setDrag(null);
     dragBoardMetricsRef.current = null;
@@ -3929,13 +3973,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           // translate(-50%, -100% - LIFT). Any rem-rounding difference between
           // the ghost cells and the board cells would otherwise cause vertical drift.
           const ghostRect = dragGhostRef.current.getBoundingClientRect();
-          const liftPx = DRAG_GHOST_LIFT_REM * metrics.rootFontSize;
+          const liftPx = metrics.ghostLiftRem * metrics.rootFontSize;
           const snappedX = metrics.gridLeft + col * metrics.stepX + ghostRect.width / 2;
           const snappedY = metrics.gridTop  + row * metrics.stepY + ghostRect.height + liftPx;
           ghostX = event.clientX + stickiness * (snappedX - event.clientX);
           ghostY = event.clientY + stickiness * (snappedY - event.clientY);
         }
-        dragGhostRef.current.style.transform = getGhostTransform(ghostX, ghostY);
+        dragGhostRef.current.style.transform = getGhostTransform(ghostX, ghostY, dragBoardMetricsRef.current?.ghostLiftRem);
       }
 
       queuePreviewFromPoint(event.clientX, event.clientY, drag);
@@ -3954,6 +3998,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
     dismissZoneRef.current?.classList.remove("is-hovered");
+    setDragDismissHover(false);
     cancelQueuedPreview();
 
     const dragArmed = drag.armed || dragIntentRef.current?.armed;
@@ -5013,6 +5058,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   function handleOpenAuthPrompt({ autoFocus = false } = {}) {
     setAuthAutoFocus(autoFocus);
     resetProfilePanelState();
+    setLeaderboardOpen(false);
     setShowThemeModal(false);
     if (window.matchMedia("(max-width: 980px)").matches) {
       setShowDesktopAuthPanel(false);
@@ -5134,7 +5180,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const showDragGhost = Boolean(dragPiece && drag?.armed);
   const dragGhostMetrics = dragPiece ? dragBoardMetricsRef.current : null;
   const dragGhostStyle = {
-    transform: getGhostTransform(dragPointerRef.current.x, dragPointerRef.current.y),
+    transform: getGhostTransform(
+      dragPointerRef.current.x,
+      dragPointerRef.current.y,
+      dragGhostMetrics?.ghostLiftRem
+    ),
   };
   const accountBestScore = accountTopRuns[0]?.score ?? 0;
   const localTopRuns = session
@@ -5466,6 +5516,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             <Tray
               tray={game.tray}
               selectedPieceId={game.selectedPieceId}
+              draggedPieceId={drag?.armed ? drag.pieceId : null}
               gameOver={game.gameOver}
               interactionLocked={runInteractionLocked}
               started={started}
@@ -5702,6 +5753,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         personalVisibleCount={personalVisibleCount}
         signedIn={Boolean(session)}
         onClose={handleCloseLeaderboard}
+        onGuestSignIn={() => handleOpenAuthPrompt({ autoFocus: true })}
         onTabChange={handleLeaderboardTabChange}
         open={leaderboardOpen}
       />
@@ -5711,7 +5763,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ) : null}
 
       {showDragGhost ? (
-        <div ref={dragGhostRef} className="drag-ghost" style={dragGhostStyle}>
+        <div
+          ref={dragGhostRef}
+          className={`drag-ghost${dragDismissHovered ? " is-dismiss-hovered" : ""}`}
+          style={dragGhostStyle}
+        >
           <PieceGrid
             piece={dragPiece}
             cellSizeOverride={dragGhostMetrics?.cellSizeRem ?? null}

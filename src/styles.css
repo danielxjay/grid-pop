@@ -1,5 +1,6 @@
 :root {
   color-scheme: light;
+  --drag-ghost-lift-rem: 0.9;
   --page-top: #dfc8ff;
   --page-bottom: #c0dcff;
   --bg-surface: rgba(255, 255, 255, 0.82);
@@ -916,11 +917,40 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 
 .leaderboard-disclaimer {
   margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
   color: var(--fg-secondary);
   font-size: 0.44rem;
   letter-spacing: 0.05em;
   line-height: 1.6;
   text-align: center;
+}
+
+.leaderboard-disclaimer p {
+  margin: 0;
+}
+
+.leaderboard-disclaimer-cta {
+  min-height: 1.45rem;
+  padding: 0.1rem 0.12rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--accent);
+  box-shadow: none;
+  font-size: 0.46rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+  transition: color 120ms ease;
+}
+
+.leaderboard-disclaimer-cta:hover,
+.leaderboard-disclaimer-cta:focus-visible {
+  color: var(--accent-secondary);
 }
 
 .leaderboard-row--skeleton {
@@ -2262,6 +2292,10 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   opacity: 0.3;
 }
 
+.piece-button.is-being-dragged .piece-grid {
+  opacity: 0;
+}
+
 .piece-button[disabled] {
   pointer-events: none;
 }
@@ -2449,6 +2483,15 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   pointer-events: none;
   will-change: transform;
   filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--board-cell-depth) 32%, transparent));
+}
+
+.drag-ghost .piece-grid {
+  transition: transform 170ms cubic-bezier(0.2, 0.9, 0.22, 1.18), opacity 140ms ease;
+}
+
+.drag-ghost.is-dismiss-hovered .piece-grid {
+  opacity: 0.82;
+  transform: scale(0.45);
 }
 
 /* Start overlay — absolute over the board-container */
@@ -3159,6 +3202,7 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
 
 @media (max-width: 700px) {
   :root {
+    --drag-ghost-lift-rem: 3;
     --board-gap: 0.15rem;
     --board-size: clamp(14rem, calc(100dvh - 20rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 2rem));
   }
@@ -3410,6 +3454,12 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   .leaderboard-meta,
   .leaderboard-empty {
     font-size: 0.72rem;
+  }
+}
+
+@media (pointer: coarse) {
+  :root {
+    --drag-ghost-lift-rem: 3;
   }
 }
 

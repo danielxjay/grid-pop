@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.5.1",
+    "date": "",
+    "changes": [
+      "Cached sound effects earlier for smoother dragging",
+      "Shapes shrink down when dragged to tray return area",
+      "Fixed an issue where shapes could be dragged while the grid was inactive"
+    ]
+  },
+  {
     "version": "1.5",
     "date": "",
     "changes": [
