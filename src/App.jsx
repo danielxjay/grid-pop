@@ -1796,7 +1796,7 @@ function maskEmail(email) {
 }
 
 function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
-  const MAX_DELAY = 180;
+  const MAX_DELAY = 160;
   let dist = 0;
   if (clearedRows.has(row) && clearedCols.has(col)) {
     dist = Math.min(Math.abs(col - 3.5) / 3.5, Math.abs(row - 3.5) / 3.5);
@@ -1809,7 +1809,7 @@ function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
   const seed = row * 17 + col * 31 + 1;
   return {
     "--clear-delay": `${Math.round(dist * MAX_DELAY)}ms`,
-    "--clear-duration": `${Math.round(540 + getSeededValue(seed, 1) * 120)}ms`,
+    "--clear-duration": `${Math.round(660 + getSeededValue(seed, 1) * 120)}ms`,
     "--splash-rotation": `${Math.round(getSeededValue(seed, 2) * 360)}deg`,
     "--splash-scale-x": `${(0.9 + getSeededValue(seed, 3) * 0.45).toFixed(2)}`,
     "--splash-scale-y": `${(0.75 + getSeededValue(seed, 4) * 0.35).toFixed(2)}`,

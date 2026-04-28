@@ -1553,7 +1553,8 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 28%;
+  --pop-radius: 28%;
+  border-radius: var(--pop-radius);
   background: var(--cell-bg, rgba(200, 200, 200, 0.8));
   box-shadow:
     inset 0 2px 5px rgba(255, 255, 255, 0.65),
@@ -1561,7 +1562,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     0 2px 5px color-mix(in srgb, var(--board-cell-depth) 22%, transparent);
   border: 0 solid color-mix(in srgb, var(--tone-fill) 82%, white 18%);
   pointer-events: none;
-  animation: bubblePop var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) both;
+  animation: bubblePop var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) forwards;
 }
 
 /* Brief splatter flash that flicks off one side of the pop */
@@ -1577,36 +1578,28 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   background: transparent;
   pointer-events: none;
   transform-origin: center center;
-  animation: bubbleSplash var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) both;
+  animation: bubbleSplash var(--clear-duration, 640ms) ease-out var(--clear-delay, 0ms) forwards;
 }
 
-/* Bubble swells, ruptures, then the membrane recoils almost instantly */
+/* Bubble is already swollen when the piece lands — snaps straight to rupture */
 @keyframes bubblePop {
   0% {
     transform: scale(1);
     opacity: 1;
-    border-radius: 28%;
+    border-radius: var(--pop-radius, 28%);
     background: var(--cell-bg, rgba(200, 200, 200, 0.8));
     border-width: 0px;
     filter: brightness(1.12) saturate(1.2);
   }
-  18% {
-    transform: scale(1.08);
-    opacity: 1;
-    border-radius: 34%;
-    background: var(--cell-bg, rgba(200, 200, 200, 0.8));
-    border-width: 0px;
-    filter: brightness(1.12) saturate(1.2);
-  }
-  24% {
-    transform: scale(1.15);
+  10% {
+    transform: scale(1.12);
     opacity: 1;
     border-radius: 50%;
     background: var(--cell-bg, rgba(200, 200, 200, 0.8));
     border-width: 0px;
-    filter: brightness(1.12) saturate(1.2);
+    filter: brightness(1.15) saturate(1.25);
   }
-  29% {
+  20% {
     transform: scale(0.84);
     opacity: 0.98;
     border-radius: 52%;
@@ -1614,7 +1607,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-width: 1.25px;
     filter: brightness(1.2) saturate(0.9);
   }
-  35% {
+  32% {
     transform: scale(1.16);
     opacity: 0.34;
     border-radius: 50%;
@@ -1622,7 +1615,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
     border-width: 0.55px;
     filter: brightness(1) saturate(1);
   }
-  46% {
+  48% {
     transform: scale(1.28);
     opacity: 0.05;
     border-radius: 50%;
@@ -1639,7 +1632,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 
 /* Tiny soapy flecks kick out during the snap-away phase */
 @keyframes bubbleSplash {
-  0%, 30% {
+  0%, 20% {
     opacity: 0;
     transform: translate(-50%, -50%) rotate(var(--splash-rotation, 0deg)) scale(0.1);
     box-shadow:
@@ -1649,57 +1642,57 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
       0 0 0 0 rgba(255, 255, 255, 0),
       0 0 0 0 rgba(255, 255, 255, 0);
   }
-  36% {
+  32% {
     opacity: 1;
     transform:
       translate(-50%, -50%)
       rotate(var(--splash-rotation, 0deg))
       scale(calc(var(--splash-scale-x, 1) * 1.12), calc(var(--splash-scale-y, 1) * 1.12));
     box-shadow:
-      0 -8px 0 0.8px color-mix(in srgb, var(--tone-fill) 80%, white 20%),
-      9px -5px 0 0.55px color-mix(in srgb, var(--tone-fill) 74%, white 26%),
-      -8px -4px 0 0.5px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
-      4px -11px 0 0.35px color-mix(in srgb, var(--tone-fill) 78%, white 22%),
-      -3px -12px 0 0.25px color-mix(in srgb, var(--tone-fill) 70%, white 30%);
+      0 -12px 0 0.9px color-mix(in srgb, var(--tone-fill) 80%, white 20%),
+      13px -7px 0 0.65px color-mix(in srgb, var(--tone-fill) 74%, white 26%),
+      -11px -6px 0 0.6px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
+      6px -16px 0 0.45px color-mix(in srgb, var(--tone-fill) 78%, white 22%),
+      -5px -17px 0 0.35px color-mix(in srgb, var(--tone-fill) 70%, white 30%);
   }
-  44% {
-    opacity: 0.46;
+  36% {
+    opacity: 0.9;
     transform:
       translate(-50%, -50%)
       rotate(var(--splash-rotation, 0deg))
-      scale(calc(var(--splash-scale-x, 1) * 1.32), calc(var(--splash-scale-y, 1) * 1.24));
+      scale(calc(var(--splash-scale-x, 1) * 1.28), calc(var(--splash-scale-y, 1) * 1.18));
     box-shadow:
-      0 -15px 0 0.35px color-mix(in srgb, var(--tone-fill) 76%, white 24%),
-      13px -8px 0 0.2px color-mix(in srgb, var(--tone-fill) 70%, white 30%),
-      -11px -7px 0 0.15px color-mix(in srgb, var(--tone-fill) 68%, white 32%),
-      6px -17px 0 0.05px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
-      -5px -18px 0 0 color-mix(in srgb, var(--tone-fill) 66%, white 34%);
+      0 -18px 0 0.5px color-mix(in srgb, var(--tone-fill) 78%, white 22%),
+      17px -10px 0 0.3px color-mix(in srgb, var(--tone-fill) 72%, white 28%),
+      -15px -8px 0 0.25px color-mix(in srgb, var(--tone-fill) 70%, white 30%),
+      8px -22px 0 0.1px color-mix(in srgb, var(--tone-fill) 75%, white 25%),
+      -7px -23px 0 0.05px color-mix(in srgb, var(--tone-fill) 68%, white 32%);
   }
-  55% {
-    opacity: 0.12;
+  52% {
+    opacity: 0.3;
     transform:
       translate(-50%, -50%)
       rotate(var(--splash-rotation, 0deg))
-      scale(calc(var(--splash-scale-x, 1) * 1.42), calc(var(--splash-scale-y, 1) * 1.32));
+      scale(calc(var(--splash-scale-x, 1) * 1.48), calc(var(--splash-scale-y, 1) * 1.36));
     box-shadow:
-      0 -17px 0 0 color-mix(in srgb, var(--tone-fill) 68%, white 32%),
-      15px -9px 0 -0.05px color-mix(in srgb, var(--tone-fill) 62%, white 38%),
-      -13px -8px 0 -0.1px color-mix(in srgb, var(--tone-fill) 60%, white 40%),
-      7px -19px 0 -0.15px color-mix(in srgb, var(--tone-fill) 64%, white 36%),
-      -6px -20px 0 -0.2px color-mix(in srgb, var(--tone-fill) 58%, white 42%);
+      0 -24px 0 0.1px color-mix(in srgb, var(--tone-fill) 68%, white 32%),
+      21px -13px 0 -0.05px color-mix(in srgb, var(--tone-fill) 62%, white 38%),
+      -18px -11px 0 -0.1px color-mix(in srgb, var(--tone-fill) 60%, white 40%),
+      10px -28px 0 -0.15px color-mix(in srgb, var(--tone-fill) 64%, white 36%),
+      -9px -29px 0 -0.2px color-mix(in srgb, var(--tone-fill) 58%, white 42%);
   }
   100% {
     opacity: 0;
     transform:
       translate(-50%, -50%)
       rotate(var(--splash-rotation, 0deg))
-      scale(calc(var(--splash-scale-x, 1) * 1.48), calc(var(--splash-scale-y, 1) * 1.38));
+      scale(calc(var(--splash-scale-x, 1) * 1.6), calc(var(--splash-scale-y, 1) * 1.48));
     box-shadow:
-      0 -19px 0 -0.35px rgba(255, 255, 255, 0),
-      17px -10px 0 -0.45px rgba(255, 255, 255, 0),
-      -15px -9px 0 -0.5px rgba(255, 255, 255, 0),
-      8px -21px 0 -0.55px rgba(255, 255, 255, 0),
-      -7px -22px 0 -0.6px rgba(255, 255, 255, 0);
+      0 -28px 0 -0.5px rgba(255, 255, 255, 0),
+      24px -15px 0 -0.6px rgba(255, 255, 255, 0),
+      -21px -13px 0 -0.7px rgba(255, 255, 255, 0),
+      12px -32px 0 -0.8px rgba(255, 255, 255, 0),
+      -10px -33px 0 -0.9px rgba(255, 255, 255, 0);
   }
 }
 
@@ -3491,6 +3484,15 @@ html[data-theme="fn-80z"] .board-cell.is-filled {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
+html[data-theme="fn-80z"] .board-cell.was-cleared::before {
+  --pop-radius: 0;
+  background: var(--tone-fill);
+  box-shadow:
+    inset -3px -3px 0 color-mix(in srgb, var(--tone-fill) 68%, black),
+    inset 2px 2px 0 color-mix(in srgb, var(--tone-fill) 72%, white),
+    0 0 0.45rem color-mix(in srgb, var(--tone-fill) 36%, transparent);
+}
+
 html[data-theme="fn-80z"] .board-cell.is-filled::before,
 html[data-theme="fn-80z"] .piece-cell.is-solid,
 .theme-preview-board[data-theme="fn-80z"] .theme-preview-bubble {
@@ -3959,6 +3961,19 @@ html[data-theme="dmg"] .board-cell.is-filled {
   border-radius: 0;
 }
 
+html[data-theme="dmg"] .board-cell.was-cleared::before {
+  --pop-radius: 0;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg)),
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
+  box-shadow:
+    inset 2px 2px 0 color-mix(in srgb, var(--tone-fill) 50%, var(--board-bg)),
+    inset -2px -2px 0 color-mix(in srgb, var(--tone-fill) 58%, #0f380f);
+}
+
 /* Bevel shared by all tones — background comes from --cell-bg set per tone below */
 html[data-theme="dmg"] .board-cell.is-filled::before,
 html[data-theme="dmg"] .piece-cell.is-solid,
@@ -3974,120 +3989,80 @@ html[data-theme="dmg"] .piece-cell.is-solid,
    Theme preview bubbles use an inline style var(--cell-bg), so we override --cell-bg
    only inside .theme-preview-board[data-theme="dmg"] to avoid polluting other theme previews. */
 
-/* coral (darkest) — cross/plus mark */
+/* coral — inner picture-frame square */
 html[data-theme="dmg"] .board-cell.is-filled.tone-coral::before,
 html[data-theme="dmg"] .piece-cell.is-solid.tone-coral {
   background:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / 4px calc(100% - 8px) no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) 4px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 .theme-preview-board[data-theme="dmg"] .tone-coral {
   --cell-bg:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / 4px calc(100% - 8px) no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) 4px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 
-/* gold — single horizontal bar through centre */
+/* gold — inner picture-frame square */
 html[data-theme="dmg"] .board-cell.is-filled.tone-gold::before,
 html[data-theme="dmg"] .piece-cell.is-solid.tone-gold {
   background:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) 4px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 .theme-preview-board[data-theme="dmg"] .tone-gold {
   --cell-bg:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) 4px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 
-/* mint — four corner squares */
+/* mint — inner picture-frame square */
 html[data-theme="dmg"] .board-cell.is-filled.tone-mint::before,
 html[data-theme="dmg"] .piece-cell.is-solid.tone-mint {
   background:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) left 4px top 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) right 4px top 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) left 4px bottom 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) right 4px bottom 4px / 5px 5px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 .theme-preview-board[data-theme="dmg"] .tone-mint {
   --cell-bg:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) left 4px top 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) right 4px top 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) left 4px bottom 4px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) right 4px bottom 4px / 5px 5px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 
-/* sky — two small squares top & bottom centre (colon shape) */
+/* sky — inner picture-frame square */
 html[data-theme="dmg"] .board-cell.is-filled.tone-sky::before,
 html[data-theme="dmg"] .piece-cell.is-solid.tone-sky {
   background:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center top 5px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center bottom 5px / 5px 5px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 .theme-preview-board[data-theme="dmg"] .tone-sky {
   --cell-bg:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center top 5px / 5px 5px no-repeat,
-    linear-gradient(
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center bottom 5px / 5px 5px no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 
 /* orchid — inner picture-frame square */
@@ -4096,17 +4071,17 @@ html[data-theme="dmg"] .piece-cell.is-solid.tone-orchid {
   background:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) calc(100% - 8px) no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 .theme-preview-board[data-theme="dmg"] .tone-orchid {
   --cell-bg:
     linear-gradient(
       color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg)),
-      color-mix(in srgb, var(--tone-fill) 42%, var(--board-bg))
-    ) center / calc(100% - 8px) calc(100% - 8px) no-repeat,
-    color-mix(in srgb, var(--tone-fill) 82%, #0f380f);
+      color-mix(in srgb, var(--tone-fill) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--tone-fill) 92%, #0f380f);
 }
 
 .theme-preview-board[data-theme="dmg"] .theme-preview-cell--empty {
