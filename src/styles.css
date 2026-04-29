@@ -1532,6 +1532,14 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   isolation: isolate;
 }
 
+.board,
+.tray,
+.piece-button,
+.board-cell,
+.drag-ghost {
+  -webkit-touch-callout: none;
+}
+
 .board-cell {
   position: relative;
   display: block;
