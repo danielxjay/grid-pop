@@ -1808,7 +1808,7 @@ function Board({
             ? { "--rumble-offset": `${Math.round(getSeededValue(row * 17 + col * 31 + 1, 5) * 800)}ms` }
             : undefined;
         let cellClassName = "board-cell";
-        if (effectiveTone && !isLockedPreview) cellClassName += ` is-filled tone-${effectiveTone}`;
+        if (effectiveTone && !isLockedPreview) cellClassName += `${clearedSet.has(index) ? "" : " is-filled"} tone-${effectiveTone}`;
         if (isLockedPreview) cellClassName += ` is-locked-preview tone-${effectiveTone}`;
         if (stored?.isFill) cellClassName += " is-game-fill";
         if (isWillClear) cellClassName += " will-clear";
