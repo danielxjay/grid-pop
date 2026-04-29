@@ -120,6 +120,15 @@ export const SHAPES = [
   { name: "step-5", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
 ];
 
+const GRID_ROW_INDICES = Array.from({ length: GRID_SIZE }, (_, row) =>
+  Array.from({ length: GRID_SIZE }, (_, col) => toIndex(row, col))
+);
+const GRID_COL_INDICES = Array.from({ length: GRID_SIZE }, (_, col) =>
+  Array.from({ length: GRID_SIZE }, (_, row) => toIndex(row, col))
+);
+const SHAPE_BOUNDS = new Map();
+const SHAPE_PLACEMENT_PROBES = new Map();
+
 const SHAPE_BASE_WEIGHTS = {
   single: 1.15,
   "bar-2": 1.05,
@@ -173,6 +182,20 @@ function normalizeIncomingPiece(piece) {
     tone: typeof piece.tone === "string" ? piece.tone : TONES[0],
     bounds: piece.bounds ?? getShapeBounds(shape),
   };
+}
+
+function getPlacementProbe(shape) {
+  let probe = SHAPE_PLACEMENT_PROBES.get(shape);
+  if (!probe) {
+    probe = {
+      id: -1,
+      shape,
+      tone: TONES[0],
+      bounds: getShapeBounds(shape),
+    };
+    SHAPE_PLACEMENT_PROBES.set(shape, probe);
+  }
+  return probe;
 }
 
 function normalizeIncomingTray(tray) {
@@ -503,27 +526,41 @@ export function findPiece(tray, pieceId) {
 }
 
 export function canPlace(board, piece, row, col) {
-  return piece.shape.cells.every(([dx, dy]) => {
+  const bounds = getShapeBounds(piece.shape);
+  if (
+    row < 0 ||
+    col < 0 ||
+    row + bounds.height > GRID_SIZE ||
+    col + bounds.width > GRID_SIZE
+  ) {
+    return false;
+  }
+
+  for (const [dx, dy] of piece.shape.cells) {
     const nextRow = row + dy;
     const nextCol = col + dx;
 
-    if (
-      nextRow < 0 ||
-      nextRow >= GRID_SIZE ||
-      nextCol < 0 ||
-      nextCol >= GRID_SIZE
-    ) {
+    if (board[toIndex(nextRow, nextCol)] !== null) {
       return false;
     }
+  }
 
-    return board[toIndex(nextRow, nextCol)] === null;
-  });
+  return true;
 }
 
 export function getShapeBounds(shape) {
-  const width = Math.max(...shape.cells.map(([dx]) => dx)) + 1;
-  const height = Math.max(...shape.cells.map(([, dy]) => dy)) + 1;
-  return { width, height };
+  let bounds = SHAPE_BOUNDS.get(shape);
+  if (!bounds) {
+    let maxX = 0;
+    let maxY = 0;
+    for (const [dx, dy] of shape.cells) {
+      if (dx > maxX) maxX = dx;
+      if (dy > maxY) maxY = dy;
+    }
+    bounds = { width: maxX + 1, height: maxY + 1 };
+    SHAPE_BOUNDS.set(shape, bounds);
+  }
+  return bounds;
 }
 
 export function toIndex(row, col) {
@@ -534,6 +571,7 @@ const SLOT_PLACEABLE_THRESHOLDS = [1.0, 0.8, 0.5];
 
 function buildTray(board, nextPieceId, rngState) {
   let tray = [];
+  let trayShapes = [];
   let currentPieceId = nextPieceId;
   let currentRngState = rngState;
 
@@ -556,8 +594,9 @@ function buildTray(board, nextPieceId, rngState) {
       currentRngState = roll.rngState;
     }
 
-    const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState, requirePlaceable);
+    const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, requirePlaceable);
     tray.push(pieceState.piece);
+    trayShapes.push(pieceState.piece.shape);
     currentPieceId = pieceState.nextPieceId;
     currentRngState = pieceState.rngState;
   }
@@ -567,11 +606,13 @@ function buildTray(board, nextPieceId, rngState) {
 
     while (attempts < 40 && !tray.some((piece) => hasAnyPlacement(board, piece))) {
       tray = [];
+      trayShapes = [];
       currentPieceId = nextPieceId;
 
       for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-        const pieceState = createRandomPiece(board, tray.map((entry) => entry.shape), currentPieceId, currentRngState, true);
+        const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, true);
         tray.push(pieceState.piece);
+        trayShapes.push(pieceState.piece.shape);
         currentPieceId = pieceState.nextPieceId;
         currentRngState = pieceState.rngState;
       }
@@ -588,16 +629,12 @@ function buildTray(board, nextPieceId, rngState) {
 }
 
 function countPlacements(board, shape) {
-  const probe = {
-    id: -1,
-    shape,
-    tone: TONES[0],
-    bounds: getShapeBounds(shape),
-  };
+  const probe = getPlacementProbe(shape);
+  const bounds = getShapeBounds(shape);
   let count = 0;
 
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    for (let col = 0; col < GRID_SIZE; col += 1) {
+  for (let row = 0; row <= GRID_SIZE - bounds.height; row += 1) {
+    for (let col = 0; col <= GRID_SIZE - bounds.width; col += 1) {
       if (canPlace(board, probe, row, col)) {
         count += 1;
       }
@@ -611,7 +648,7 @@ function getShapeFamily(shape) {
   return SHAPE_FAMILIES[shape.name] || shape.name;
 }
 
-function getShapeWeight(board, shape, trayShapes, requirePlaceable) {
+function getShapeWeight(board, shape, trayShapes, requirePlaceable, fillRatio) {
   const placements = countPlacements(board, shape);
 
   if (requirePlaceable && placements === 0) {
@@ -621,8 +658,6 @@ function getShapeWeight(board, shape, trayShapes, requirePlaceable) {
   let weight = SHAPE_BASE_WEIGHTS[shape.name] ?? 1;
 
   if (requirePlaceable) {
-    const fillRatio = board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length;
-
     if (placements <= 2) {
       weight *= fillRatio >= 0.7 ? 0.62 : fillRatio >= 0.5 ? 0.8 : 0.9;
     } else if (placements <= 4) {
@@ -655,7 +690,10 @@ function getShapeWeight(board, shape, trayShapes, requirePlaceable) {
 }
 
 function pickWeightedShape(board, rngState, trayShapes, requirePlaceable) {
-  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes, requirePlaceable));
+  const fillRatio = requirePlaceable
+    ? board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length
+    : 0;
+  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes, requirePlaceable, fillRatio));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const shapePick = nextRandomValue(rngState);
 
@@ -702,19 +740,13 @@ function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlac
 }
 
 function hasPotentialMove(board) {
-  return SHAPES.some((shape) =>
-    hasAnyPlacement(board, {
-      id: -1,
-      shape,
-      tone: TONES[0],
-      bounds: getShapeBounds(shape),
-    })
-  );
+  return SHAPES.some((shape) => hasAnyPlacement(board, getPlacementProbe(shape)));
 }
 
 function hasAnyPlacement(board, piece) {
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    for (let col = 0; col < GRID_SIZE; col += 1) {
+  const bounds = getShapeBounds(piece.shape);
+  for (let row = 0; row <= GRID_SIZE - bounds.height; row += 1) {
+    for (let col = 0; col <= GRID_SIZE - bounds.width; col += 1) {
       if (canPlace(board, piece, row, col)) {
         return true;
       }
@@ -727,21 +759,13 @@ function hasAnyPlacement(board, piece) {
 export function findClears(board) {
   const cleared = new Set();
 
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    const rowIndices = Array.from({ length: GRID_SIZE }, (_, col) =>
-      toIndex(row, col)
-    );
-
+  for (const rowIndices of GRID_ROW_INDICES) {
     if (rowIndices.every((index) => board[index] !== null)) {
       rowIndices.forEach((index) => cleared.add(index));
     }
   }
 
-  for (let col = 0; col < GRID_SIZE; col += 1) {
-    const colIndices = Array.from({ length: GRID_SIZE }, (_, row) =>
-      toIndex(row, col)
-    );
-
+  for (const colIndices of GRID_COL_INDICES) {
     if (colIndices.every((index) => board[index] !== null)) {
       colIndices.forEach((index) => cleared.add(index));
     }
@@ -753,21 +777,13 @@ export function findClears(board) {
 function countLines(clearedIndices) {
   let lines = 0;
 
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    const rowIndices = Array.from({ length: GRID_SIZE }, (_, col) =>
-      toIndex(row, col)
-    );
-
+  for (const rowIndices of GRID_ROW_INDICES) {
     if (rowIndices.every((index) => clearedIndices.has(index))) {
       lines += 1;
     }
   }
 
-  for (let col = 0; col < GRID_SIZE; col += 1) {
-    const colIndices = Array.from({ length: GRID_SIZE }, (_, row) =>
-      toIndex(row, col)
-    );
-
+  for (const colIndices of GRID_COL_INDICES) {
     if (colIndices.every((index) => clearedIndices.has(index))) {
       lines += 1;
     }

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import {
   GRID_SIZE,
@@ -1841,6 +1841,19 @@ function getSeededValue(seed, offset) {
   return value - Math.floor(value);
 }
 
+const CLEAR_CELL_EFFECT_STYLES = BOARD_CELL_INDICES.map((index) => {
+  const row = Math.floor(index / GRID_SIZE);
+  const col = index % GRID_SIZE;
+  const seed = row * 17 + col * 31 + 1;
+
+  return {
+    "--clear-duration": `${Math.round(660 + getSeededValue(seed, 1) * 120)}ms`,
+    "--splash-rotation": `${Math.round(getSeededValue(seed, 2) * 360)}deg`,
+    "--splash-scale-x": `${(0.9 + getSeededValue(seed, 3) * 0.45).toFixed(2)}`,
+    "--splash-scale-y": `${(0.75 + getSeededValue(seed, 4) * 0.35).toFixed(2)}`,
+  };
+});
+
 function maskEmail(email) {
   if (!email) return "";
   const [local, domain] = email.split("@");
@@ -1860,13 +1873,9 @@ function buildClearAnimationStyle(row, col, clearedRows, clearedCols) {
     dist = Math.abs(row - 3.5) / 3.5;
   }
 
-  const seed = row * 17 + col * 31 + 1;
   return {
+    ...CLEAR_CELL_EFFECT_STYLES[toIndex(row, col)],
     "--clear-delay": `${Math.round(dist * MAX_DELAY)}ms`,
-    "--clear-duration": `${Math.round(660 + getSeededValue(seed, 1) * 120)}ms`,
-    "--splash-rotation": `${Math.round(getSeededValue(seed, 2) * 360)}deg`,
-    "--splash-scale-x": `${(0.9 + getSeededValue(seed, 3) * 0.45).toFixed(2)}`,
-    "--splash-scale-y": `${(0.75 + getSeededValue(seed, 4) * 0.35).toFixed(2)}`,
   };
 }
 
@@ -1874,6 +1883,7 @@ const DRAG_GHOST_LIFT_REM = 0.9;
 const DRAG_GHOST_LIFT_CSS_VAR = "--drag-ghost-lift-rem";
 const DROP_SNAP_SLOP_CELLS = 0.38;
 const TRAY_DRAG_START_SLOP_PX = 12;
+const DESKTOP_LAYOUT_QUERY = "(min-width: 981px)";
 
 const STICKINESS_LEVELS = [
   { value: 0,    label: "Off"        },
@@ -2301,6 +2311,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [trayRevealToken, setTrayRevealToken] = useState(0);
   const [finishRunAttempt, setFinishRunAttempt] = useState(0);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [dragDismissVisible, setDragDismissVisible] = useState(false);
   const [dragDismissHovered, setDragDismissHovered] = useState(false);
   const accountRunsFetchInFlightRef = useRef(false);
   const accountRunsReadyRef = useRef(false);
@@ -2320,6 +2331,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
   const dragBoardMetricsRef = useRef(null);
+  const hoverBoardMetricsRef = useRef(null);
+  const dragDismissVisibleRef = useRef(false);
+  const dragEnteredBoardRef = useRef(false);
   const dragDismissHoveredRef = useRef(false);
   const livePreviewRef = useRef(game.preview);
   const queuedPreviewRef = useRef(null);
@@ -2341,6 +2355,60 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     dragDismissHoveredRef.current = nextHovered;
     setDragDismissHovered(nextHovered);
+  }
+
+  function setDragDismissVisibility(nextVisible) {
+    if (dragDismissVisibleRef.current === nextVisible) {
+      return;
+    }
+
+    dragDismissVisibleRef.current = nextVisible;
+    setDragDismissVisible(nextVisible);
+  }
+
+  function resetDragDismissState() {
+    dragEnteredBoardRef.current = false;
+    dismissZoneRef.current?.classList.remove("is-hovered");
+    setDragDismissHover(false);
+    setDragDismissVisibility(false);
+  }
+
+  function updateDragDismissVisibilityFromPoint(clientX, clientY) {
+    if (dragDismissVisibleRef.current) {
+      return;
+    }
+
+    const metrics = dragBoardMetricsRef.current;
+    if (!metrics) {
+      return;
+    }
+
+    const horizontalSlop = metrics.stepPx;
+    const verticalSlop = metrics.stepPx * 0.25;
+    const nearBoardHorizontally =
+      clientX >= metrics.gridLeft - horizontalSlop &&
+      clientX <= metrics.gridRight + horizontalSlop;
+    const nearBoardVertically =
+      clientY >= metrics.gridTop - verticalSlop &&
+      clientY <= metrics.gridBottom + verticalSlop;
+
+    if (nearBoardHorizontally && nearBoardVertically) {
+      dragEnteredBoardRef.current = true;
+      return;
+    }
+
+    if (!dragEnteredBoardRef.current) {
+      return;
+    }
+
+    const desktopLayout = window.matchMedia(DESKTOP_LAYOUT_QUERY).matches;
+    const isMovingTowardTray = desktopLayout
+      ? clientX > metrics.gridRight + horizontalSlop && nearBoardVertically
+      : clientY > metrics.gridBottom + verticalSlop && nearBoardHorizontally;
+
+    if (isMovingTowardTray) {
+      setDragDismissVisibility(true);
+    }
   }
 
   function resetRunRecoveryState() {
@@ -3641,8 +3709,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     return () => window.clearTimeout(timer);
   }, [game.cleared]);
 
-  const unlockedThemes = getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked);
-  const unlockNotifiableThemeKeys = [...unlockedThemes].filter((key) => !FREE_THEME_KEYS.has(key));
+  const unlockedThemes = useMemo(
+    () => getUnlockedThemes(accountStats, profile, globalRuns, session?.user?.id, devThemeUnlocked),
+    [accountStats, devThemeUnlocked, globalRuns, profile, session?.user?.id]
+  );
+  const unlockNotifiableThemeKeys = useMemo(
+    () => [...unlockedThemes].filter((key) => !FREE_THEME_KEYS.has(key)),
+    [unlockedThemes]
+  );
   const hasUnreadChangelog = lastSeenVersion !== CLIENT_VERSION;
   const hasUnreadThemes = seenThemeUnlocks !== null && unlockNotifiableThemeKeys.some((key) => !seenThemeUnlocks.has(key));
 
@@ -3736,14 +3810,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
   }, [globalRuns]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const aggregateStats = accountStats ? {
+  const aggregateStats = useMemo(() => accountStats ? {
     gamesPlayed: accountStats.gamesPlayed,
     bestScore: accountStats.bestScore,
     bestCombo: accountStats.bestCombo,
     bestMoveScore: accountStats.bestMoveScore,
     bestLinesCleared: accountStats.bestLinesCleared,
     mostMoves: accountStats.mostMoves,
-  } : null;
+  } : null, [accountStats]);
 
   function recordVerifiedMove(pieceId, row, col) {
     setActiveVerifiedRun((current) => {
@@ -3785,7 +3859,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     // If pointer is over the dismiss zone, clear the board preview and bail out early.
     // This prevents the lifted ghost from accidentally showing a valid board placement
     // when the player is dragging back toward the tray.
-    const dismissZone = dismissZoneRef.current;
+    const dismissZone = dragDismissVisibleRef.current ? dismissZoneRef.current : null;
     if (dismissZone) {
       const zoneRect = dismissZone.getBoundingClientRect();
       const isOverZone = clientX >= zoneRect.left && clientX <= zoneRect.right &&
@@ -3804,10 +3878,16 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setDragDismissHover(false);
     }
 
-    const metrics = activeDrag ? (dragBoardMetricsRef.current ?? getBoardCellMetrics(boardElement)) : getBoardCellMetrics(boardElement);
+    const metrics = activeDrag
+      ? (dragBoardMetricsRef.current ?? getBoardCellMetrics(boardElement))
+      : (hoverBoardMetricsRef.current ?? getBoardCellMetrics(boardElement));
 
     if (!metrics) {
       return;
+    }
+
+    if (!activeDrag) {
+      hoverBoardMetricsRef.current = metrics;
     }
 
     const { ghostBounds, row: rawRow, col: rawCol } = getSnappedPlacement(metrics, piece, clientX, clientY);
@@ -3903,14 +3983,23 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
-    dismissZoneRef.current?.classList.remove("is-hovered");
-    setDragDismissHover(false);
+    resetDragDismissState();
     cancelQueuedPreview();
     setDrag(null);
     dragBoardMetricsRef.current = null;
+    hoverBoardMetricsRef.current = null;
     livePreviewRef.current = null;
     setGame((current) => ({ ...clearPreview(current), selectedPieceId: null }));
   }, [cancelQueuedPreview, drag, runInteractionLocked]);
+
+  useEffect(() => {
+    function handleResize() {
+      hoverBoardMetricsRef.current = null;
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleWindowPointerMove = useEffectEvent((event) => {
     if (runInteractionLocked) {
@@ -3956,6 +4045,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         pickupSoundPlayedRef.current = true;
       }
 
+      updateDragDismissVisibilityFromPoint(event.clientX, event.clientY);
+
       dragPointerRef.current = {
         x: event.clientX,
         y: event.clientY,
@@ -3997,15 +4088,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
-    dismissZoneRef.current?.classList.remove("is-hovered");
-    setDragDismissHover(false);
     cancelQueuedPreview();
 
     const dragArmed = drag.armed || dragIntentRef.current?.armed;
     dragIntentRef.current = null;
     if (!dragArmed) {
+      resetDragDismissState();
       setDrag(null);
       dragBoardMetricsRef.current = null;
+      hoverBoardMetricsRef.current = null;
       livePreviewRef.current = null;
       return;
     }
@@ -4013,8 +4104,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     runPreviewAtPoint(event.clientX, event.clientY, drag);
     const pieceId = drag.pieceId;
     const preview = livePreviewRef.current;
+    resetDragDismissState();
     setDrag(null);
     dragBoardMetricsRef.current = null;
+    hoverBoardMetricsRef.current = null;
     livePreviewRef.current = null;
     window.setTimeout(() => {
       trayDragClickSuppressRef.current = false;
@@ -4592,6 +4685,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setGame((current) => clearPreview(current));
     }
 
+    hoverBoardMetricsRef.current = null;
     primeSound();
     playPickupSound();
     setGame((current) => togglePieceSelection(current, pieceId));
@@ -4611,7 +4705,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setGame((current) => clearPreview(current));
     }
 
+    hoverBoardMetricsRef.current = null;
     pickupSoundPlayedRef.current = false;
+    resetDragDismissState();
     dragPointerRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -4684,6 +4780,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     cancelQueuedPreview();
     previewSoundRef.current.key = null;
     livePreviewRef.current = null;
+    hoverBoardMetricsRef.current = null;
     setGame((current) => clearPreview(current));
   }
 
@@ -4716,6 +4813,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         setLockedPreview(null);
         setGame((current) => ({ ...clearPreview(current), selectedPieceId: null }));
       }
+      hoverBoardMetricsRef.current = null;
       return;
     }
 
@@ -4739,6 +4837,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     setGame(nextGame);
+    hoverBoardMetricsRef.current = null;
   }
 
   async function handleRequestCode(event) {
@@ -5131,53 +5230,73 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setAuthMessage("");
   }
 
-  const clearedSet = new Set(game.cleared);
+  const clearedSet = useMemo(() => new Set(game.cleared), [game.cleared]);
 
-  let displayBoard = game.board;
-  if (fillCells.length > 0) {
-    displayBoard = [...game.board];
+  const displayBoard = useMemo(() => {
+    if (fillCells.length === 0) {
+      return game.board;
+    }
+
+    const nextBoard = [...game.board];
     for (const { index, tone } of fillCells) {
-      if (!displayBoard[index]) {
-        displayBoard[index] = { tone, groupId: -1, isFill: true };
+      if (!nextBoard[index]) {
+        nextBoard[index] = { tone, groupId: -1, isFill: true };
       }
     }
-  }
+    return nextBoard;
+  }, [fillCells, game.board]);
 
   // Derive which cells would be cleared at the current valid preview position
-  let previewClearSet = new Set();
-  let previewTone = null;
-  if (game.preview?.valid) {
-    const previewPiece = findPiece(game.tray, game.preview.pieceId);
-    if (previewPiece) {
-      const simBoard = [...game.board];
-      for (const [dx, dy] of previewPiece.shape.cells) {
-        simBoard[toIndex(game.preview.row + dy, game.preview.col + dx)] = {
-          tone: previewPiece.tone,
-          groupId: previewPiece.id,
-        };
-      }
-      previewClearSet = findClears(simBoard);
-      if (previewClearSet.size > 0) {
-        previewTone = previewPiece.tone;
-      }
+  const { previewClearSet, previewTone } = useMemo(() => {
+    if (!game.preview?.valid) {
+      return { previewClearSet: new Set(), previewTone: null };
     }
-  }
+
+    const previewPiece = findPiece(game.tray, game.preview.pieceId);
+    if (!previewPiece) {
+      return { previewClearSet: new Set(), previewTone: null };
+    }
+
+    const simBoard = [...game.board];
+    for (const [dx, dy] of previewPiece.shape.cells) {
+      simBoard[toIndex(game.preview.row + dy, game.preview.col + dx)] = {
+        tone: previewPiece.tone,
+        groupId: previewPiece.id,
+      };
+    }
+    const nextPreviewClearSet = findClears(simBoard);
+    return {
+      previewClearSet: nextPreviewClearSet,
+      previewTone: nextPreviewClearSet.size > 0 ? previewPiece.tone : null,
+    };
+  }, [game.board, game.preview, game.tray]);
 
   // Derive locked preview cell set for board highlighting
-  const lockedPreviewSet = new Set();
-  let lockedPreviewTone = null;
-  let lockedPreviewPiece = null;
-  if (lockedPreview?.valid) {
-    lockedPreviewPiece = findPiece(game.tray, lockedPreview.pieceId);
-    if (lockedPreviewPiece) {
-      lockedPreviewTone = lockedPreviewPiece.tone;
-      for (const [dx, dy] of lockedPreviewPiece.shape.cells) {
-        lockedPreviewSet.add(toIndex(lockedPreview.row + dy, lockedPreview.col + dx));
+  const { lockedPreviewSet, lockedPreviewTone, lockedPreviewPiece } = useMemo(() => {
+    const nextLockedPreviewSet = new Set();
+    if (!lockedPreview?.valid) {
+      return {
+        lockedPreviewSet: nextLockedPreviewSet,
+        lockedPreviewTone: null,
+        lockedPreviewPiece: null,
+      };
+    }
+
+    const nextLockedPreviewPiece = findPiece(game.tray, lockedPreview.pieceId);
+    if (nextLockedPreviewPiece) {
+      for (const [dx, dy] of nextLockedPreviewPiece.shape.cells) {
+        nextLockedPreviewSet.add(toIndex(lockedPreview.row + dy, lockedPreview.col + dx));
       }
     }
-  }
+
+    return {
+      lockedPreviewSet: nextLockedPreviewSet,
+      lockedPreviewTone: nextLockedPreviewPiece?.tone ?? null,
+      lockedPreviewPiece: nextLockedPreviewPiece,
+    };
+  }, [game.tray, lockedPreview]);
   const dragPiece = drag ? findPiece(game.tray, drag.pieceId) : null;
-  const showDragGhost = Boolean(dragPiece && drag?.armed);
+  const showDragGhost = Boolean(dragPiece);
   const dragGhostMetrics = dragPiece ? dragBoardMetricsRef.current : null;
   const dragGhostStyle = {
     transform: getGhostTransform(
@@ -5187,20 +5306,29 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     ),
   };
   const accountBestScore = accountTopRuns[0]?.score ?? 0;
-  const localTopRuns = session
-    ? []
-    : [...localRuns]
-      .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
-      .slice(0, PERSONAL_TOP_RUN_LIMIT);
-  const localRunNumbers = session
-    ? {}
-    : Object.fromEntries(
-      localRuns.map((run, index) => [String(run.id), Math.max(1, localRuns.length - index)])
-    );
+  const localTopRuns = useMemo(
+    () => session
+      ? []
+      : [...localRuns]
+        .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+        .slice(0, PERSONAL_TOP_RUN_LIMIT),
+    [localRuns, session]
+  );
+  const localRunNumbers = useMemo(
+    () => session
+      ? {}
+      : Object.fromEntries(
+        localRuns.map((run, index) => [String(run.id), Math.max(1, localRuns.length - index)])
+      ),
+    [localRuns, session]
+  );
   const displayedBestScore = session
     ? Math.max(game.score, accountBestScore)
     : game.bestScore;
-  const personalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
+  const personalRuns = useMemo(
+    () => session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT),
+    [accountRecentRuns, localRuns, session]
+  );
   const personalTopRuns = session ? accountTopRuns : localTopRuns;
   const personalRunNumbers = session ? accountRunNumbers : localRunNumbers;
   const personalTopRunNumbers = session ? accountRunNumbers : localRunNumbers;
@@ -5512,7 +5640,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             </div>
           </section>
 
-          <aside className={`sidebar${drag?.armed ? " is-drag-active" : ""}`}>
+          <aside className={`sidebar${dragDismissVisible ? " is-drag-active" : ""}`}>
             <Tray
               tray={game.tray}
               selectedPieceId={game.selectedPieceId}
@@ -5765,7 +5893,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       {showDragGhost ? (
         <div
           ref={dragGhostRef}
-          className={`drag-ghost${dragDismissHovered ? " is-dismiss-hovered" : ""}`}
+          className={`drag-ghost${drag?.armed ? "" : " is-pending"}${dragDismissHovered ? " is-dismiss-hovered" : ""}`}
           style={dragGhostStyle}
         >
           <PieceGrid
