@@ -6582,7 +6582,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           <h1 className="game-title" aria-label={gameMode === 'crunch' ? 'GridPop! Crunch' : 'GridPop!'}>
             <span className="game-title-wordmark">GridPop!</span>
             {gameMode === 'crunch' ? (
-              <span className="game-title-stamp" aria-hidden="true">[crunch]</span>
+              <span className="game-title-stamp" aria-hidden="true">&#123;crunch&#125;</span>
             ) : null}
           </h1>
         </header>
