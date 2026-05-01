@@ -942,21 +942,25 @@ function HowToPlayCrunchModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
               <MiniBoard grid={placeGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Drop</strong>
-                <p>Drag shapes from the tray onto the grid. Every poxel placed scores points.</p>
-                <p className="how-to-play-pts">15 pts per poxel</p>
+                <p>Drag shapes from the tray onto the grid and build full rows or columns to pop lines.</p>
               </div>
             </div>
             <div className="how-to-play-step">
               <MiniBoard grid={wallGrid} />
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Crunch</strong>
-                <p>Walls close in from both sides, pushing poxels inward. Fill a row (walls count) and it pops. Walls alone won't clear.</p>
+                <p>Walls close in from both sides, pushing poxels inward. Wall spaces will pop too when they&apos;re part of a completed row or column.</p>
               </div>
             </div>
             <div className="how-to-play-step">
               <div className="how-to-play-combo-badges" aria-hidden="true">
-                <span className="how-to-play-badge">⏱</span>
-                <span className="how-to-play-badge how-to-play-badge--hot">💥</span>
+                <span className="how-to-play-badge">04:20</span>
+                <span className="how-to-play-badge how-to-play-badge--hot">
+                  <span className="how-to-play-poxel-count">
+                    <span className="how-to-play-poxel" />
+                    <span>x69</span>
+                  </span>
+                </span>
               </div>
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">Scoring</strong>
