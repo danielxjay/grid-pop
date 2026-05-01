@@ -625,10 +625,12 @@ function buildTray(board, nextPieceId, rngState, shapes = SHAPES) {
     currentRngState = pieceState.rngState;
   }
 
-  if (hasPotentialMove(board, shapes)) {
+  const requiredPlayableCount = getRequiredPlayableTrayCount(board, shapes);
+
+  if (requiredPlayableCount > 0) {
     let attempts = 0;
 
-    while (attempts < 40 && !tray.some((piece) => hasAnyPlacement(board, piece))) {
+    while (attempts < 40 && countPlayableTrayShapes(board, tray) < requiredPlayableCount) {
       tray = [];
       trayShapes = [];
       currentPieceId = nextPieceId;
@@ -765,6 +767,44 @@ function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlac
 
 function hasPotentialMove(board, shapes = SHAPES) {
   return shapes.some((shape) => hasAnyPlacement(board, getPlacementProbe(shape)));
+}
+
+function countPlaceableShapes(board, shapes = SHAPES) {
+  let count = 0;
+
+  for (const shape of shapes) {
+    if (hasAnyPlacement(board, getPlacementProbe(shape))) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function countPlayableTrayShapes(board, tray) {
+  const playableShapeNames = new Set();
+
+  for (const piece of tray) {
+    if (piece && hasAnyPlacement(board, piece)) {
+      playableShapeNames.add(piece.shape.name);
+    }
+  }
+
+  return playableShapeNames.size;
+}
+
+function getRequiredPlayableTrayCount(board, shapes = SHAPES) {
+  const placeableShapeCount = countPlaceableShapes(board, shapes);
+
+  if (placeableShapeCount <= 0) {
+    return 0;
+  }
+
+  if (shapes === CRUNCH_SHAPES) {
+    return Math.min(2, placeableShapeCount);
+  }
+
+  return 1;
 }
 
 function hasAnyPlacement(board, piece) {
