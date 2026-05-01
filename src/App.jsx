@@ -1,21 +1,31 @@
-import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import {
   GRID_SIZE,
   RUN_HISTORY_STORAGE_KEY,
   STORAGE_KEY,
+  TONES,
   loadRunHistory,
   recordRunScore,
   TRAY_SIZE,
   applyPlacement,
+  applyCrunchWave,
+  applyWavePendingClears,
+  canCrunchWallAdvance,
+  getCrunchTouchingWallCells,
+  haveCrunchWallsJoined,
+  isCrunchWall,
   buildPreview,
   clearClearedCells,
   clearPreview,
   createGameState,
   findClears,
+  findNewlyClearedIndices,
   findPiece,
   loadBestScore,
   saveBestScore,
+  loadCrunchBestRating,
+  saveCrunchBestRating,
   setRankedTray,
   setPreview,
   toIndex,
@@ -25,6 +35,9 @@ import {
   getSoundVolume,
   isSoundEnabled,
   playClearSound,
+  playCrunchCriticalCountdownSound,
+  playCrunchCountdownSound,
+  playCrunchWallSound,
   playFillCellSound,
   playPreviewMoveSound,
   playPickupSound,
@@ -174,7 +187,7 @@ const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
 const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.5";
-const CLIENT_VERSION = "gridpop-web-1.5.1";
+const CLIENT_VERSION = "gridpop-web-1.5.2";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
@@ -197,6 +210,8 @@ const ACTIVE_RUN_SESSION_VERSION = 1;
 const DEV_THEME_UNLOCK_KEY = "gridpop-dev-theme";
 const LAST_SEEN_VERSION_STORAGE_KEY = "gridpop-last-seen-version";
 const SEEN_THEME_UNLOCKS_STORAGE_KEY = "gridpop-seen-theme-unlocks";
+const CRUNCH_MODE_FLAG_KEY = "crunch_mode";
+const SEEN_CRUNCH_HOW_TO_KEY = "gridpop-seen-crunch-howto-v1";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
 const RETURNING_PLAYER_STORAGE_KEYS = [
@@ -508,7 +523,25 @@ function TrophyIcon() {
   );
 }
 
-function ScorePanel({ score, bestScore, combo, onClick }) {
+function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFrameInRef, poxelsPopped, warn, critical }) {
+  if (mode === 'crunch') {
+    return (
+      <div className="score-panel">
+        <div className="score-stat">
+          <p className="section-label">Run Time</p>
+          <strong className="score-value" ref={runTimeRef}>0:00</strong>
+        </div>
+        <div className="score-stat">
+          <p className="section-label">{critical ? 'Critical' : 'Crunch Timer'}</p>
+          <strong className={`score-value${warn ? ' is-crunch-warning-value' : ''}`} ref={nextFrameInRef}>--</strong>
+        </div>
+        <div className="score-stat">
+          <p className="section-label">Popped</p>
+          <strong className="score-value">{poxelsPopped ?? 0}</strong>
+        </div>
+      </div>
+    );
+  }
   return (
     <button
       className="score-panel score-panel--button"
@@ -868,6 +901,170 @@ function HowToPlayModal({ onClose, onOpenChangelog, hasUnreadChangelog }) {
               {hasUnreadChangelog ? <span className="ui-pill-badge">New!</span> : null}
             </button>
           </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function HowToPlayCrunchModal({ onClose, onOpenChangelog, hasUnreadChangelog }) {
+  const placeGrid = [
+    [null,    null,     null,     null   ],
+    ["sky",   null,     null,     null   ],
+    ["sky",   "coral",  null,     null   ],
+    ["sky",   "coral",  "coral",  null   ],
+  ];
+
+  const wallGrid = [
+    ["wall", "sky",   "coral",  "wall"],
+    ["wall", "coral", null,     "wall"],
+    ["wall", "mint",  "sky",    "wall"],
+    ["wall", "coral", "gold",   "wall"],
+  ];
+
+  return (
+    <div
+      className="how-to-play-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="How to Play Crunch"
+      onClick={onClose}
+    >
+      <div className="how-to-play-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close how to play">
+          Close
+        </button>
+        <section className="how-to-play-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>How to Play Crunch</h2>
+          <div className="how-to-play-steps">
+            <div className="how-to-play-step">
+              <MiniBoard grid={placeGrid} />
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Drop</strong>
+                <p>Drag shapes from the tray onto the grid. Every poxel placed scores points.</p>
+                <p className="how-to-play-pts">15 pts per poxel</p>
+              </div>
+            </div>
+            <div className="how-to-play-step">
+              <MiniBoard grid={wallGrid} />
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Crunch</strong>
+                <p>Walls close in from both sides, pushing poxels inward. Fill a row (walls count) and it pops. Walls alone won't clear.</p>
+              </div>
+            </div>
+            <div className="how-to-play-step">
+              <div className="how-to-play-combo-badges" aria-hidden="true">
+                <span className="how-to-play-badge">⏱</span>
+                <span className="how-to-play-badge how-to-play-badge--hot">💥</span>
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Scoring</strong>
+                <p>Your <strong>Crunch Score</strong> is based on how long you survive and how many poxels you pop.</p>
+              </div>
+            </div>
+          </div>
+          <p className="how-to-play-footer">
+            The game ends when the walls meet.
+          </p>
+          <p className="how-to-play-credit">
+            Made by{" "}
+            <a
+              className="site-footer-link"
+              href="https://www.threads.com/@dxniel.jxy"
+              target="_blank"
+              rel="noreferrer"
+            >
+              @dxniel.jxy
+            </a>
+            {" · "}
+            <button
+              className="site-footer-version site-footer-version--button"
+              type="button"
+              onClick={onOpenChangelog}
+              aria-label={hasUnreadChangelog ? `View changelog for new in version ${CLIENT_VERSION.replace("gridpop-web-", "")}` : "View changelog"}
+            >
+              <span>{CLIENT_VERSION.replace("gridpop-web-", "v")}</span>
+              {hasUnreadChangelog ? <span className="ui-pill-badge">New!</span> : null}
+            </button>
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function RunActionConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  pending = false,
+  error = "",
+  onCancel,
+  onConfirm,
+}) {
+  return (
+    <div
+      className="leaderboard-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onCancel}
+    >
+      <div className="leaderboard-modal-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onCancel} aria-label={`Close ${title.toLowerCase()}`}>
+          Close
+        </button>
+        <section className="leaderboard-modal run-action-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>{title}</h2>
+          <div className="leaderboard-panel run-action-panel">
+            <p className="leaderboard-empty">{message}</p>
+            {error ? <p className="auth-error">{error}</p> : null}
+            <div className="run-action-modal-buttons">
+              <button className="auth-secondary-button" type="button" onClick={onCancel} disabled={pending}>
+                No
+              </button>
+              <button className="auth-button run-action-confirm" type="button" onClick={onConfirm} disabled={pending}>
+                {pending ? "Working..." : confirmLabel}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function RunModeSelectModal({ currentMode, onSelectMode, onClose }) {
+  return (
+    <div
+      className="leaderboard-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Switch game mode"
+      onClick={onClose}
+    >
+      <div className="leaderboard-modal-wrap" onClick={(event) => event.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close switch game mode">
+          Close
+        </button>
+        <section className="leaderboard-modal run-action-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>Switch Game Mode</h2>
+          <div className="leaderboard-panel run-action-panel">
+            <p className="leaderboard-empty">Select a game mode.</p>
+            <div className="mode-select run-action-mode-select">
+              <button className="mode-card" type="button" onClick={() => onSelectMode('classic')}>
+                <span className="mode-card-name">Classic</span>
+                <span className="mode-card-blurb">{currentMode === 'classic' ? 'resume current run' : 'casual line popping'}</span>
+              </button>
+              <button className="mode-card mode-card--crunch" type="button" onClick={() => onSelectMode('crunch')}>
+                <span className="mode-card-name">Crunch</span>
+                <span className="mode-card-blurb">{currentMode === 'crunch' ? 'resume current run' : 'walls close in. time-based.'}</span>
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -1462,6 +1659,40 @@ function SettingsPanel({
   );
 }
 
+function RunActionsPanel({
+  canSwitchMode,
+  disabled,
+  onQuitRun,
+  onSwitchMode,
+}) {
+  return (
+    <section className="settings-panel run-actions-panel" aria-label="Current run actions">
+      <h2>Current Run</h2>
+      <p className="run-actions-copy">End this run now or open mode select to choose what to play next.</p>
+      <div className="run-actions-buttons">
+        {canSwitchMode ? (
+          <button
+            className="auth-secondary-button run-actions-button"
+            type="button"
+            onClick={onSwitchMode}
+            disabled={disabled}
+          >
+            Switch Game Mode
+          </button>
+        ) : null}
+        <button
+          className="auth-secondary-button run-actions-button run-actions-button--danger"
+          type="button"
+          onClick={onQuitRun}
+          disabled={disabled}
+        >
+          End Current Run
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function AuthPanel({
   authCode,
   authEmail,
@@ -1753,12 +1984,13 @@ function Tray({
 }
 
 
-function Board({
+const Board = React.memo(function Board({
   boardRef,
   board,
   clearedSet,
   clearedTones,
   interactionLocked,
+  isDragging,
   lockedPreviewPath,
   lockedPreviewSet,
   lockedPreviewTone,
@@ -1769,6 +2001,10 @@ function Board({
   onBoardLeave,
   onCellClick,
   onLockedPreviewPointerDown,
+  crunchWarn,
+  crunchCritical,
+  crunchCriticalSet,
+  crunchPendingClearSet,
 }) {
   // Determine which rows/cols are fully cleared so we can stagger per-axis
   const clearedRows = new Set();
@@ -1789,7 +2025,7 @@ function Board({
   return (
     <div
       ref={boardRef}
-      className="board"
+      className={`board${crunchWarn ? " is-crunch-warning" : ""}${crunchCritical ? " is-crunch-critical" : ""}`}
       aria-label="Game board"
       onPointerMove={onBoardMove}
       onPointerLeave={onBoardLeave}
@@ -1798,21 +2034,33 @@ function Board({
         const row = Math.floor(index / GRID_SIZE);
         const col = index % GRID_SIZE;
         const stored = board[index];
-        const isWillClear = previewClearSet.has(index) && Boolean(previewTone);
+        const isWall = typeof stored?.groupId === 'string' && stored.groupId.startsWith('crunch-wall');
+        const isCrunchCriticalCell = crunchCriticalSet?.has(index);
+        const isPreviewWillClear = previewClearSet.has(index) && Boolean(previewTone);
+        const isWillClear = isPreviewWillClear || isCrunchCriticalCell;
         const isLockedPreview = !stored && lockedPreviewSet?.has(index) && Boolean(lockedPreviewTone);
-        const effectiveTone = isWillClear ? previewTone : isLockedPreview ? lockedPreviewTone : (stored?.tone ?? clearedTones[index]);
+        const effectiveTone = isPreviewWillClear ? previewTone : isLockedPreview ? lockedPreviewTone : (stored?.tone ?? clearedTones[index]);
+        const isClearedPoxel = clearedSet.has(index) && !isWall;
 
-        const cellStyle = clearedSet.has(index)
+        const cellStyle = isClearedPoxel
           ? buildClearAnimationStyle(row, col, clearedRows, clearedCols)
           : isWillClear
             ? { "--rumble-offset": `${Math.round(getSeededValue(row * 17 + col * 31 + 1, 5) * 800)}ms` }
             : undefined;
         let cellClassName = "board-cell";
-        if (effectiveTone && !isLockedPreview) cellClassName += `${clearedSet.has(index) ? "" : " is-filled"} tone-${effectiveTone}`;
+        if (effectiveTone && !isLockedPreview) cellClassName += `${isClearedPoxel ? "" : " is-filled"} tone-${effectiveTone}`;
         if (isLockedPreview) cellClassName += ` is-locked-preview tone-${effectiveTone}`;
         if (stored?.isFill) cellClassName += " is-game-fill";
+        if (isWall) {
+          cellClassName += " is-crunch-wall";
+          cellClassName += stored.groupId === 'crunch-wall-l' ? " is-crunch-wall-l" : " is-crunch-wall-r";
+        }
         if (isWillClear) cellClassName += " will-clear";
-        if (clearedSet.has(index)) cellClassName += " was-cleared";
+        if (isCrunchCriticalCell) cellClassName += " is-crunch-critical-cell";
+        if (isClearedPoxel) cellClassName += " was-cleared";
+        if (!isWall && stored?.pushDir === 'l') cellClassName += " is-push-l";
+        else if (!isWall && stored?.pushDir === 'r') cellClassName += " is-push-r";
+        if (crunchPendingClearSet?.has(index)) cellClassName += " is-crunch-pending-clear";
 
         return (
           <button
@@ -1834,7 +2082,23 @@ function Board({
       )}
     </div>
   );
-}
+}, (prev, next) =>
+  prev.board === next.board &&
+  prev.clearedSet === next.clearedSet &&
+  prev.clearedTones === next.clearedTones &&
+  prev.interactionLocked === next.interactionLocked &&
+  prev.isDragging === next.isDragging &&
+  prev.lockedPreviewPath === next.lockedPreviewPath &&
+  prev.lockedPreviewSet === next.lockedPreviewSet &&
+  prev.lockedPreviewTone === next.lockedPreviewTone &&
+  prev.previewClearSet === next.previewClearSet &&
+  prev.previewTone === next.previewTone &&
+  prev.started === next.started &&
+  prev.crunchWarn === next.crunchWarn &&
+  prev.crunchCritical === next.crunchCritical &&
+  prev.crunchCriticalSet === next.crunchCriticalSet &&
+  prev.crunchPendingClearSet === next.crunchPendingClearSet
+);
 
 function getSeededValue(seed, offset) {
   const value = Math.sin(seed * 12.9898 + offset * 78.233) * 43758.5453;
@@ -1883,6 +2147,7 @@ const DRAG_GHOST_LIFT_REM = 0.9;
 const DRAG_GHOST_LIFT_CSS_VAR = "--drag-ghost-lift-rem";
 const DROP_SNAP_SLOP_CELLS = 0.38;
 const TRAY_DRAG_START_SLOP_PX = 12;
+const CRUNCH_DRAG_PREVIEW_MIN_MS = 90;
 const DESKTOP_LAYOUT_QUERY = "(min-width: 981px)";
 
 const STICKINESS_LEVELS = [
@@ -2201,8 +2466,303 @@ function getAllowedThemeKey(themeKey, unlockedThemes) {
   return unlockedThemes.has(themeKey) ? themeKey : "classic";
 }
 
+// Returns ms between frame events based on how long the run has been going.
+function getCrunchFrameInterval(elapsedMs) {
+  const s = elapsedMs / 1000;
+  if (s < 90) return 10000;
+  if (s < 180) return 8000;
+  if (s < 300) return 6000;
+  return 5000;
+}
+
+function getCrunchWaveAdvance(elapsedMs, board) {
+  if (elapsedMs < 90000) {
+    const preferLeft = Math.random() < 0.5;
+    const preferredSide = preferLeft ? 'left' : 'right';
+    const fallbackSide = preferLeft ? 'right' : 'left';
+
+    if (canCrunchWallAdvance(board, preferredSide)) {
+      return preferLeft
+        ? { advanceLeft: true, advanceRight: false }
+        : { advanceLeft: false, advanceRight: true };
+    }
+
+    if (canCrunchWallAdvance(board, fallbackSide)) {
+      return preferLeft
+        ? { advanceLeft: false, advanceRight: true }
+        : { advanceLeft: true, advanceRight: false };
+    }
+
+    return { advanceLeft: false, advanceRight: false };
+  }
+
+  return { advanceLeft: true, advanceRight: true };
+}
+
+const CRUNCH_CRITICAL_DURATION_MS = 5000;
+
+function formatCrunchTime(ms) {
+  const totalSecs = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function computeCrunchRating(survivalMs, poxelsPopped) {
+  const seconds = survivalMs / 1000;
+  return Math.round(seconds * 10 * (1 + poxelsPopped / 100));
+}
+
+function countCrunchClearedPoxels(previousBoard, clearedIndices) {
+  if (!Array.isArray(clearedIndices) || clearedIndices.length === 0) {
+    return 0;
+  }
+
+  return clearedIndices.reduce((count, index) => (
+    isCrunchWall(previousBoard?.[index]) ? count : count + 1
+  ), 0);
+}
+
+function resolveFeatureFlags(globalFlags, overrideFlags) {
+  const resolved = { ...globalFlags };
+
+  for (const [flagKey, enabled] of Object.entries(overrideFlags)) {
+    resolved[flagKey] = enabled;
+  }
+
+  return resolved;
+}
+
+function hasSeenCrunchHowTo() {
+  try {
+    return localStorage.getItem(SEEN_CRUNCH_HOW_TO_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function markSeenCrunchHowTo() {
+  try {
+    localStorage.setItem(SEEN_CRUNCH_HOW_TO_KEY, "true");
+  } catch {}
+}
+
+function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, isPausedRef }) {
+  const [crunchWallDepth, setCrunchWallDepth] = useState(1);
+  const [crunchPoxelsPopped, setCrunchPoxelsPopped] = useState(0);
+  const [crunchWarn, setCrunchWarn] = useState(false);
+  const [crunchCritical, setCrunchCritical] = useState(false);
+  const [crunchCriticalCells, setCrunchCriticalCells] = useState(null);
+  // Cells completing a row/col this wave — shown with rumble animation before actual clear.
+  const [crunchPendingClears, setCrunchPendingClears] = useState(null);
+  const crunchWallDepthRef = useRef(1);
+  const crunchRunStartRef = useRef(null);
+  const crunchNextFrameAtRef = useRef(null);
+  const crunchCriticalEndsAtRef = useRef(null);
+  const crunchTickRef = useRef(null);
+  const crunchLastCountdownCueRef = useRef(null);
+  const crunchCriticalRef = useRef(false);
+  const crunchWarnRef = useRef(false);
+  const crunchTimeDisplayRef = useRef(null);
+  const crunchCountdownDisplayRef = useRef(null);
+  const crunchPendingClearTimerRef = useRef(null);
+  crunchCriticalRef.current = crunchCritical;
+
+  const enterCrunchCritical = useEffectEvent((board) => {
+    const touching = getCrunchTouchingWallCells(board);
+    if (touching.length === 0) return false;
+
+    setCrunchCritical(true);
+    setCrunchCriticalCells(new Set(touching));
+    if (!crunchCriticalEndsAtRef.current) {
+      crunchCriticalEndsAtRef.current = Date.now() + CRUNCH_CRITICAL_DURATION_MS;
+      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(Math.ceil(CRUNCH_CRITICAL_DURATION_MS / 1000));
+      crunchLastCountdownCueRef.current = null;
+    }
+    if (!crunchWarnRef.current) {
+      crunchWarnRef.current = true;
+      setCrunchWarn(true);
+    }
+    return true;
+  });
+
+  const refreshCrunchCriticalAfterPlacement = useEffectEvent((nextGame) => {
+    if (gameMode !== 'crunch' || !crunchCriticalRef.current) return;
+
+    const touching = getCrunchTouchingWallCells(nextGame.board);
+    if (touching.length === 0) {
+      setCrunchCritical(false);
+      setCrunchCriticalCells(null);
+      crunchCriticalEndsAtRef.current = null;
+      crunchLastCountdownCueRef.current = null;
+      const nextFrameAt = Date.now() + getCrunchFrameInterval(Date.now() - crunchRunStartRef.current);
+      crunchNextFrameAtRef.current = nextFrameAt;
+      const nextCountdown = String(Math.ceil((nextFrameAt - Date.now()) / 1000));
+      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = nextCountdown;
+      const newWarn = Number(nextCountdown) <= 3;
+      if (newWarn !== crunchWarnRef.current) {
+        crunchWarnRef.current = newWarn;
+        setCrunchWarn(newWarn);
+      }
+      return;
+    }
+
+    setCrunchCriticalCells(new Set(touching));
+  });
+
+  // Crunch frame timer — fires every second to update display and trigger frame fills.
+  useEffect(() => {
+    if (!started || gameMode !== 'crunch' || latestGameRef.current.gameOver) return;
+
+    crunchTickRef.current = window.setInterval(() => {
+      if (isPausedRef.current) return;
+      const now = Date.now();
+      const elapsed = now - crunchRunStartRef.current;
+
+      if (crunchTimeDisplayRef.current) crunchTimeDisplayRef.current.textContent = formatCrunchTime(elapsed);
+
+      if (crunchCriticalRef.current) {
+        const criticalRemaining = Math.max(0, Math.ceil((crunchCriticalEndsAtRef.current - now) / 1000));
+        if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(criticalRemaining);
+
+        if (criticalRemaining >= 1 && criticalRemaining <= 5 && crunchLastCountdownCueRef.current !== criticalRemaining) {
+          playCrunchCriticalCountdownSound(criticalRemaining);
+          crunchLastCountdownCueRef.current = criticalRemaining;
+        }
+
+        if (criticalRemaining <= 0) {
+          playCrunchWallSound();
+          const isGameOver = haveCrunchWallsJoined(latestGameRef.current.board);
+          if (isGameOver) {
+            setCrunchCritical(false);
+            setCrunchCriticalCells(null);
+            crunchCriticalEndsAtRef.current = null;
+            crunchLastCountdownCueRef.current = null;
+          }
+          setGame((current) => ({ ...current, gameOver: isGameOver }));
+        }
+        return;
+      }
+
+      const remaining = Math.max(0, Math.ceil((crunchNextFrameAtRef.current - now) / 1000));
+      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(remaining);
+
+      const newWarn = remaining <= 3;
+      if (newWarn !== crunchWarnRef.current) {
+        crunchWarnRef.current = newWarn;
+        setCrunchWarn(newWarn);
+      }
+
+      if (remaining >= 1 && remaining <= 3 && crunchLastCountdownCueRef.current !== remaining) {
+        playCrunchCountdownSound(remaining);
+        crunchLastCountdownCueRef.current = remaining;
+      }
+
+      if (now >= crunchNextFrameAtRef.current) {
+        const depth = crunchWallDepthRef.current;
+        const tone = TONES[depth % TONES.length];
+        const waveAdvance = getCrunchWaveAdvance(elapsed, latestGameRef.current.board);
+        playCrunchWallSound();
+
+        const { game: nextGame, pendingClears } = applyCrunchWave(latestGameRef.current, tone, waveAdvance);
+        const enteredCritical = nextGame.gameOver && enterCrunchCritical(nextGame.board);
+        startTransition(() => {
+          setGame(enteredCritical ? { ...nextGame, gameOver: false } : nextGame);
+        });
+
+        if (pendingClears.length > 0) {
+          window.clearTimeout(crunchPendingClearTimerRef.current);
+          setCrunchPendingClears(new Set(pendingClears.map((p) => p.idx)));
+          crunchPendingClearTimerRef.current = window.setTimeout(() => {
+            playClearSound();
+            startTransition(() => {
+              setGame((current) => applyWavePendingClears(current, pendingClears));
+            });
+            setCrunchPendingClears(null);
+            setCrunchPoxelsPopped((prev) => prev + pendingClears.length);
+          }, 380);
+        }
+
+        crunchWallDepthRef.current = depth + 1;
+        const newInterval = getCrunchFrameInterval(elapsed);
+        crunchNextFrameAtRef.current = now + newInterval;
+        setCrunchWallDepth(depth + 1);
+        const nextCountdown = String(Math.ceil(newInterval / 1000));
+        if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = nextCountdown;
+        const postWaveWarn = Number(nextCountdown) <= 3;
+        if (postWaveWarn !== crunchWarnRef.current) {
+          crunchWarnRef.current = postWaveWarn;
+          setCrunchWarn(postWaveWarn);
+        }
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(crunchTickRef.current);
+      crunchTickRef.current = null;
+      crunchLastCountdownCueRef.current = null;
+    };
+  }, [started, gameMode, gameOver]);
+
+  useEffect(() => {
+    if (started && gameMode === 'crunch' && !gameOver) return;
+
+    window.clearTimeout(crunchPendingClearTimerRef.current);
+    setCrunchPendingClears(null);
+  }, [started, gameMode, gameOver]);
+
+  function startCrunch(displayedBestScore) {
+    const baseState = createGameState(displayedBestScore, { crunch: true });
+    const { game: gameWithWall } = applyCrunchWave(baseState, TONES[0]);
+    crunchWallDepthRef.current = 1;
+    setCrunchWallDepth(1);
+    setCrunchPoxelsPopped(0);
+    setCrunchCritical(false);
+    setCrunchCriticalCells(null);
+    crunchWarnRef.current = false;
+    setCrunchWarn(false);
+    crunchRunStartRef.current = Date.now();
+    crunchNextFrameAtRef.current = Date.now() + getCrunchFrameInterval(0);
+    crunchCriticalEndsAtRef.current = null;
+    crunchLastCountdownCueRef.current = null;
+    if (crunchTimeDisplayRef.current) crunchTimeDisplayRef.current.textContent = '0:00';
+    if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = '10';
+    return gameWithWall;
+  }
+
+  function onClearedInCrunch(previousBoard, clearedIndices) {
+    const count = countCrunchClearedPoxels(previousBoard, clearedIndices);
+    if (count > 0) setCrunchPoxelsPopped((prev) => prev + count);
+  }
+
+  function shiftTimestampsForPause(duration) {
+    if (crunchRunStartRef.current !== null) crunchRunStartRef.current += duration;
+    if (crunchNextFrameAtRef.current !== null) crunchNextFrameAtRef.current += duration;
+    if (crunchCriticalEndsAtRef.current !== null) crunchCriticalEndsAtRef.current += duration;
+  }
+
+  return {
+    crunchWarn,
+    crunchCritical,
+    crunchCriticalCells,
+    crunchPendingClears,
+    crunchPoxelsPopped,
+    crunchWallDepth,
+    crunchTimeDisplayRef,
+    crunchCountdownDisplayRef,
+    refreshCrunchCriticalAfterPlacement,
+    startCrunch,
+    onClearedInCrunch,
+    shiftTimestampsForPause,
+    crunchRunStartRef,
+  };
+}
+
 export default function App({ updateReady = false, onApplyUpdate = () => {}, onDismissUpdate = () => {} }) {
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
+  // Always-current ref so the crunch tick can read game state without stale closure issues.
+  const latestGameRef = useRef(game);
+  latestGameRef.current = game;
   const [drag, setDrag] = useState(null);
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
   const [soundVolume, setSoundVolumeState] = useState(() => getSoundVolume());
@@ -2231,22 +2791,50 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [confirmPlacement, setConfirmPlacement] = useState(() => {
     try { return localStorage.getItem("gridpop-confirm-placement") === "true"; } catch { return false; }
   });
+  const [gameMode, setGameMode] = useState('classic'); // 'classic' | 'crunch'
+  const gameModeRef = useRef('classic');
+  gameModeRef.current = gameMode;
+  const [showModeSelect, setShowModeSelect] = useState(false);
+  const [modeSelectIntent, setModeSelectIntent] = useState("start");
+  const modeSelectRef = useRef(null);
+  const [started, setStarted] = useState(false);
+  const isPausedRef = useRef(false);
+  const pauseStartedAtRef = useRef(null);
+  const {
+    crunchWarn,
+    crunchCritical,
+    crunchCriticalCells,
+    crunchPendingClears,
+    crunchPoxelsPopped,
+    crunchWallDepth,
+    crunchTimeDisplayRef,
+    crunchCountdownDisplayRef,
+    refreshCrunchCriticalAfterPlacement,
+    startCrunch,
+    onClearedInCrunch,
+    shiftTimestampsForPause,
+    crunchRunStartRef,
+  } = useCrunchMode({ latestGameRef, started, gameMode, gameOver: game.gameOver, setGame, isPausedRef });
   const confirmPlacementRef = useRef(confirmPlacement);
   const [lockedPreview, setLockedPreview] = useState(null);
   const [lockedPreviewPath, setLockedPreviewPath] = useState(null);
-  const [started, setStarted] = useState(false);
   const [gameOverPhase, setGameOverPhase] = useState(null); // null | 'filling' | 'overlay'
   const [fillCells, setFillCells] = useState([]);
   const [isNewBest, setIsNewBest] = useState(false);
   const [displayedScore, setDisplayedScore] = useState(0);
   const [scoreFinished, setScoreFinished] = useState(false);
   const [statsRevealed, setStatsRevealed] = useState(0);
+  const [crunchBestRating, setCrunchBestRating] = useState(() => loadCrunchBestRating());
+  const [crunchFinalRating, setCrunchFinalRating] = useState(0);
+  const [crunchFinalSurvivalMs, setCrunchFinalSurvivalMs] = useState(0);
   const [showPlayAgain, setShowPlayAgain] = useState(false);
   const [showNewBestBanner, setShowNewBestBanner] = useState(false);
   const [authReady, setAuthReady] = useState(() => !hasSupabaseConfig);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [featureFlags, setFeatureFlags] = useState({});
+  const [featureFlagsLoading, setFeatureFlagsLoading] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authCode, setAuthCode] = useState("");
   const [otpSentTo, setOtpSentTo] = useState("");
@@ -2274,9 +2862,36 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
   const [authAutoFocus, setAuthAutoFocus] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [pendingCrunchHowToStart, setPendingCrunchHowToStart] = useState(false);
+  const [showRunModeSelect, setShowRunModeSelect] = useState(false);
+  const [runActionDialog, setRunActionDialog] = useState(null);
+  const [runActionPending, setRunActionPending] = useState(false);
+  const [runActionError, setRunActionError] = useState("");
+  const forceFinishRunRef = useRef(false);
   const [showStats, setShowStats] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const isModalOpen = Boolean(
+    showHowToPlay || showStats || showThemeModal || showChangelog ||
+    showRunModeSelect || runActionDialog ||
+    leaderboardOpen || showMobileAuthPanel || showDesktopAuthPanel
+  );
+  useEffect(() => {
+    if (!started || game.gameOver || gameMode !== 'crunch') {
+      isPausedRef.current = false;
+      pauseStartedAtRef.current = null;
+      return;
+    }
+    if (isModalOpen) {
+      isPausedRef.current = true;
+      pauseStartedAtRef.current = Date.now();
+    } else if (pauseStartedAtRef.current !== null) {
+      const duration = Date.now() - pauseStartedAtRef.current;
+      pauseStartedAtRef.current = null;
+      isPausedRef.current = false;
+      shiftTimestampsForPause(duration);
+    }
+  }, [isModalOpen, started, game.gameOver, gameMode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSeenVersion, setLastSeenVersion] = useState(() => loadLastSeenVersion());
   const [seenThemeUnlocks, setSeenThemeUnlocks] = useState(() => loadSeenThemeUnlocks());
   const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
@@ -2330,14 +2945,19 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const previewSoundRef = useRef({ key: null, at: 0 });
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
+  const prevCrunchBestRef = useRef(loadCrunchBestRating());
   const dragBoardMetricsRef = useRef(null);
   const hoverBoardMetricsRef = useRef(null);
   const dragDismissVisibleRef = useRef(false);
   const dragEnteredBoardRef = useRef(false);
   const dragDismissHoveredRef = useRef(false);
   const livePreviewRef = useRef(game.preview);
+  const dragPreviewDomRef = useRef({ indices: [], toneIndices: [], tone: null });
   const queuedPreviewRef = useRef(null);
   const previewFrameRef = useRef(0);
+  const lastDragPreviewAtRef = useRef(0);
+  const queuedDragMoveRef = useRef(null);
+  const dragMoveFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
   const nextTrayFetchInFlightRef = useRef(false);
   const moveSyncStateRef = useRef({ runId: null, moveCount: 0 });
@@ -2431,6 +3051,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setSession(null);
     setProfile(null);
     setProfileLoading(false);
+    setFeatureFlags({});
+    setFeatureFlagsLoading(false);
     setDisplayNameDraft("");
     setEditingProfile(false);
     setShowDesktopAuthPanel(false);
@@ -2487,7 +3109,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const handleTrayPieceReveal = useEffectEvent(() => {
     playFillCellSound();
   });
-
 
   useEffect(() => {
     const root = document.documentElement;
@@ -2580,11 +3201,19 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const rankedReady = Boolean(
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
+  const canUseCrunch = Boolean(session?.user?.id && featureFlags[CRUNCH_MODE_FLAG_KEY]);
   const startAuthPending = Boolean(hasSupabaseConfig && !authReady);
   const startProfilePending = Boolean(session?.user?.id && profileLoading);
   const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
+  const startFeatureFlagsPending = Boolean(session?.user?.id && featureFlagsLoading);
   const startNeedsDisplayName = Boolean(session?.user?.id && !profileLoading && !profile?.display_name);
-  const startBlocked = Boolean(startPending || startAuthPending || startProfilePending || startAccountPending);
+  const startBlocked = Boolean(
+    startPending ||
+    startAuthPending ||
+    startProfilePending ||
+    startAccountPending ||
+    startFeatureFlagsPending
+  );
   const detectedRunPreferredSession = activeRunDetected?.id ? loadActiveRunSession(activeRunDetected.id) : null;
   const autoResumeDetectedRun = Boolean(activeRunCheckDone && activeRunDetected?.id && detectedRunPreferredSession);
   const localActiveRunSession = !started && rankedReady ? loadActiveRunSession() : null;
@@ -2598,6 +3227,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     ? "Loading your account..."
     : startAccountPending
       ? "Loading your score history..."
+      : startFeatureFlagsPending
+        ? "Loading feature access..."
       : activeRunCheckFailed
         ? "Couldn't check for unfinished runs. Starting will try again."
       : startNeedsDisplayName
@@ -2606,6 +3237,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const runReconnectActive = moveSyncReconnectPending || nextTrayReconnectPending;
   const gameplayBlocked = Boolean(
     started && !game.gameOver && (
+      isModalOpen ||
       resumedElsewhere ||
       runReconnectActive ||
       runReconnectActionRequired ||
@@ -2636,7 +3268,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       );
   const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
     ? "Reconnecting..."
-    : startPending || startAuthPending || startProfilePending || startAccountPending
+    : startPending || startAuthPending || startProfilePending || startAccountPending || startFeatureFlagsPending
       ? "Starting your run..."
       : "";
   const showRunReconnectOverlay = Boolean(
@@ -3392,6 +4024,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             runId: submittedRun.id,
             moves: submittedRun.moves,
             deviceToken: deviceTokenRef.current,
+            forceFinish: forceFinishRunRef.current,
           },
         }));
 
@@ -3427,11 +4060,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
 
         if (isSubmittedRunStillCurrent()) {
+          forceFinishRunRef.current = false;
           setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this score. Tap to retry."));
         }
         return;
       }
 
+      forceFinishRunRef.current = false;
       clearPendingRun(submittedRun.id);
       clearActiveRunSession(submittedRun.id);
       if (isSubmittedRunStillCurrent()) {
@@ -3512,6 +4147,60 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   useEffect(() => {
     if (!hasSupabaseConfig || !session?.user?.id) {
+      setFeatureFlags({});
+      setFeatureFlagsLoading(false);
+      return;
+    }
+
+    let alive = true;
+    setFeatureFlagsLoading(true);
+
+    async function loadFeatureFlags() {
+      const [globalFlagsResult, overrideFlagsResult] = await Promise.all([
+        supabase
+          .from("feature_flags")
+          .select("flag_key, enabled"),
+        supabase
+          .from("feature_flag_overrides")
+          .select("flag_key, enabled")
+          .eq("user_id", session.user.id),
+      ]);
+
+      if (!alive) {
+        return;
+      }
+
+      if (globalFlagsResult.error || overrideFlagsResult.error) {
+        setAuthError(
+          globalFlagsResult.error?.message ||
+          overrideFlagsResult.error?.message ||
+          "Could not load feature access."
+        );
+        setFeatureFlags({});
+        setFeatureFlagsLoading(false);
+        return;
+      }
+
+      const globalFlags = Object.fromEntries(
+        (globalFlagsResult.data ?? []).map((row) => [row.flag_key, Boolean(row.enabled)])
+      );
+      const overrideFlags = Object.fromEntries(
+        (overrideFlagsResult.data ?? []).map((row) => [row.flag_key, Boolean(row.enabled)])
+      );
+
+      setFeatureFlags(resolveFeatureFlags(globalFlags, overrideFlags));
+      setFeatureFlagsLoading(false);
+    }
+
+    loadFeatureFlags();
+
+    return () => {
+      alive = false;
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !session?.user?.id) {
       setProfile(null);
       setProfileLoading(false);
       setDisplayNameDraft("");
@@ -3577,14 +4266,16 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     navigator.serviceWorker?.getRegistration().then((reg) => reg?.update()).catch(() => {});
 
-    setLocalRuns(recordRunScore(game.score, {
-      bestCombo: game.bestCombo,
-      bestMoveScore: game.bestMoveScore,
-      bestLinesCleared: game.bestLinesCleared,
-      moveCount: game.moveCount,
-    }));
-    if (!activeVerifiedRun) {
-      autoSubmitGuestRun(game.score);
+    if (gameMode !== 'crunch') {
+      setLocalRuns(recordRunScore(game.score, {
+        bestCombo: game.bestCombo,
+        bestMoveScore: game.bestMoveScore,
+        bestLinesCleared: game.bestLinesCleared,
+        moveCount: game.moveCount,
+      }));
+      if (!activeVerifiedRun) {
+        autoSubmitGuestRun(game.score);
+      }
     }
 
     setDrag(null);
@@ -3595,14 +4286,72 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return { ...current, preview: null, selectedPieceId: null };
     });
 
-    const newBest = game.score > prevBestScoreRef.current;
-    setIsNewBest(newBest);
+    if (gameMode === 'crunch') {
+      const survivalMs = crunchRunStartRef.current ? Date.now() - crunchRunStartRef.current : 0;
+      const rating = computeCrunchRating(survivalMs, crunchPoxelsPopped);
+      setCrunchFinalRating(rating);
+      setCrunchFinalSurvivalMs(survivalMs);
+      const newBestCrunch = rating > prevCrunchBestRef.current;
+      setIsNewBest(newBestCrunch);
+      if (newBestCrunch) {
+        saveCrunchBestRating(rating);
+        setCrunchBestRating(rating);
+      }
+    } else {
+      const newBest = game.score > prevBestScoreRef.current;
+      setIsNewBest(newBest);
+    }
 
     const TONES = ['coral', 'gold', 'mint', 'sky', 'orchid'];
     const emptyCells = game.board
       .map((cell, i) => (cell ? null : i))
       .filter((i) => i !== null)
       .sort(() => Math.random() - 0.5);
+
+    if (gameMode === 'crunch') {
+      setGameOverPhase('filling');
+      setFillCells([]);
+
+      // Beat delay — let the wall collision register visually before the fill
+      const beatTimer = setTimeout(() => {
+        // Fill all non-wall cells — poxels get crunched over, only existing wall tiles stay
+        const cellsToFill = game.board
+          .map((cell, i) => (isCrunchWall(cell) ? null : i))
+          .filter((i) => i !== null)
+          .sort(() => Math.random() - 0.5);
+
+        if (cellsToFill.length === 0) {
+          setGameOverPhase('overlay');
+          return;
+        }
+
+        let i = 0;
+        const BATCH = 4;
+        fillIntervalRef.current = setInterval(() => {
+          const batch = cellsToFill.slice(i, i + BATCH).map((index) => ({
+            index,
+            tone: 'coral',
+            groupId: (index % GRID_SIZE) < GRID_SIZE / 2 ? 'crunch-wall-l' : 'crunch-wall-r',
+          }));
+          setFillCells((prev) => [...prev, ...batch]);
+          playFillCellSound();
+          i += BATCH;
+          if (i >= cellsToFill.length) {
+            clearInterval(fillIntervalRef.current);
+            fillIntervalRef.current = null;
+            setTimeout(() => setGameOverPhase('overlay'), 700);
+          }
+        }, 35);
+      }, 300);
+
+      return () => {
+        clearTimeout(beatTimer);
+        if (fillIntervalRef.current) {
+          clearInterval(fillIntervalRef.current);
+          fillIntervalRef.current = null;
+        }
+      };
+    }
 
     setGameOverPhase('filling');
     setFillCells([]);
@@ -3643,8 +4392,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    const target = game.score;
-    const prevBest = prevBestScoreRef.current;
+    const target = gameMode === 'crunch' ? crunchFinalRating : game.score;
+    const prevBest = gameMode === 'crunch' ? prevCrunchBestRef.current : prevBestScoreRef.current;
     const newBestThreshold = prevBest > 0 ? prevBest : target;
     const DURATION = 1200;
     const startTime = performance.now();
@@ -3695,7 +4444,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       cancelAnimationFrame(rafId);
       timerIds.forEach(clearTimeout);
     };
-  }, [gameOverPhase, game.score, isNewBest]);
+  }, [gameOverPhase, game.score, crunchFinalRating, gameMode, isNewBest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (game.cleared.length === 0) {
@@ -3848,6 +4597,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
+    const forcePreview = Boolean(activeDrag?.forcePreview);
+    if (activeDrag && !forcePreview && gameMode === 'crunch') {
+      const now = performance.now();
+      if (now - lastDragPreviewAtRef.current < CRUNCH_DRAG_PREVIEW_MIN_MS) {
+        return;
+      }
+      lastDragPreviewAtRef.current = now;
+    }
+
     const pieceId = activeDrag?.pieceId ?? game.selectedPieceId;
     const piece = findPiece(game.tray, pieceId);
     const boardElement = boardRef.current;
@@ -3870,6 +4628,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         previewSoundRef.current.key = null;
         if (livePreviewRef.current !== null) {
           livePreviewRef.current = null;
+          if (activeDrag && gameMode === 'crunch') {
+            clearDragPreviewDom();
+            return;
+          }
           startTransition(() => setGame((current) => clearPreview(current)));
         }
         return;
@@ -3902,6 +4664,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       previewSoundRef.current.key = null;
       if (livePreviewRef.current !== null) {
         livePreviewRef.current = null;
+        if (activeDrag && gameMode === 'crunch') {
+          clearDragPreviewDom();
+          return;
+        }
         startTransition(() => {
           setGame((current) => clearPreview(current));
         });
@@ -3942,6 +4708,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     livePreviewRef.current = preview;
+    if (activeDrag && gameMode === 'crunch') {
+      // forcePreview is set at drop time — we only need livePreviewRef updated,
+      // DOM class manipulation would be immediately reversed and causes a style recalc.
+      if (!activeDrag.forcePreview) {
+        applyDragPreviewDom(preview, piece);
+      }
+      return;
+    }
+
     startTransition(() => {
       setGame((current) => setPreview(current, preview));
     });
@@ -3976,6 +4751,84 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     queuedPreviewRef.current = null;
   });
 
+  const cancelQueuedDragMove = useEffectEvent(() => {
+    if (dragMoveFrameRef.current) {
+      window.cancelAnimationFrame(dragMoveFrameRef.current);
+      dragMoveFrameRef.current = 0;
+    }
+
+    queuedDragMoveRef.current = null;
+  });
+
+  function clearDragPreviewDom() {
+    const { indices, toneIndices, tone } = dragPreviewDomRef.current;
+    const cells = boardRef.current?.querySelectorAll(".board-cell");
+    if (!cells || indices.length === 0) {
+      dragPreviewDomRef.current = { indices: [], toneIndices: [], tone: null };
+      return;
+    }
+
+    for (const index of indices) {
+      const cell = cells[index];
+      if (!cell) continue;
+      cell.classList.remove("is-drag-will-clear");
+      cell.style.removeProperty("--rumble-offset");
+    }
+    // Only remove the tone class from cells that didn't already have it —
+    // cells that originally had the same tone as the piece must keep it.
+    if (tone && toneIndices) {
+      for (const index of toneIndices) {
+        const cell = cells[index];
+        if (!cell) continue;
+        cell.classList.remove(`tone-${tone}`);
+      }
+    }
+
+    dragPreviewDomRef.current = { indices: [], toneIndices: [], tone: null };
+  }
+
+  function applyDragPreviewDom(preview, piece) {
+    clearDragPreviewDom();
+
+    if (!preview?.valid || !piece) {
+      return;
+    }
+
+    const simBoard = [...latestGameRef.current.board];
+    for (const [dx, dy] of piece.shape.cells) {
+      simBoard[toIndex(preview.row + dy, preview.col + dx)] = {
+        tone: piece.tone,
+        groupId: piece.id,
+      };
+    }
+
+    const nextClearSet = findNewlyClearedIndices(latestGameRef.current.board, simBoard);
+    if (nextClearSet.size === 0) {
+      return;
+    }
+
+    const cells = boardRef.current?.querySelectorAll(".board-cell");
+    if (!cells) {
+      return;
+    }
+
+    const indices = [...nextClearSet];
+    const toneIndices = [];
+    for (const index of indices) {
+      const row = Math.floor(index / GRID_SIZE);
+      const col = index % GRID_SIZE;
+      const cell = cells[index];
+      if (!cell) continue;
+      // Track cells where tone is newly added so we can safely remove only those on clear.
+      const alreadyHasTone = cell.classList.contains(`tone-${piece.tone}`);
+      cell.classList.add("is-drag-will-clear", `tone-${piece.tone}`);
+      if (!alreadyHasTone) toneIndices.push(index);
+      cell.style.setProperty("--rumble-offset", `${Math.round(getSeededValue(row * 17 + col * 31 + 1, 5) * 800)}ms`);
+    }
+
+    dragPreviewDomRef.current = { indices, toneIndices, tone: piece.tone };
+  }
+
   useEffect(() => {
     if (!runInteractionLocked || !drag) {
       return;
@@ -3984,13 +4837,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
     resetDragDismissState();
+    cancelQueuedDragMove();
     cancelQueuedPreview();
+    clearDragPreviewDom();
     setDrag(null);
     dragBoardMetricsRef.current = null;
     hoverBoardMetricsRef.current = null;
     livePreviewRef.current = null;
     setGame((current) => ({ ...clearPreview(current), selectedPieceId: null }));
-  }, [cancelQueuedPreview, drag, runInteractionLocked]);
+  }, [cancelQueuedDragMove, cancelQueuedPreview, drag, runInteractionLocked]);
 
   useEffect(() => {
     function handleResize() {
@@ -4001,80 +4856,99 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleWindowPointerMove = useEffectEvent((event) => {
-    if (runInteractionLocked) {
+  const processQueuedDragMove = useEffectEvent(({ clientX, clientY, activeDrag }) => {
+    if (runInteractionLocked || !activeDrag) {
       return;
     }
 
-    if (drag) {
-      let dragArmed = drag.armed;
-      if (!dragArmed) {
-        const intent = dragIntentRef.current;
-        const dx = event.clientX - (intent?.startX ?? event.clientX);
-        const dy = event.clientY - (intent?.startY ?? event.clientY);
-        const slop = intent?.pointerType === "mouse" ? 10 : TRAY_DRAG_START_SLOP_PX;
+    let dragArmed = activeDrag.armed;
+    if (!dragArmed) {
+      const intent = dragIntentRef.current;
+      const dx = clientX - (intent?.startX ?? clientX);
+      const dy = clientY - (intent?.startY ?? clientY);
+      const slop = intent?.pointerType === "mouse" ? 10 : TRAY_DRAG_START_SLOP_PX;
 
-        if (dx * dx + dy * dy <= slop * slop) {
-          return;
-        }
-
-        dragArmed = true;
-        trayDragClickSuppressRef.current = true;
-        if (intent) {
-          dragIntentRef.current = { ...intent, armed: true };
-        }
-
-        setGame((current) => (
-          current.selectedPieceId === drag.pieceId
-            ? current
-            : {
-                ...current,
-                selectedPieceId: drag.pieceId,
-              }
-        ));
-        setDrag((current) => (
-          current?.pieceId === drag.pieceId
-            ? { ...current, armed: true }
-            : current
-        ));
+      if (dx * dx + dy * dy <= slop * slop) {
+        return;
       }
 
-      if (!pickupSoundPlayedRef.current) {
-        primeSound();
-        playPickupSound();
-        pickupSoundPlayedRef.current = true;
+      dragArmed = true;
+      trayDragClickSuppressRef.current = true;
+      if (intent) {
+        dragIntentRef.current = { ...intent, armed: true };
       }
 
-      updateDragDismissVisibilityFromPoint(event.clientX, event.clientY);
-
-      dragPointerRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-
-      if (dragGhostRef.current) {
-        let ghostX = event.clientX;
-        let ghostY = event.clientY;
-        const stickiness = gridStickinessRef.current;
-        if (stickiness > 0 && livePreviewRef.current && dragBoardMetricsRef.current) {
-          const metrics = dragBoardMetricsRef.current;
-          const { row, col } = livePreviewRef.current;
-          // Use the ghost element's actual rendered dimensions so the snap target
-          // is derived from the same pixel values that the CSS transform uses for
-          // translate(-50%, -100% - LIFT). Any rem-rounding difference between
-          // the ghost cells and the board cells would otherwise cause vertical drift.
-          const ghostRect = dragGhostRef.current.getBoundingClientRect();
-          const liftPx = metrics.ghostLiftRem * metrics.rootFontSize;
-          const snappedX = metrics.gridLeft + col * metrics.stepX + ghostRect.width / 2;
-          const snappedY = metrics.gridTop  + row * metrics.stepY + ghostRect.height + liftPx;
-          ghostX = event.clientX + stickiness * (snappedX - event.clientX);
-          ghostY = event.clientY + stickiness * (snappedY - event.clientY);
-        }
-        dragGhostRef.current.style.transform = getGhostTransform(ghostX, ghostY, dragBoardMetricsRef.current?.ghostLiftRem);
-      }
-
-      queuePreviewFromPoint(event.clientX, event.clientY, drag);
+      setGame((current) => (
+        current.selectedPieceId === activeDrag.pieceId
+          ? current
+          : {
+              ...current,
+              selectedPieceId: activeDrag.pieceId,
+            }
+      ));
+      setDrag((current) => (
+        current?.pieceId === activeDrag.pieceId
+          ? { ...current, armed: true }
+          : current
+      ));
     }
+
+    if (!pickupSoundPlayedRef.current) {
+      primeSound();
+      playPickupSound();
+      pickupSoundPlayedRef.current = true;
+    }
+
+    updateDragDismissVisibilityFromPoint(clientX, clientY);
+
+    dragPointerRef.current = { x: clientX, y: clientY };
+
+    if (dragGhostRef.current) {
+      let ghostX = clientX;
+      let ghostY = clientY;
+      const stickiness = gridStickinessRef.current;
+      if (stickiness > 0 && livePreviewRef.current && dragBoardMetricsRef.current) {
+        const piece = findPiece(game.tray, activeDrag.pieceId);
+        const metrics = dragBoardMetricsRef.current;
+        if (piece) {
+          const { row, col } = livePreviewRef.current;
+          const ghostBounds = getGhostBounds(metrics, piece, clientX, clientY);
+          const liftPx = metrics.ghostLiftRem * metrics.rootFontSize;
+          const snappedX = metrics.gridLeft + col * metrics.stepX + (ghostBounds.right - ghostBounds.left) / 2;
+          const snappedY = metrics.gridTop + row * metrics.stepY + (ghostBounds.bottom - ghostBounds.top) + liftPx;
+          ghostX = clientX + stickiness * (snappedX - clientX);
+          ghostY = clientY + stickiness * (snappedY - clientY);
+        }
+      }
+      dragGhostRef.current.style.transform = getGhostTransform(ghostX, ghostY, dragBoardMetricsRef.current?.ghostLiftRem);
+    }
+
+    queuePreviewFromPoint(clientX, clientY, activeDrag);
+  });
+
+  const handleWindowPointerMove = useEffectEvent((event) => {
+    if (runInteractionLocked || !drag) {
+      return;
+    }
+
+    queuedDragMoveRef.current = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      activeDrag: drag,
+    };
+
+    if (dragMoveFrameRef.current) {
+      return;
+    }
+
+    dragMoveFrameRef.current = window.requestAnimationFrame(() => {
+      dragMoveFrameRef.current = 0;
+      const nextMove = queuedDragMoveRef.current;
+      queuedDragMoveRef.current = null;
+      if (nextMove) {
+        processQueuedDragMove(nextMove);
+      }
+    });
   });
 
   const handleWindowPointerUp = useEffectEvent((event) => {
@@ -4088,12 +4962,16 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     pickupSoundPlayedRef.current = false;
     previewSoundRef.current.key = null;
+    cancelQueuedDragMove();
     cancelQueuedPreview();
+    clearDragPreviewDom();
 
     const dragArmed = drag.armed || dragIntentRef.current?.armed;
     dragIntentRef.current = null;
     if (!dragArmed) {
       resetDragDismissState();
+      cancelQueuedDragMove();
+      clearDragPreviewDom();
       setDrag(null);
       dragBoardMetricsRef.current = null;
       hoverBoardMetricsRef.current = null;
@@ -4101,10 +4979,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    runPreviewAtPoint(event.clientX, event.clientY, drag);
+    runPreviewAtPoint(event.clientX, event.clientY, { ...drag, forcePreview: true });
     const pieceId = drag.pieceId;
     const preview = livePreviewRef.current;
     resetDragDismissState();
+    cancelQueuedDragMove();
+    clearDragPreviewDom();
     setDrag(null);
     dragBoardMetricsRef.current = null;
     hoverBoardMetricsRef.current = null;
@@ -4135,6 +5015,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         recordVerifiedMove(pieceId, preview.row, preview.col);
       }
 
+      refreshCrunchCriticalAfterPlacement(nextGame);
+      onClearedInCrunch(game.board, nextGame.cleared);
       setGame(nextGame);
       return;
     }
@@ -4296,7 +5178,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayRetryTick(0);
     setMoveSyncRetryTick(0);
     setTrayRevealToken(0);
-    setGame(createGameState(displayedBestScore));
+
+    if (gameModeRef.current === 'crunch') {
+      setGame(startCrunch(displayedBestScore));
+    } else {
+      setGame(createGameState(displayedBestScore));
+    }
+
     setStarted(true);
     if (soundEnabled) unlockAndTestSound();
   }
@@ -4377,6 +5265,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
+    if (session?.user?.id && featureFlagsLoading) {
+      return;
+    }
+
     if (session?.user?.id && !profile?.display_name) {
       setAuthError("Set a display name before starting.");
       handleOpenAuthPrompt();
@@ -4384,6 +5276,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     prevBestScoreRef.current = displayedBestScore;
+    prevCrunchBestRef.current = crunchBestRating;
     setGameOverPhase(null);
     setFillCells([]);
     setIsNewBest(false);
@@ -4474,12 +5367,46 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setStartFailed(true);
   }
 
+  function startClassicGame(confirmAbandon = false) {
+    gameModeRef.current = 'classic';
+    setGameMode('classic');
+    setShowModeSelect(false);
+    setModeSelectIntent("start");
+    setShowRunModeSelect(false);
+    beginNextGame(confirmAbandon);
+  }
+
+  function launchCrunchGame() {
+    gameModeRef.current = 'crunch';
+    setGameMode('crunch');
+    setShowModeSelect(false);
+    setModeSelectIntent("start");
+    setShowRunModeSelect(false);
+    if (!hasSeenCrunchHowTo()) {
+      setPendingCrunchHowToStart(true);
+      setShowHowToPlay(true);
+      return;
+    }
+    startLocalGame();
+  }
+
   function handleStartGame() {
-    beginNextGame();
+    if (canUseCrunch) {
+      setModeSelectIntent("start");
+      setShowModeSelect(true);
+      return;
+    }
+
+    startClassicGame();
   }
 
   function handleNewGame() {
-    beginNextGame(true);
+    if (canUseCrunch) {
+      setModeSelectIntent("fresh");
+      setShowModeSelect(true);
+      return;
+    }
+    startClassicGame(true);
   }
 
   const resumeRun = useEffectEvent(async ({ reclaim = false, preferredSession = null, clearStartOverlay = true } = {}) => {
@@ -4594,6 +5521,25 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     handleNewGame();
   }
 
+  function selectMode(mode) {
+    if (mode === 'crunch') {
+      launchCrunchGame();
+      return;
+    }
+    startClassicGame(modeSelectIntent === "fresh");
+  }
+
+  useEffect(() => {
+    if (!canUseCrunch && showModeSelect) {
+      setShowModeSelect(false);
+    }
+  }, [canUseCrunch, showModeSelect]);
+
+  useEffect(() => {
+    if (!showModeSelect) return;
+    modeSelectRef.current?.focus();
+  }, [showModeSelect]);
+
   function handleRestart() {
     if (runSubmitting) {
       return;
@@ -4602,7 +5548,19 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       clearInterval(fillIntervalRef.current);
       fillIntervalRef.current = null;
     }
-    beginNextGame();
+    setGameOverPhase(null);
+    setFillCells([]);
+    setIsNewBest(false);
+    setRunSubmitting(false);
+    setRunSubmissionError("");
+    if (canUseCrunch) {
+      setStarted(false);
+      setModeSelectIntent("start");
+      setShowModeSelect(true);
+      return;
+    }
+
+    startClassicGame();
   }
 
   function handleVolumeChange(value) {
@@ -4726,6 +5684,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     };
 
     previewSoundRef.current.key = null;
+    lastDragPreviewAtRef.current = 0;
     setDrag(nextDrag);
   }
 
@@ -4808,6 +5767,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           recordVerifiedMove(lockedPreview.pieceId, lockedPreview.row, lockedPreview.col);
         }
         setLockedPreview(null);
+        refreshCrunchCriticalAfterPlacement(nextGame);
+        onClearedInCrunch(game.board, nextGame.cleared);
         setGame(nextGame);
       } else {
         setLockedPreview(null);
@@ -4836,6 +5797,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       recordVerifiedMove(game.selectedPieceId, row, col);
     }
 
+    refreshCrunchCriticalAfterPlacement(nextGame);
+    onClearedInCrunch(game.board, nextGame.cleared);
     setGame(nextGame);
     hoverBoardMetricsRef.current = null;
   }
@@ -5182,9 +6145,172 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setShowThemeModal(false);
   }
 
+  function handleOpenRunModeSelect() {
+    primeSound();
+    playPlaceSound();
+    setRunActionError("");
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+    setShowRunModeSelect(true);
+  }
+
+  function handleCloseRunModeSelect() {
+    primeSound();
+    playPlaceSound();
+    setShowRunModeSelect(false);
+  }
+
+  function handleOpenEndRunConfirm() {
+    primeSound();
+    playPlaceSound();
+    setRunActionError("");
+    setShowDesktopAuthPanel(false);
+    setShowMobileAuthPanel(false);
+    setRunActionDialog({ type: "end" });
+  }
+
+  function handleCloseRunActionDialog() {
+    if (runActionPending) {
+      return;
+    }
+    primeSound();
+    playPlaceSound();
+    setRunActionDialog(null);
+    setRunActionError("");
+  }
+
+  function forceEndCurrentRun() {
+    setShowRunModeSelect(false);
+    setRunActionDialog(null);
+    setRunActionError("");
+    setRunActionPending(false);
+    forceFinishRunRef.current = gameMode !== 'crunch';
+    setGame((current) => (
+      current.gameOver
+        ? current
+        : { ...current, gameOver: true, preview: null, selectedPieceId: null }
+    ));
+  }
+
+  function handleRunModeSelect(mode) {
+    if (mode === gameMode) {
+      primeSound();
+      playPlaceSound();
+      setShowRunModeSelect(false);
+      return;
+    }
+
+    primeSound();
+    playPlaceSound();
+    setShowRunModeSelect(false);
+    setRunActionError("");
+    setRunActionDialog({ type: "switch", targetMode: mode });
+  }
+
+  function finalizeClassicRunLocally() {
+    setLocalRuns(recordRunScore(game.score, {
+      bestCombo: game.bestCombo,
+      bestMoveScore: game.bestMoveScore,
+      bestLinesCleared: game.bestLinesCleared,
+      moveCount: game.moveCount,
+    }));
+
+    if (!activeVerifiedRun) {
+      autoSubmitGuestRun(game.score);
+    }
+  }
+
+  function finalizeCrunchRunLocally() {
+    const survivalMs = crunchRunStartRef.current ? Date.now() - crunchRunStartRef.current : 0;
+    const rating = computeCrunchRating(survivalMs, crunchPoxelsPopped);
+    if (rating > crunchBestRating) {
+      saveCrunchBestRating(rating);
+      setCrunchBestRating(rating);
+    }
+  }
+
+  async function completeCurrentRunForModeSwitch(targetMode) {
+    setRunActionError("");
+
+    if (gameMode === 'crunch') {
+      finalizeCrunchRunLocally();
+      setRunActionPending(false);
+      setRunActionDialog(null);
+      if (targetMode === 'crunch') {
+        launchCrunchGame();
+      } else {
+        startClassicGame();
+      }
+      return;
+    }
+
+    finalizeClassicRunLocally();
+
+    if (activeVerifiedRun?.id && hasSupabaseConfig) {
+      let error = null;
+
+      for (let attempt = 0; attempt <= FINISH_RUN_RETRY_DELAYS_MS.length; attempt += 1) {
+        ({ error } = await supabase.functions.invoke("finish-run", {
+          body: {
+            runId: activeVerifiedRun.id,
+            moves: activeVerifiedRun.moves,
+            deviceToken: deviceTokenRef.current,
+            forceFinish: true,
+          },
+        }));
+
+        if (!error || !isRetryableRunConnectionError(error) || attempt === FINISH_RUN_RETRY_DELAYS_MS.length) {
+          break;
+        }
+
+        await sleep(FINISH_RUN_RETRY_DELAYS_MS[attempt]);
+      }
+
+      if (error) {
+        setRunActionPending(false);
+        setRunActionError(await getFunctionErrorMessage(error, "Could not switch game mode right now."));
+        return;
+      }
+
+      clearPendingRun(activeVerifiedRun.id);
+      clearActiveRunSession(activeVerifiedRun.id);
+      setActiveVerifiedRun(null);
+      resetRunRecoveryState();
+      loadAccountRuns();
+      loadGlobalLeaderboard();
+    }
+
+    setRunActionPending(false);
+    setRunActionDialog(null);
+    setRunActionError("");
+
+    if (targetMode === 'crunch') {
+      launchCrunchGame();
+    } else {
+      startClassicGame();
+    }
+  }
+
+  function handleConfirmRunAction() {
+    if (!runActionDialog) {
+      return;
+    }
+
+    primeSound();
+    playPlaceSound();
+    setRunActionPending(true);
+    if (runActionDialog.type === "switch") {
+      void completeCurrentRunForModeSwitch(runActionDialog.targetMode);
+      return;
+    }
+
+    forceEndCurrentRun();
+  }
+
   function handleOpenHowToPlay() {
     primeSound();
     playPlaceSound();
+    setPendingCrunchHowToStart(false);
     setShowHowToPlay(true);
   }
 
@@ -5192,6 +6318,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     primeSound();
     playPlaceSound();
     setShowHowToPlay(false);
+    if (pendingCrunchHowToStart) {
+      markSeenCrunchHowTo();
+      setPendingCrunchHowToStart(false);
+      startLocalGame();
+    }
   }
 
   function handleOpenChangelog() {
@@ -5238,9 +6369,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     const nextBoard = [...game.board];
-    for (const { index, tone } of fillCells) {
-      if (!nextBoard[index]) {
-        nextBoard[index] = { tone, groupId: -1, isFill: true };
+    for (const { index, tone, groupId } of fillCells) {
+      // Wall fill: overwrite poxels too (crunch buries everything). Classic fill: empty only.
+      if (!nextBoard[index] || (groupId && groupId.startsWith('crunch-wall') && !isCrunchWall(nextBoard[index]))) {
+        nextBoard[index] = { tone, groupId: groupId ?? -1, isFill: true };
       }
     }
     return nextBoard;
@@ -5264,7 +6396,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         groupId: previewPiece.id,
       };
     }
-    const nextPreviewClearSet = findClears(simBoard);
+    const nextPreviewClearSet = findNewlyClearedIndices(game.board, simBoard);
     return {
       previewClearSet: nextPreviewClearSet,
       previewTone: nextPreviewClearSet.size > 0 ? previewPiece.tone : null,
@@ -5443,7 +6575,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           >
             <SpeakerIcon on={soundEnabled && soundVolume > 0} />
           </button>
-          <h1>GridPop!</h1>
+          <h1 className="game-title" aria-label={gameMode === 'crunch' ? 'GridPop! Crunch' : 'GridPop!'}>
+            <span className="game-title-wordmark">GridPop!</span>
+            {gameMode === 'crunch' ? (
+              <span className="game-title-stamp" aria-hidden="true">[crunch]</span>
+            ) : null}
+          </h1>
         </header>
 
         <main className="game-layout">
@@ -5454,8 +6591,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 bestScore={displayedBestScore}
                 combo={game.combo}
                 onClick={() => handleOpenLeaderboard("personal")}
+                mode={gameMode}
+                runTimeRef={crunchTimeDisplayRef}
+                nextFrameInRef={crunchCountdownDisplayRef}
+                poxelsPopped={crunchPoxelsPopped}
+                warn={crunchWarn}
+                critical={crunchCritical}
               />
-              <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />
+              {gameMode !== 'crunch' && <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />}
             </div>
             <div className="mobile-player-handle">
               {playerHandleMessage ? (
@@ -5488,6 +6631,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 clearedSet={clearedSet}
                 clearedTones={game.clearedTones}
                 interactionLocked={runInteractionLocked}
+                isDragging={Boolean(drag)}
                 lockedPreviewSet={lockedPreviewSet}
                 lockedPreviewTone={lockedPreviewTone}
                 previewClearSet={previewClearSet}
@@ -5497,6 +6641,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 onBoardLeave={handleBoardLeave}
                 onCellClick={handleCellClick}
                 onLockedPreviewPointerDown={lockedPreviewPiece ? (e) => handleLockedPreviewPointerDown(lockedPreviewPiece, e) : undefined}
+                crunchWarn={crunchWarn}
+                crunchCritical={crunchCritical}
+                crunchCriticalSet={crunchCriticalCells}
+                crunchPendingClearSet={crunchPendingClears}
               />
               {!started ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
@@ -5523,6 +6671,17 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                         Start new
                       </button>
                     </>
+                  ) : showModeSelect && canUseCrunch ? (
+                    <div className="mode-select" ref={modeSelectRef} tabIndex={-1} aria-label="Choose game mode">
+                      <button className="mode-card" type="button" onClick={() => selectMode('classic')}>
+                        <span className="mode-card-name">Classic</span>
+                        <span className="mode-card-blurb">casual line popping</span>
+                      </button>
+                      <button className="mode-card mode-card--crunch" type="button" onClick={() => selectMode('crunch')}>
+                        <span className="mode-card-name">Crunch</span>
+                        <span className="mode-card-blurb">walls close in. time-based.</span>
+                      </button>
+                    </div>
                   ) : (
                     <>
                       {resumeFailed ? <p className="start-failed-msg">{resumeFailed}</p> : null}
@@ -5572,29 +6731,52 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                   <div className="game-over-content">
                     <div className="game-over-score-group">
                       {showNewBestBanner && <p className="new-best-banner">✨ New Best! ✨</p>}
-                      <p className={`game-over-score${scoreFinished ? ' is-done' : ''}`}>{displayedScore}</p>
+                      {gameMode === 'crunch' && <p className="game-over-score-label">Crunch Score</p>}
+                      <p className={`game-over-score${scoreFinished ? ' is-done' : ''}`}>{displayedScore.toLocaleString()}</p>
                     </div>
                     <div className="game-over-mid">
                       <div className="game-over-divider" />
-                      <div className="game-over-stats">
-                        <div className={`game-over-stat${statsRevealed >= 1 ? ' is-revealed' : ''}`}>
-                          <span className="game-over-stat-value">{game.moveCount}</span>
-                          <span className="game-over-stat-label">shapes played</span>
-                        </div>
-                        <div className={`game-over-stat${statsRevealed >= 2 ? ' is-revealed' : ''}`}>
-                          <span className="game-over-stat-value">x{game.bestCombo + 1}</span>
-                          <span className="game-over-stat-label">highest chain</span>
-                        </div>
-                        {game.bestLinesCleared > 0 && (
-                          <div className={`game-over-stat${statsRevealed >= 3 ? ' is-revealed' : ''}`}>
-                            <span className="game-over-stat-value">{game.bestLinesCleared} {game.bestLinesCleared === 1 ? 'line' : 'lines'}</span>
-                            <span className="game-over-stat-label">biggest burst</span>
+                      {gameMode === 'crunch' ? (
+                        <div className="game-over-stats">
+                          <div className={`game-over-stat${statsRevealed >= 1 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">{formatCrunchTime(crunchFinalSurvivalMs)}</span>
+                            <span className="game-over-stat-label">time survived</span>
                           </div>
-                        )}
-                      </div>
+                          <div className={`game-over-stat${statsRevealed >= 2 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">{crunchWallDepth}</span>
+                            <span className="game-over-stat-label">waves</span>
+                          </div>
+                          <div className={`game-over-stat${statsRevealed >= 3 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">{crunchPoxelsPopped}</span>
+                            <span className="game-over-stat-label">poxels popped</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="game-over-stats">
+                          <div className={`game-over-stat${statsRevealed >= 1 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">{game.moveCount}</span>
+                            <span className="game-over-stat-label">shapes played</span>
+                          </div>
+                          <div className={`game-over-stat${statsRevealed >= 2 ? ' is-revealed' : ''}`}>
+                            <span className="game-over-stat-value">x{game.bestCombo + 1}</span>
+                            <span className="game-over-stat-label">highest chain</span>
+                          </div>
+                          {game.bestLinesCleared > 0 && (
+                            <div className={`game-over-stat${statsRevealed >= 3 ? ' is-revealed' : ''}`}>
+                              <span className="game-over-stat-value">{game.bestLinesCleared} {game.bestLinesCleared === 1 ? 'line' : 'lines'}</span>
+                              <span className="game-over-stat-label">biggest burst</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className={`game-over-actions${showPlayAgain ? ' is-visible' : ''}`}>
-                      <button className="start-button" type="button" onClick={handleRestart} disabled={runSubmitting || startPending || (!!session && !accountRunsReadyRef.current)}>
+                      <button
+                        className="start-button"
+                        type="button"
+                        onClick={handleRestart}
+                        disabled={runSubmitting || startPending || (!!session && (!accountRunsReadyRef.current || featureFlagsLoading))}
+                      >
                         Play Again
                       </button>
                       {runSubmissionError ? (
@@ -5749,6 +6931,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               crtFilterLevel={crtFilterLevel}
               onCrtFilterLevelChange={handleCrtFilterLevelChange}
             />
+            {started && !game.gameOver ? (
+              <RunActionsPanel
+                canSwitchMode={canUseCrunch}
+                disabled={runActionPending || runSubmitting || resumePending}
+                onQuitRun={handleOpenEndRunConfirm}
+                onSwitchMode={handleOpenRunModeSelect}
+              />
+            ) : null}
             <AuthPanel
               authCode={authCode}
               authEmail={authEmail}
@@ -5810,6 +7000,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               crtFilterLevel={crtFilterLevel}
               onCrtFilterLevelChange={handleCrtFilterLevelChange}
             />
+            {started && !game.gameOver ? (
+              <RunActionsPanel
+                canSwitchMode={canUseCrunch}
+                disabled={runActionPending || runSubmitting || resumePending}
+                onQuitRun={handleOpenEndRunConfirm}
+                onSwitchMode={handleOpenRunModeSelect}
+              />
+            ) : null}
             <AuthPanel
               authCode={authCode}
               authEmail={authEmail}
@@ -5841,7 +7039,39 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         </div>
       ) : null}
 
-      {showHowToPlay ? <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} /> : null}
+      {showRunModeSelect ? (
+        <RunModeSelectModal
+          currentMode={gameMode}
+          onSelectMode={handleRunModeSelect}
+          onClose={handleCloseRunModeSelect}
+        />
+      ) : null}
+
+      {runActionDialog ? (
+        <RunActionConfirmModal
+          title={
+            runActionDialog.type === "switch"
+              ? `Switch to ${runActionDialog.targetMode === 'crunch' ? 'Crunch' : 'Classic'}`
+              : "End Current Run"
+          }
+          message={
+            runActionDialog.type === "switch"
+              ? "Warning: This will end your current run. Continue?"
+              : "Are you sure you want to end this run now?"
+          }
+          confirmLabel={runActionDialog.type === "switch" ? "Yes, Switch" : "Yes, End Run"}
+          pending={runActionPending}
+          error={runActionError}
+          onCancel={handleCloseRunActionDialog}
+          onConfirm={handleConfirmRunAction}
+        />
+      ) : null}
+
+      {showHowToPlay ? (
+        gameMode === 'crunch'
+          ? <HowToPlayCrunchModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
+          : <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
+      ) : null}
       {showThemeModal ? (
         <ThemeModal
           activeTheme={activeTheme}

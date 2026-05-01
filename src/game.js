@@ -120,6 +120,10 @@ export const SHAPES = [
   { name: "step-5", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
 ];
 
+export const CRUNCH_SHAPES = SHAPES.filter(({ name }) =>
+  ['single', 'bar-2', 'bar-3', 'col-2', 'col-3', 'l-3', 'square-2'].includes(name)
+);
+
 const GRID_ROW_INDICES = Array.from({ length: GRID_SIZE }, (_, row) =>
   Array.from({ length: GRID_SIZE }, (_, col) => toIndex(row, col))
 );
@@ -235,6 +239,23 @@ export function saveBestScore(score) {
   }
 }
 
+const CRUNCH_BEST_KEY = "gridpop-crunch-best";
+
+export function loadCrunchBestRating() {
+  try {
+    const v = localStorage.getItem(CRUNCH_BEST_KEY);
+    return v !== null ? Number.parseInt(v, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveCrunchBestRating(rating) {
+  try {
+    localStorage.setItem(CRUNCH_BEST_KEY, String(rating));
+  } catch {}
+}
+
 export function loadRunHistory() {
   try {
     const rawValue = localStorage.getItem(RUN_HISTORY_STORAGE_KEY);
@@ -306,6 +327,8 @@ export function markRunsAsSynced(runIds) {
 export function createGameState(bestScore = loadBestScore(), options = {}) {
   const board = createBoard();
   const ranked = Boolean(options.ranked);
+  const crunch = Boolean(options.crunch);
+  const shapes = crunch ? CRUNCH_SHAPES : SHAPES;
   const hasServerTray = Array.isArray(options.tray);
   const seed = hasServerTray
     ? null
@@ -320,7 +343,7 @@ export function createGameState(bestScore = loadBestScore(), options = {}) {
         nextPieceId: (serverTray.reduce((max, piece) => Math.max(max, piece?.id ?? 0), 0) || 0) + 1,
         rngState: 0,
       }
-    : buildTray(board, 1, initialRngState);
+    : buildTray(board, 1, initialRngState, shapes);
 
   return {
     board,
@@ -329,6 +352,7 @@ export function createGameState(bestScore = loadBestScore(), options = {}) {
     seed,
     rngState,
     ranked,
+    crunch,
     awaitingTray: false,
     score: 0,
     bestScore,
@@ -402,24 +426,24 @@ export function applyPlacement(game, pieceId, row, col) {
     board[toIndex(nextRow, nextCol)] = { tone: piece.tone, groupId: piece.id };
   }
 
-  const clearedIndices = findClears(board);
+  const newlyClearedIndices = findNewlyClearedIndices(game.board, board);
   const blocksPlaced = piece.shape.cells.length;
   const previousCombo = game.combo;
   let combo = 0;
   let cleared = [];
 
   const clearedTones = {};
-  if (clearedIndices.size > 0) {
-    for (const index of clearedIndices) {
+  if (newlyClearedIndices.size > 0) {
+    for (const index of newlyClearedIndices) {
       clearedTones[index] = piece.tone;
       board[index] = null;
     }
 
     combo = previousCombo + 1;
-    cleared = [...clearedIndices];
+    cleared = [...newlyClearedIndices];
   }
 
-  const linesCleared = countLines(clearedIndices);
+  const linesCleared = countLines(newlyClearedIndices, board);
   const comboMultiplier = Math.max(1, combo + 1);
   const burstScore = linesCleared * linesCleared * 180;
   const moveScore = blocksPlaced * 15 + burstScore * comboMultiplier;
@@ -436,7 +460,7 @@ export function applyPlacement(game, pieceId, row, col) {
   const trayExhausted = tray.every((entry) => entry === null);
 
   if (trayExhausted && !game.ranked) {
-    const nextTrayState = buildTray(board, nextPieceId, game.rngState);
+    const nextTrayState = buildTray(board, nextPieceId, game.rngState, game.crunch ? CRUNCH_SHAPES : SHAPES);
     tray = nextTrayState.tray;
     nextPieceId = nextTrayState.nextPieceId;
     rngState = nextTrayState.rngState;
@@ -466,7 +490,7 @@ export function applyPlacement(game, pieceId, row, col) {
     };
   }
 
-  const gameOver = !tray.some((entry) => entry && hasAnyPlacement(board, entry));
+  const gameOver = game.crunch ? false : !tray.some((entry) => entry && hasAnyPlacement(board, entry));
 
   return {
     ...game,
@@ -569,7 +593,7 @@ export function toIndex(row, col) {
 
 const SLOT_PLACEABLE_THRESHOLDS = [1.0, 0.8, 0.5];
 
-function buildTray(board, nextPieceId, rngState) {
+function buildTray(board, nextPieceId, rngState, shapes = SHAPES) {
   let tray = [];
   let trayShapes = [];
   let currentPieceId = nextPieceId;
@@ -594,14 +618,14 @@ function buildTray(board, nextPieceId, rngState) {
       currentRngState = roll.rngState;
     }
 
-    const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, requirePlaceable);
+    const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, requirePlaceable, shapes);
     tray.push(pieceState.piece);
     trayShapes.push(pieceState.piece.shape);
     currentPieceId = pieceState.nextPieceId;
     currentRngState = pieceState.rngState;
   }
 
-  if (hasPotentialMove(board)) {
+  if (hasPotentialMove(board, shapes)) {
     let attempts = 0;
 
     while (attempts < 40 && !tray.some((piece) => hasAnyPlacement(board, piece))) {
@@ -610,7 +634,7 @@ function buildTray(board, nextPieceId, rngState) {
       currentPieceId = nextPieceId;
 
       for (let slot = 0; slot < TRAY_SIZE; slot += 1) {
-        const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, true);
+        const pieceState = createRandomPiece(board, trayShapes, currentPieceId, currentRngState, true, shapes);
         tray.push(pieceState.piece);
         trayShapes.push(pieceState.piece.shape);
         currentPieceId = pieceState.nextPieceId;
@@ -689,41 +713,41 @@ function getShapeWeight(board, shape, trayShapes, requirePlaceable, fillRatio) {
   return weight;
 }
 
-function pickWeightedShape(board, rngState, trayShapes, requirePlaceable) {
+function pickWeightedShape(board, rngState, trayShapes, requirePlaceable, shapes = SHAPES) {
   const fillRatio = requirePlaceable
     ? board.reduce((count, cell) => count + (cell ? 1 : 0), 0) / board.length
     : 0;
-  const weights = SHAPES.map((shape) => getShapeWeight(board, shape, trayShapes, requirePlaceable, fillRatio));
+  const weights = shapes.map((shape) => getShapeWeight(board, shape, trayShapes, requirePlaceable, fillRatio));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   const shapePick = nextRandomValue(rngState);
 
   if (totalWeight <= 0) {
     return {
-      shape: SHAPES[Math.floor(shapePick.value * SHAPES.length) % SHAPES.length],
+      shape: shapes[Math.floor(shapePick.value * shapes.length) % shapes.length],
       rngState: shapePick.rngState,
     };
   }
 
   let remaining = shapePick.value * totalWeight;
 
-  for (let index = 0; index < SHAPES.length; index += 1) {
+  for (let index = 0; index < shapes.length; index += 1) {
     remaining -= weights[index];
     if (remaining <= 0) {
       return {
-        shape: SHAPES[index],
+        shape: shapes[index],
         rngState: shapePick.rngState,
       };
     }
   }
 
   return {
-    shape: SHAPES[SHAPES.length - 1],
+    shape: shapes[shapes.length - 1],
     rngState: shapePick.rngState,
   };
 }
 
-function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlaceable) {
-  const shapePick = pickWeightedShape(board, rngState, trayShapes, requirePlaceable);
+function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlaceable, shapes = SHAPES) {
+  const shapePick = pickWeightedShape(board, rngState, trayShapes, requirePlaceable, shapes);
   const tonePick = nextRandomValue(shapePick.rngState);
   const tone = TONES[Math.floor(tonePick.value * TONES.length) % TONES.length];
 
@@ -739,8 +763,8 @@ function createRandomPiece(board, trayShapes, nextPieceId, rngState, requirePlac
   };
 }
 
-function hasPotentialMove(board) {
-  return SHAPES.some((shape) => hasAnyPlacement(board, getPlacementProbe(shape)));
+function hasPotentialMove(board, shapes = SHAPES) {
+  return shapes.some((shape) => hasAnyPlacement(board, getPlacementProbe(shape)));
 }
 
 function hasAnyPlacement(board, piece) {
@@ -756,35 +780,134 @@ function hasAnyPlacement(board, piece) {
   return false;
 }
 
-export function findClears(board) {
-  const cleared = new Set();
+// Wall cells are permanent — they block placement but never participate in line clears.
+export function isCrunchWall(cell) {
+  return cell !== null && typeof cell.groupId === 'string' && cell.groupId.startsWith('crunch-wall');
+}
 
-  for (const rowIndices of GRID_ROW_INDICES) {
-    if (rowIndices.every((index) => board[index] !== null)) {
-      rowIndices.forEach((index) => cleared.add(index));
+export function getCrunchTouchingWallCells(board) {
+  const touching = [];
+
+  for (let row = 0; row < GRID_SIZE; row++) {
+    let leftFront = -1;
+    let rightFront = GRID_SIZE;
+
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const cell = board[toIndex(row, col)];
+      if (cell !== null && cell.groupId === 'crunch-wall-l') {
+        leftFront = Math.max(leftFront, col);
+      } else if (cell !== null && cell.groupId === 'crunch-wall-r') {
+        rightFront = Math.min(rightFront, col);
+      }
+    }
+
+    if (leftFront !== -1 && rightFront !== GRID_SIZE && leftFront + 1 >= rightFront) {
+      touching.push(toIndex(row, leftFront), toIndex(row, rightFront));
     }
   }
 
-  for (const colIndices of GRID_COL_INDICES) {
-    if (colIndices.every((index) => board[index] !== null)) {
-      colIndices.forEach((index) => cleared.add(index));
+  return touching;
+}
+
+export function haveCrunchWallsJoined(board) {
+  return getCrunchTouchingWallCells(board).length > 0;
+}
+
+function getCompletedLineSets(board) {
+  const rows = new Set();
+  const cols = new Set();
+
+  for (let row = 0; row < GRID_ROW_INDICES.length; row += 1) {
+    const rowIndices = GRID_ROW_INDICES[row];
+    if (
+      rowIndices.every((i) => board[i] !== null) &&
+      rowIndices.some((i) => !isCrunchWall(board[i]))
+    ) {
+      rows.add(row);
+    }
+  }
+
+  for (let col = 0; col < GRID_COL_INDICES.length; col += 1) {
+    const colIndices = GRID_COL_INDICES[col];
+    if (
+      colIndices.every((i) => board[i] !== null) &&
+      colIndices.some((i) => !isCrunchWall(board[i]))
+    ) {
+      cols.add(col);
+    }
+  }
+
+  return { rows, cols };
+}
+
+function addCompletedLineCells(target, lineSets) {
+  for (const row of lineSets.rows) {
+    GRID_ROW_INDICES[row].forEach((i) => target.add(i));
+  }
+
+  for (const col of lineSets.cols) {
+    GRID_COL_INDICES[col].forEach((i) => target.add(i));
+  }
+}
+
+export function findClears(board) {
+  const cleared = new Set();
+  addCompletedLineCells(cleared, getCompletedLineSets(board));
+  return cleared;
+}
+
+export function findNewlyClearedIndices(previousBoard, nextBoard) {
+  const previousLines = getCompletedLineSets(previousBoard);
+  const nextLines = getCompletedLineSets(nextBoard);
+  const cleared = new Set();
+
+  for (const row of nextLines.rows) {
+    if (!previousLines.rows.has(row)) {
+      GRID_ROW_INDICES[row].forEach((i) => cleared.add(i));
+    }
+  }
+
+  for (const col of nextLines.cols) {
+    if (!previousLines.cols.has(col)) {
+      GRID_COL_INDICES[col].forEach((i) => cleared.add(i));
     }
   }
 
   return cleared;
 }
 
-function countLines(clearedIndices) {
+function findCrunchWaveAutoClears(board) {
+  const cleared = new Set();
+
+  for (const rowIndices of GRID_ROW_INDICES) {
+    if (
+      rowIndices.every((i) => board[i] !== null) &&
+      rowIndices.some((i) => !isCrunchWall(board[i]))
+    ) {
+      rowIndices.forEach((i) => cleared.add(i));
+    }
+  }
+
+  return cleared;
+}
+
+function countLines(clearedIndices, board) {
   let lines = 0;
 
   for (const rowIndices of GRID_ROW_INDICES) {
-    if (rowIndices.every((index) => clearedIndices.has(index))) {
+    if (
+      rowIndices.every((i) => clearedIndices.has(i)) &&
+      rowIndices.some((i) => !isCrunchWall(board[i]))
+    ) {
       lines += 1;
     }
   }
 
   for (const colIndices of GRID_COL_INDICES) {
-    if (colIndices.every((index) => clearedIndices.has(index))) {
+    if (
+      colIndices.every((i) => clearedIndices.has(i)) &&
+      colIndices.some((i) => !isCrunchWall(board[i]))
+    ) {
       lines += 1;
     }
   }
@@ -855,4 +978,229 @@ export function replayRun(seed, moves) {
     score: game.score,
     game,
   };
+}
+
+// Advances the crunch walls inward by one step on each side.
+// Each wall's entire adjacent chain of poxels slides as a unit.
+// Poxels with a gap between them and the wall are NOT shifted.
+// When the chain front meets an obstacle: front + obstacle both pop, rest of chain slides.
+// Left side processed first; right side reads the updated board so cross-half collisions resolve.
+// After the wave, findClears runs to auto-pop any complete rows formed by walls + poxels.
+// Game over fires the instant opposing walls become adjacent (no gap between them).
+// Returns { game: nextGame, crushedCount: number }
+export function applyCrunchWave(game, tone, { advanceLeft = true, advanceRight = true } = {}) {
+  const old = game.board;
+  // Strip pushDir from shifted poxels and isFill from existing wall cells so only the
+  // freshly-placed slab this wave carries is-game-fill (and therefore the slide animation).
+  // Old wall cells lose is-game-fill, freeing the cell element to show the pulse outline.
+  const board = old.map((cell) => {
+    if (cell === null) return null;
+    const stripPush = cell.pushDir != null;
+    const stripFill = cell.isFill && isCrunchWall(cell);
+    if (!stripPush && !stripFill) return cell;
+    return { ...cell, pushDir: undefined, isFill: stripFill ? false : cell.isFill };
+  });
+  let crushedCount = 0;
+  const clearedWave = [];
+  const clearedWaveTones = {};
+
+  for (let row = 0; row < GRID_SIZE; row++) {
+    // Compute both fronts for this row first (rows can differ if a row-clear removed some wall cells).
+    let leftFront = -1;
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const cell = old[toIndex(row, col)];
+      if (cell !== null && cell.groupId === 'crunch-wall-l') leftFront = col;
+      else break;
+    }
+    let rightFront = GRID_SIZE;
+    for (let col = GRID_SIZE - 1; col >= 0; col--) {
+      const cell = old[toIndex(row, col)];
+      if (cell !== null && cell.groupId === 'crunch-wall-r') rightFront = col;
+      else break;
+    }
+
+    const leftNewCol = leftFront + 1;
+    const rightNewCol = rightFront - 1;
+
+    // === LEFT WALL — advance one step inward unless it would cross the right wall's target ===
+    let skipLeftWall = false;
+    if (advanceLeft && leftNewCol <= rightNewCol) {
+      // Gather consecutive poxels immediately in front of the left wall (stop at gap or any wall).
+      const chain = [];
+      for (let col = leftNewCol; col < GRID_SIZE; col++) {
+        const cell = old[toIndex(row, col)];
+        if (cell !== null && !isCrunchWall(cell)) chain.push({ col, cell });
+        else break;
+      }
+
+      if (chain.length > 0) {
+        const frontCol = chain[chain.length - 1].col;
+        const destCol = frontCol + 1;
+        const atDest = board[toIndex(row, destCol)];
+
+        if (atDest !== null) {
+          if (isCrunchWall(atDest)) {
+            // Chain is trapped against the opposite wall. The advancing wall
+            // crushes the adjacent poxel and still moves in.
+            const crushed = chain[0];
+            clearedWave.push(toIndex(row, crushed.col));
+            clearedWaveTones[toIndex(row, crushed.col)] = crushed.cell.tone;
+            board[toIndex(row, crushed.col)] = null;
+            crushedCount++;
+          } else {
+            clearedWave.push(toIndex(row, destCol));
+            clearedWaveTones[toIndex(row, destCol)] = atDest.tone;
+            board[toIndex(row, destCol)] = null;
+            crushedCount++;
+            crushedCount++;
+            for (let i = chain.length - 2; i >= 0; i--) {
+              board[toIndex(row, chain[i].col + 1)] = { ...chain[i].cell, isFill: false, pushDir: 'l' };
+            }
+            if (chain.length === 1) board[toIndex(row, frontCol)] = null;
+          }
+        } else {
+          for (let i = chain.length - 1; i >= 0; i--) {
+            board[toIndex(row, chain[i].col + 1)] = { ...chain[i].cell, isFill: false, pushDir: 'l' };
+          }
+        }
+      }
+
+      // New wall cell — isFill triggers the slide-in animation
+      if (!skipLeftWall) {
+        board[toIndex(row, leftNewCol)] = { tone, groupId: 'crunch-wall-l', isFill: true };
+      }
+    }
+
+    // === RIGHT WALL — advance one step inward if it won't hit the left wall's target ===
+    // Reads board (not old) for chain collection so it sees poxels already shifted by the left pass.
+    let skipRightWall = false;
+    if (advanceRight && rightNewCol >= leftNewCol && (!advanceLeft || rightNewCol > leftNewCol)) {
+      const chain = [];
+      for (let col = rightNewCol; col >= 0; col--) {
+        const cell = board[toIndex(row, col)];
+        if (cell !== null && !isCrunchWall(cell)) chain.push({ col, cell });
+        else break;
+      }
+
+      if (chain.length > 0) {
+        const frontCol = chain[chain.length - 1].col;
+        const destCol = frontCol - 1;
+        const atDest = board[toIndex(row, destCol)];
+
+        if (atDest !== null) {
+          if (isCrunchWall(atDest)) {
+            // Chain is trapped against the opposite wall. The advancing wall
+            // crushes the adjacent poxel and still moves in.
+            const crushed = chain[0];
+            clearedWave.push(toIndex(row, crushed.col));
+            clearedWaveTones[toIndex(row, crushed.col)] = crushed.cell.tone;
+            board[toIndex(row, crushed.col)] = null;
+            crushedCount++;
+          } else {
+            clearedWave.push(toIndex(row, destCol));
+            clearedWaveTones[toIndex(row, destCol)] = atDest.tone;
+            board[toIndex(row, destCol)] = null;
+            crushedCount++;
+            crushedCount++;
+            for (let i = chain.length - 2; i >= 0; i--) {
+              board[toIndex(row, chain[i].col - 1)] = { ...chain[i].cell, isFill: false, pushDir: 'r' };
+            }
+            if (chain.length === 1) board[toIndex(row, frontCol)] = null;
+          }
+        } else {
+          for (let i = chain.length - 1; i >= 0; i--) {
+            board[toIndex(row, chain[i].col - 1)] = { ...chain[i].cell, isFill: false, pushDir: 'r' };
+          }
+        }
+      }
+
+      if (!skipRightWall) {
+        // Check for a stray poxel at rightNewCol — only relevant when the chain was empty.
+        const atRightNew = board[toIndex(row, rightNewCol)];
+        if (chain.length === 0 && atRightNew !== null && !isCrunchWall(atRightNew)) {
+          clearedWave.push(toIndex(row, rightNewCol));
+          clearedWaveTones[toIndex(row, rightNewCol)] = atRightNew.tone;
+          crushedCount++;
+        }
+        if (atRightNew === null || !isCrunchWall(atRightNew)) {
+          board[toIndex(row, rightNewCol)] = { tone, groupId: 'crunch-wall-r', isFill: true };
+        }
+      }
+    }
+  }
+
+  // Collect any complete rows formed by walls + poxels after the wave.
+  // Walls are excluded — they only pop when the *user* deliberately completes a line.
+  // Poxels in that line still get the crunch → rumble → pop treatment.
+  const postWaveClears = findCrunchWaveAutoClears(board);
+  const pendingClears = [...postWaveClears]
+    .filter((idx) => !isCrunchWall(board[idx]))
+    .map((idx) => ({ idx, tone: board[idx]?.tone ?? tone }));
+
+  // Crunch mode only ends when the left/right walls touch on any row. We do not
+  // end on "no legal moves" because the next wall wave can push, crush, or clear
+  // poxels and make tray pieces playable again.
+  const gameOver = haveCrunchWallsJoined(board);
+
+  return {
+    game: {
+      ...game,
+      board,
+      preview: null,
+      selectedPieceId: null,
+      gameOver,
+      cleared: clearedWave,
+      clearedTones: clearedWaveTones,
+    },
+    crushedCount,
+    // Cells that completed a row/col this wave. Caller should show a brief rumble
+    // animation on these cells before applying the actual clear.
+    pendingClears,
+  };
+}
+
+export function canCrunchWallAdvance(board, side) {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    let leftFront = -1;
+    for (let col = 0; col < GRID_SIZE; col++) {
+      const cell = board[toIndex(row, col)];
+      if (cell !== null && cell.groupId === 'crunch-wall-l') leftFront = col;
+      else break;
+    }
+
+    let rightFront = GRID_SIZE;
+    for (let col = GRID_SIZE - 1; col >= 0; col--) {
+      const cell = board[toIndex(row, col)];
+      if (cell !== null && cell.groupId === 'crunch-wall-r') rightFront = col;
+      else break;
+    }
+
+    const leftNewCol = leftFront + 1;
+    const rightNewCol = rightFront - 1;
+
+    if (side === 'left' && leftNewCol <= rightNewCol) return true;
+    if (side === 'right' && rightNewCol >= leftNewCol) return true;
+  }
+
+  return false;
+}
+
+// Apply post-wave auto-clears that were deferred for the rumble animation.
+// Call this after the ~380 ms rumble window has elapsed.
+// pendingClears only contains poxels (walls were filtered out in applyCrunchWave).
+export function applyWavePendingClears(game, pendingClears) {
+  if (!pendingClears || pendingClears.length === 0) return game;
+  const board = game.board.slice();
+  const clearedWave = [];
+  const clearedWaveTones = {};
+  for (const { idx, tone } of pendingClears) {
+    if (board[idx] !== null) {
+      if (!isCrunchWall(board[idx])) {
+        clearedWaveTones[idx] = board[idx].tone ?? tone;
+        clearedWave.push(idx);
+        board[idx] = null;
+      }
+    }
+  }
+  return { ...game, board, cleared: clearedWave, clearedTones: clearedWaveTones };
 }

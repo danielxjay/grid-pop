@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
     const runId = typeof body?.runId === "string" ? body.runId : "";
     const moves = parseMoves(body?.moves);
     const deviceToken = typeof body?.deviceToken === "string" ? body.deviceToken : null;
+    const forceFinish = Boolean(body?.forceFinish);
 
     if (!runId || !moves) {
       return json({ error: "A run id and moves array are required." }, { status: 400 });
@@ -125,7 +126,7 @@ Deno.serve(async (req) => {
       return json({ error: "Run state is out of sync. Reload the board and finish the current path before submitting." }, { status: 409 });
     }
 
-    const verification = replayRun(run.seed, moves, { requireGameOver: true });
+    const verification = replayRun(run.seed, moves, { requireGameOver: !forceFinish });
 
     if (!verification.valid || !verification.game) {
       await supabaseAdmin

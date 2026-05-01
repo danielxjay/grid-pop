@@ -77,6 +77,17 @@ function makeVelcro(ctx, duration) {
   return buf;
 }
 
+function makeDistortionCurve(amount = 24) {
+  const samples = 256;
+  const curve = new Float32Array(samples);
+  const k = Math.max(0, amount);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+
 function pickBuffer(buffers) {
   return buffers[Math.floor(Math.random() * buffers.length)];
 }
@@ -418,4 +429,151 @@ export function playFillCellSound() {
     gain: 0.22,
     t,
   });
+}
+
+// Crunch mode wall advance — distorted lower-mid slab grind, separate from padded thuds.
+export function playCrunchWallSound() {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+  const t = startAt;
+
+  const master = getMasterGain(ctx);
+
+  // Short overdriven body: more crushed synth/stone than kick drum.
+  const body = ctx.createOscillator();
+  body.type = "sawtooth";
+  body.frequency.setValueAtTime(92, t);
+  body.frequency.exponentialRampToValueAtTime(68, t + 0.18);
+
+  const drive = ctx.createWaveShaper();
+  drive.curve = makeDistortionCurve(42);
+  drive.oversample = "2x";
+
+  const bodyFilter = ctx.createBiquadFilter();
+  bodyFilter.type = "lowpass";
+  bodyFilter.frequency.setValueAtTime(780, t);
+  bodyFilter.frequency.exponentialRampToValueAtTime(340, t + 0.2);
+  bodyFilter.Q.value = 1.1;
+
+  const bodyEnv = ctx.createGain();
+  bodyEnv.gain.setValueAtTime(0.0001, t);
+  bodyEnv.gain.linearRampToValueAtTime(0.42, t + 0.008);
+  bodyEnv.gain.exponentialRampToValueAtTime(0.0001, t + 0.23);
+
+  body.connect(drive);
+  drive.connect(bodyFilter);
+  bodyFilter.connect(bodyEnv);
+  bodyEnv.connect(master);
+  body.start(t);
+  body.stop(t + 0.25);
+
+  // Crushed grit layer gives the "chunk sliding in" texture without reading as a drum hit.
+  playNoise(ctx, makeGranular(ctx, 0.18, 0.34), {
+    hpf: 75,
+    bpf: 270 + Math.random() * 60,
+    bpfQ: 0.85,
+    lpf: 1050,
+    attack: 0.004,
+    decay: 0.16,
+    gain: 0.46,
+    t: t + 0.006,
+  });
+
+  playNoise(ctx, makeGranular(ctx, 0.09, 0.52), {
+    hpf: 420,
+    bpf: 760 + Math.random() * 180,
+    bpfQ: 1.4,
+    lpf: 1700,
+    attack: 0.001,
+    decay: 0.07,
+    gain: 0.18,
+    t: t + 0.018,
+  });
+}
+
+// Crunch countdown — low race-start beeps, with the final cue jumping higher.
+export function playCrunchCountdownSound(count) {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+  const t = startAt;
+  const isFinal = Number(count) <= 1;
+  const freq = isFinal ? 520 : 260;
+  const duration = isFinal ? 0.16 : 0.12;
+
+  const osc = ctx.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(freq, t);
+
+  const tone = ctx.createBiquadFilter();
+  tone.type = "bandpass";
+  tone.frequency.value = freq * 1.05;
+  tone.Q.value = isFinal ? 5.5 : 4.2;
+
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.linearRampToValueAtTime(isFinal ? 0.36 : 0.28, t + 0.006);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+  osc.connect(tone);
+  tone.connect(env);
+  env.connect(getMasterGain(ctx));
+  osc.start(t);
+  osc.stop(t + duration + 0.02);
+
+  playNoise(ctx, makeWhiteNoise(ctx, 0.025), {
+    hpf: 1200,
+    bpf: isFinal ? 2600 : 1700,
+    bpfQ: 2.4,
+    attack: 0.001,
+    decay: 0.018,
+    gain: isFinal ? 0.055 : 0.04,
+    t,
+  });
+}
+
+// Critical countdown — tighter, more urgent double-hit cue for each second.
+export function playCrunchCriticalCountdownSound(count) {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+
+  const master = getMasterGain(ctx);
+  const baseFreq = 330 + Math.max(0, 5 - Number(count)) * 18;
+  const hitSpacing = 0.11;
+
+  for (let hit = 0; hit < 2; hit++) {
+    const t = startAt + hit * hitSpacing;
+    const osc = ctx.createOscillator();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(baseFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.92, t + 0.09);
+
+    const tone = ctx.createBiquadFilter();
+    tone.type = "bandpass";
+    tone.frequency.value = baseFreq * 1.45;
+    tone.Q.value = 6.2;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(hit === 0 ? 0.24 : 0.18, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.085);
+
+    osc.connect(tone);
+    tone.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t + 0.1);
+
+    playNoise(ctx, makeWhiteNoise(ctx, 0.02), {
+      hpf: 1500,
+      bpf: 2400 + hit * 180,
+      bpfQ: 3.1,
+      attack: 0.001,
+      decay: 0.02,
+      gain: hit === 0 ? 0.035 : 0.028,
+      t,
+    });
+  }
 }

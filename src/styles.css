@@ -493,6 +493,40 @@ h1 {
   pointer-events: none;
 }
 
+.game-title {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.game-title-wordmark {
+  display: block;
+}
+
+.game-title-stamp {
+  position: absolute;
+  right: -0.35rem;
+  bottom: 0.02rem;
+  z-index: 1;
+  display: block;
+  padding: 0.18em 0.38em 0.12em;
+  border: 2px solid color-mix(in srgb, var(--accent-secondary) 72%, #fff 28%);
+  border-radius: 0.18rem;
+  background: color-mix(in srgb, var(--accent-secondary) 82%, #8ed7f1 18%);
+  color: #f8fdff;
+  font-size: clamp(0.34rem, 1.55vw, 0.52rem);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: none;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fff 18%, transparent),
+    2px 2px 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  transform: rotate(-11deg);
+  transform-origin: center;
+  opacity: 0.96;
+}
+
 h2 {
   font-size: clamp(0.75rem, 2vw, 1.1rem);
 }
@@ -1301,6 +1335,64 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   animation: modalHeaderGlow 2600ms ease-in-out infinite;
 }
 
+.run-actions-panel {
+  max-width: 12.5rem;
+}
+
+.run-actions-copy {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--menu-muted, var(--fg-secondary));
+}
+
+.run-actions-buttons,
+.run-action-modal-buttons {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.run-actions-button {
+  width: 100%;
+}
+
+.run-actions-button--danger {
+  border-color: color-mix(in srgb, #b02268 70%, transparent);
+  color: #b02268;
+  box-shadow: 3px 3px 0 color-mix(in srgb, #b02268 16%, transparent);
+}
+
+.run-actions-button--danger:hover,
+.run-actions-button--danger:focus-visible {
+  border-color: #b02268;
+  color: #b02268;
+  box-shadow: 4px 4px 0 color-mix(in srgb, #b02268 22%, transparent);
+}
+
+.run-action-panel {
+  gap: 1rem;
+}
+
+.run-action-confirm {
+  width: 100%;
+}
+
+.run-action-modal-buttons {
+  width: min(100%, 16rem);
+  margin: 0 auto;
+}
+
+.run-action-modal .leaderboard-empty {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.run-action-mode-select {
+  width: 100%;
+  justify-content: center;
+}
+
 .settings-row {
   display: grid;
   gap: 0.42rem;
@@ -1617,6 +1709,134 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   animation: cellFillIn 180ms ease-out forwards;
 }
 
+/* Crunch warning — board border pulses urgently when ≤ 3 s remain (nice visual for standard play;
+   color-only signal so supplemented by timer blink for WCAG 2.2 AA) */
+@keyframes crunchWarnBorderPulse {
+  0%, 100% { border-color: var(--accent-secondary); box-shadow: 5px 5px 0 var(--accent-secondary), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent); }
+  50%       { border-color: color-mix(in srgb, var(--accent-secondary) 60%, white); box-shadow: 5px 5px 0 var(--accent-secondary), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent-secondary) 70%, white); }
+}
+.board.is-crunch-warning {
+  animation: crunchWarnBorderPulse 0.55s ease-in-out infinite;
+}
+.board.is-crunch-critical {
+  animation-duration: 0.32s;
+}
+
+/* Timer blink — motion-based signal, satisfies WCAG 2.2 AA 1.4.1 (not color-only) */
+@keyframes crunchTimerBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+.score-value.is-crunch-warning-value {
+  animation: crunchTimerBlink 0.55s step-start infinite;
+}
+
+/* Crunch pending-clear rumble — fires on cells that formed a complete row/col this wave.
+   Gives the player a brief ~380 ms "shimmy" before the actual pop, so the sequence reads:
+   crunch → rumble → pop instead of crunch → instant vanish. */
+@keyframes crunchClearWarn {
+  0%   { transform: translate(0, 0)          scale(1); }
+  12%  { transform: translate(-2px, 1px)     scale(1.02); }
+  24%  { transform: translate(1.5px, -1.5px) scale(1); }
+  38%  { transform: translate(0.5px, 2px)    scale(1.02); }
+  50%  { transform: translate(-1.5px, 0.5px) scale(1); }
+  62%  { transform: translate(2px, -0.5px)   scale(1.02); }
+  74%  { transform: translate(-1px, 1px)     scale(1); }
+  86%  { transform: translate(1px, 0.5px)    scale(1.01); }
+  100% { transform: translate(0, 0)          scale(1); }
+}
+@keyframes crunchClearWarnWall {
+  0%, 100% { filter: brightness(1); }
+  40%      { filter: brightness(1.55); }
+  80%      { filter: brightness(1.25); }
+}
+
+/* Poxel cells in a pending-clear row: shake the bubble */
+.board-cell.is-crunch-pending-clear:not(.is-crunch-wall)::before {
+  animation: crunchClearWarn 320ms linear infinite;
+  filter: brightness(1.14) saturate(1.24);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+/* Wall cells in a pending-clear row: brightness flash (no shake — they're fixed slabs) */
+.board-cell.is-crunch-pending-clear.is-crunch-wall {
+  animation: crunchClearWarnWall 145ms ease-in-out infinite;
+}
+
+.board-cell.is-crunch-critical-cell.is-crunch-wall {
+  z-index: 2;
+  animation: crunchClearWarn 320ms linear infinite;
+  animation-delay: calc(-1 * var(--rumble-offset, 0ms));
+  filter: brightness(1.2) saturate(1.25);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Crunch wall slide-in — new wall columns slide in from their respective sides like metal slabs */
+@keyframes crunchWallSlideInL {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes crunchWallSlideInR {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.board-cell.is-crunch-wall-l.is-game-fill {
+  animation: crunchWallSlideInL 180ms cubic-bezier(0.15, 0, 0, 1) forwards;
+}
+.board-cell.is-crunch-wall-r.is-game-fill {
+  animation: crunchWallSlideInR 180ms cubic-bezier(0.15, 0, 0, 1) forwards;
+}
+.board-cell.is-crunch-critical-cell.is-crunch-wall.is-game-fill {
+  animation: crunchClearWarn 320ms linear infinite;
+  animation-delay: calc(-1 * var(--rumble-offset, 0ms));
+}
+/* Suppress the bubble pop on wall cells — they don't bubble in */
+.board-cell.is-crunch-wall.is-game-fill::before {
+  animation: none;
+}
+
+/* Poxel push — bubble slides in from the direction the wall pushed it */
+@keyframes pushSlideInL {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes pushSlideInR {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.board-cell.is-push-l.is-filled::before {
+  animation: pushSlideInL 160ms cubic-bezier(0.2, 0, 0.0, 1) forwards;
+}
+.board-cell.is-push-r.is-filled::before {
+  animation: pushSlideInR 160ms cubic-bezier(0.2, 0, 0.0, 1) forwards;
+}
+
+/* Crunch wall cells — solid brick slab, fixed accent-secondary colour regardless of wave tone */
+.board-cell.is-crunch-wall.is-filled {
+  background: color-mix(in srgb, var(--accent-secondary) 80%, black);
+  border-color: color-mix(in srgb, var(--accent-secondary) 55%, black);
+  border-radius: 0.1rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.board-cell.is-crunch-wall.is-filled::before {
+  border-radius: 0.1rem;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(0, 0, 0, 0.15) 4px,
+    rgba(0, 0, 0, 0.15) 5px
+  );
+  box-shadow: none;
+  animation: none !important; /* hatching pattern must never move */
+}
+
 @keyframes cellFillIn {
   0% {
     transform: scale(0);
@@ -1798,7 +2018,12 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   z-index: 1;
 }
 
-.board-cell.will-clear::before {
+.board-cell.is-drag-will-clear {
+  z-index: 1;
+}
+
+.board-cell.will-clear::before,
+.board-cell.is-drag-will-clear::before {
   animation: willClearRumble 800ms linear infinite;
   animation-delay: calc(-1 * var(--rumble-offset, 0ms));
   filter: brightness(1.14) saturate(1.24);
@@ -2173,6 +2398,25 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
 .mini-cell--mint { background: var(--tone-mint); }
 .mini-cell--sky { background: var(--tone-sky); }
 .mini-cell--orchid { background: var(--tone-orchid); }
+.mini-cell--wall {
+  background: color-mix(in srgb, var(--accent-secondary) 80%, black);
+  border-radius: 1px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 0 rgba(0,0,0,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.mini-cell--wall::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.18) 3px,
+    rgba(0,0,0,0.18) 4px
+  );
+}
 
 /* Combo badges */
 .how-to-play-combo-badges {
@@ -2554,10 +2798,16 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   transition: transform 80ms ease, box-shadow 80ms ease;
 }
 
-.start-button:hover,
 .start-button:focus-visible {
   transform: translate(-2px, -2px);
   box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent) 35%, black);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .start-button:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent) 35%, black);
+  }
 }
 
 .start-button:active {
@@ -2711,6 +2961,15 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
       0 0 30px rgba(255, 140, 0, 0.45);
     transform: scale(1.06);
   }
+}
+
+.game-over-score-label {
+  margin: 0;
+  font-size: 0.6rem;
+  font-family: "Press Start 2P", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .game-over-score {
@@ -2899,6 +3158,113 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   opacity: 0.75;
 }
 
+.mode-select {
+  display: flex;
+  gap: 1.1rem;
+  align-items: stretch;
+}
+
+.mode-select:focus {
+  outline: none;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  width: 7.5rem;
+  padding: 1.25rem 0.75rem;
+  border-radius: 4px;
+  background: var(--accent);
+  border: 3px solid #fff;
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--accent) 35%, black);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.mode-card--crunch {
+  background: var(--accent-secondary);
+  box-shadow: 5px 5px 0 color-mix(in srgb, var(--accent-secondary) 35%, black);
+}
+
+.mode-card:focus-visible {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent) 35%, black);
+}
+
+.mode-card--crunch:focus-visible {
+  box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent-secondary) 35%, black);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mode-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent) 35%, black);
+  }
+
+  .mode-card--crunch:hover {
+    box-shadow: 7px 7px 0 color-mix(in srgb, var(--accent-secondary) 35%, black);
+  }
+}
+
+.mode-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent) 35%, black);
+}
+
+.mode-card--crunch:active {
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 35%, black);
+}
+
+.mode-card-name {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.6rem;
+  color: #fff;
+  letter-spacing: 0.06em;
+  text-shadow: 2px 2px 0 color-mix(in srgb, currentColor 0%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.mode-card-blurb {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  color: color-mix(in srgb, #fff 78%, transparent);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.mode-toggle-button {
+  cursor: pointer;
+  background: none;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0.6rem 1.2rem;
+  transition: border-color 120ms ease, color 120ms ease;
+  pointer-events: auto;
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.mode-toggle-button:hover,
+.mode-toggle-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.mode-toggle-button:active {
+  opacity: 0.7;
+}
+
+
 .game-over-overlay.is-new-best .game-over-score {
   color: var(--gold);
   text-shadow:
@@ -3009,6 +3375,10 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
     width: min(100%, 26rem);
     display: grid;
     gap: 0.45rem;
+    max-height: calc(100dvh - max(4.05rem, calc(3.3rem + env(safe-area-inset-top))) - max(0.75rem, env(safe-area-inset-bottom)));
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.1rem;
   }
 
   .mobile-auth-close {
@@ -3844,6 +4214,29 @@ html[data-theme="fn-80z"] .piece-cell.is-solid,
     0 0 0.45rem color-mix(in srgb, var(--tone-fill) 36%, transparent);
 }
 
+html[data-theme="fn-80z"] .board-cell.is-crunch-wall.is-filled {
+  background: #12051d;
+  border-color: color-mix(in srgb, var(--accent-secondary) 75%, var(--accent));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 0.45rem color-mix(in srgb, var(--accent-secondary) 24%, transparent);
+}
+
+html[data-theme="fn-80z"] .board-cell.is-crunch-wall.is-filled::before {
+  background:
+    linear-gradient(180deg, rgba(0, 240, 255, 0.16), rgba(255, 45, 122, 0.08)),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(0, 240, 255, 0.28) 0 3px,
+      rgba(255, 45, 122, 0.18) 3px 6px,
+      rgba(8, 6, 28, 0.0) 6px 10px
+    );
+  box-shadow:
+    inset -3px -3px 0 rgba(0, 0, 0, 0.5),
+    inset 2px 2px 0 rgba(255, 255, 255, 0.08),
+    0 0 0.55rem color-mix(in srgb, var(--accent-secondary) 28%, transparent);
+}
+
 html[data-theme="fn-80z"] .piece-button {
   background: rgba(5, 4, 18, 0.82);
   border-color: rgba(0, 240, 255, 0.24);
@@ -3952,6 +4345,18 @@ html[data-theme="tinted"] .drag-ghost .piece-cell.is-solid {
   box-shadow:
     inset 0 2px 4px rgba(255, 255, 255, 0.55),
     inset 0 -2px 3px rgba(0, 0, 0, 0.18);
+}
+
+/* Tinted — crunch walls use the same slab colour as tinted++ (without outline or symbol) */
+html[data-theme="tinted"] .board-cell.is-crunch-wall.is-filled {
+  background: color-mix(in srgb, #005e94 80%, black);
+  border-color: color-mix(in srgb, #005e94 55%, black);
+}
+/* Tinted ::before bubble styling wins over the base wall slab due to source order — reset it */
+html[data-theme="tinted"] .board-cell.is-crunch-wall.is-filled::before {
+  inset: 0;
+  border-radius: 0.1rem;
+  box-shadow: none;
 }
 
 /* Tinted++ — current WCAG-focused accessible variant */
@@ -4079,7 +4484,8 @@ html[data-theme="tinted-plus-plus"] .piece-cell.is-solid {
 }
 
 /* Tinted++ — rumble the symbol in sync with the bubble */
-html[data-theme="tinted-plus-plus"] .board-cell.will-clear::after {
+html[data-theme="tinted-plus-plus"] .board-cell.will-clear::after,
+html[data-theme="tinted-plus-plus"] .board-cell.is-drag-will-clear::after {
   animation: willClearRumble 800ms linear infinite;
   animation-delay: calc(-1 * var(--rumble-offset, 0ms));
 }
@@ -4124,6 +4530,16 @@ html[data-theme="tinted-plus-plus"] .piece-grid .piece-cell.is-solid::after {
 html[data-theme="tinted-plus-plus"] .drag-ghost .piece-cell.is-solid::after {
   font-size: var(--tone-symbol-size, 1.5rem);
   transform: translateY(var(--tone-symbol-offset-y));
+}
+
+/* Crunch wall cells in tinted++ get ╳ — distinct from all tone symbols, light ink over dark slab */
+html[data-theme="tinted-plus-plus"] .board-cell.is-crunch-wall.is-filled::after {
+  content: "╳";
+  font-family: var(--tone-symbol-font);
+  font-size: 1.9rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+  transform: none;
 }
 
 .theme-preview-board[data-theme="tinted-plus-plus"] .theme-preview-bubble {
@@ -4299,6 +4715,47 @@ html[data-theme="dmg"] .board-cell {
 
 html[data-theme="dmg"] .board-cell.is-filled {
   border-radius: 0;
+}
+
+html[data-theme="dmg"] .board-cell.is-crunch-wall.is-filled {
+  background: #0f380f;
+  border-color: #0f380f;
+  box-shadow:
+    inset 0 1px 0 rgba(155, 188, 15, 0.12),
+    inset 0 -2px 0 rgba(6, 24, 8, 0.55);
+}
+
+html[data-theme="dmg"] .board-cell.is-crunch-wall.is-filled::before {
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 18%,
+      rgba(155, 188, 15, 0.20) 18% 24%,
+      transparent 24% 76%,
+      rgba(155, 188, 15, 0.20) 76% 82%,
+      transparent 82% 100%
+    ),
+    linear-gradient(
+      color-mix(in srgb, #306230 58%, #0f380f),
+      color-mix(in srgb, #306230 72%, #0f380f)
+    );
+  box-shadow:
+    inset 2px 2px 0 rgba(155, 188, 15, 0.12),
+    inset -2px -2px 0 rgba(6, 24, 8, 0.65);
+}
+
+html[data-theme="dmg"] .board-cell.is-crunch-wall.is-filled::after {
+  content: "=";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(155, 188, 15, 0.58);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.65rem;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
 }
 
 html[data-theme="dmg"] .board-cell.was-cleared::before {

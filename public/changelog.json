@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.5.2",
+    "date": "",
+    "changes": [
+      "Added an End Current Run option in the menu (scores still submit for signed-in players)"
+    ]
+  },
+  {
     "version": "1.5.1",
     "date": "",
     "changes": [
