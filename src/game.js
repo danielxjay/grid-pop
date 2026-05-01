@@ -444,6 +444,9 @@ export function applyPlacement(game, pieceId, row, col) {
   }
 
   const linesCleared = countLines(newlyClearedIndices, board);
+  const clearedWallCount = [...newlyClearedIndices].reduce((count, index) => (
+    isCrunchWall(game.board[index]) ? count + 1 : count
+  ), 0);
   const comboMultiplier = Math.max(1, combo + 1);
   const burstScore = linesCleared * linesCleared * 180;
   const moveScore = blocksPlaced * 15 + burstScore * comboMultiplier;
@@ -487,6 +490,8 @@ export function applyPlacement(game, pieceId, row, col) {
       gameOver: false,
       cleared,
       clearedTones,
+      clearedLineCount: linesCleared,
+      clearedWallCount,
     };
   }
 
@@ -512,6 +517,8 @@ export function applyPlacement(game, pieceId, row, col) {
     gameOver,
     cleared,
     clearedTones,
+    clearedLineCount: linesCleared,
+    clearedWallCount,
   };
 }
 

@@ -2473,10 +2473,10 @@ function getAllowedThemeKey(themeKey, unlockedThemes) {
 // Returns ms between frame events based on how long the run has been going.
 function getCrunchFrameInterval(elapsedMs) {
   const s = elapsedMs / 1000;
-  if (s < 90) return 10000;
-  if (s < 180) return 8000;
-  if (s < 300) return 6000;
-  return 5000;
+  if (s < 45) return 6000;
+  if (s < 90) return 5000;
+  if (s < 150) return 4000;
+  return 3000;
 }
 
 function getCrunchWaveAdvance(elapsedMs, board) {
@@ -2504,6 +2504,17 @@ function getCrunchWaveAdvance(elapsedMs, board) {
 }
 
 const CRUNCH_CRITICAL_DURATION_MS = 5000;
+const CRUNCH_LINE_TIME_BONUS_MS = 1000;
+const CRUNCH_WALL_CELL_TIME_BONUS_MS = 250;
+
+function formatCrunchCountdown(ms) {
+  const safeMs = Math.max(0, ms);
+  if (safeMs < 10000) {
+    return (safeMs / 1000).toFixed(1);
+  }
+
+  return String(Math.ceil(safeMs / 1000));
+}
 
 function formatCrunchTime(ms) {
   const totalSecs = Math.floor(ms / 1000);
@@ -2525,6 +2536,18 @@ function countCrunchClearedPoxels(previousBoard, clearedIndices) {
   return clearedIndices.reduce((count, index) => (
     isCrunchWall(previousBoard?.[index]) ? count : count + 1
   ), 0);
+}
+
+function getCrunchTimeBonusMs(linesCleared, wallCellsCleared) {
+  if (!Number.isFinite(linesCleared) || linesCleared <= 0) {
+    return 0;
+  }
+
+  return (linesCleared * CRUNCH_LINE_TIME_BONUS_MS) + (Math.max(0, wallCellsCleared) * CRUNCH_WALL_CELL_TIME_BONUS_MS);
+}
+
+function formatCrunchTimeBonus(ms) {
+  return `+${(Math.max(0, ms) / 1000).toFixed(2).replace(/0$/, "").replace(/\.0$/, "")}s`;
 }
 
 function resolveFeatureFlags(globalFlags, overrideFlags) {
@@ -2570,7 +2593,25 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   const crunchTimeDisplayRef = useRef(null);
   const crunchCountdownDisplayRef = useRef(null);
   const crunchPendingClearTimerRef = useRef(null);
+  const crunchTimeBonusTimerRef = useRef(null);
+  const crunchTimerPulseTimerRef = useRef(null);
+  const [crunchTimeBonusBoard, setCrunchTimeBonusBoard] = useState(null);
   crunchCriticalRef.current = crunchCritical;
+
+  const syncCrunchCountdownDisplay = useEffectEvent((now = Date.now()) => {
+    if (!crunchCountdownDisplayRef.current) {
+      return;
+    }
+
+    if (crunchCriticalRef.current && crunchCriticalEndsAtRef.current !== null) {
+      crunchCountdownDisplayRef.current.textContent = formatCrunchCountdown(crunchCriticalEndsAtRef.current - now);
+      return;
+    }
+
+    if (crunchNextFrameAtRef.current !== null) {
+      crunchCountdownDisplayRef.current.textContent = formatCrunchCountdown(crunchNextFrameAtRef.current - now);
+    }
+  });
 
   const enterCrunchCritical = useEffectEvent((board) => {
     const touching = getCrunchTouchingWallCells(board);
@@ -2580,7 +2621,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     setCrunchCriticalCells(new Set(touching));
     if (!crunchCriticalEndsAtRef.current) {
       crunchCriticalEndsAtRef.current = Date.now() + CRUNCH_CRITICAL_DURATION_MS;
-      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(Math.ceil(CRUNCH_CRITICAL_DURATION_MS / 1000));
+      syncCrunchCountdownDisplay();
       crunchLastCountdownCueRef.current = null;
     }
     if (!crunchWarnRef.current) {
@@ -2601,9 +2642,8 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       crunchLastCountdownCueRef.current = null;
       const nextFrameAt = Date.now() + getCrunchFrameInterval(Date.now() - crunchRunStartRef.current);
       crunchNextFrameAtRef.current = nextFrameAt;
-      const nextCountdown = String(Math.ceil((nextFrameAt - Date.now()) / 1000));
-      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = nextCountdown;
-      const newWarn = Number(nextCountdown) <= 3;
+      syncCrunchCountdownDisplay();
+      const newWarn = Math.ceil((nextFrameAt - Date.now()) / 1000) <= 3;
       if (newWarn !== crunchWarnRef.current) {
         crunchWarnRef.current = newWarn;
         setCrunchWarn(newWarn);
@@ -2614,7 +2654,47 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     setCrunchCriticalCells(new Set(touching));
   });
 
-  // Crunch frame timer — fires every second to update display and trigger frame fills.
+  const awardCrunchTimeBonus = useEffectEvent((linesCleared, wallCellsCleared, clearedIndices = []) => {
+    const bonusMs = getCrunchTimeBonusMs(linesCleared, wallCellsCleared);
+    if (bonusMs <= 0) {
+      return;
+    }
+
+    if (crunchCriticalEndsAtRef.current !== null) {
+      crunchCriticalEndsAtRef.current += bonusMs;
+    } else if (crunchNextFrameAtRef.current !== null) {
+      crunchNextFrameAtRef.current += bonusMs;
+    }
+
+    syncCrunchCountdownDisplay();
+    crunchCountdownDisplayRef.current?.classList.remove("is-crunch-time-bonus");
+    void crunchCountdownDisplayRef.current?.offsetWidth;
+    crunchCountdownDisplayRef.current?.classList.add("is-crunch-time-bonus");
+    window.clearTimeout(crunchTimerPulseTimerRef.current);
+    crunchTimerPulseTimerRef.current = window.setTimeout(() => {
+      crunchCountdownDisplayRef.current?.classList.remove("is-crunch-time-bonus");
+    }, 420);
+    if (clearedIndices.length > 0) {
+      const center = clearedIndices.reduce((acc, index) => {
+        acc.row += Math.floor(index / GRID_SIZE) + 0.5;
+        acc.col += (index % GRID_SIZE) + 0.5;
+        return acc;
+      }, { row: 0, col: 0 });
+      const avgRow = center.row / clearedIndices.length;
+      const avgCol = center.col / clearedIndices.length;
+      setCrunchTimeBonusBoard({
+        text: formatCrunchTimeBonus(bonusMs),
+        left: `${(avgCol / GRID_SIZE) * 100}%`,
+        top: `${(avgRow / GRID_SIZE) * 100}%`,
+      });
+    }
+    window.clearTimeout(crunchTimeBonusTimerRef.current);
+    crunchTimeBonusTimerRef.current = window.setTimeout(() => {
+      setCrunchTimeBonusBoard(null);
+    }, 700);
+  });
+
+  // Crunch frame timer — fires frequently so the pressure clock can show tenths smoothly.
   useEffect(() => {
     if (!started || gameMode !== 'crunch' || latestGameRef.current.gameOver) return;
 
@@ -2626,8 +2706,9 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       if (crunchTimeDisplayRef.current) crunchTimeDisplayRef.current.textContent = formatCrunchTime(elapsed);
 
       if (crunchCriticalRef.current) {
-        const criticalRemaining = Math.max(0, Math.ceil((crunchCriticalEndsAtRef.current - now) / 1000));
-        if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(criticalRemaining);
+        const criticalRemainingMs = crunchCriticalEndsAtRef.current - now;
+        const criticalRemaining = Math.max(0, Math.ceil(criticalRemainingMs / 1000));
+        syncCrunchCountdownDisplay(now);
 
         if (criticalRemaining >= 1 && criticalRemaining <= 5 && crunchLastCountdownCueRef.current !== criticalRemaining) {
           playCrunchCriticalCountdownSound(criticalRemaining);
@@ -2648,8 +2729,9 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
         return;
       }
 
-      const remaining = Math.max(0, Math.ceil((crunchNextFrameAtRef.current - now) / 1000));
-      if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = String(remaining);
+      const remainingMs = crunchNextFrameAtRef.current - now;
+      const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+      syncCrunchCountdownDisplay(now);
 
       const newWarn = remaining <= 3;
       if (newWarn !== crunchWarnRef.current) {
@@ -2691,20 +2773,20 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
         const newInterval = getCrunchFrameInterval(elapsed);
         crunchNextFrameAtRef.current = now + newInterval;
         setCrunchWallDepth(depth + 1);
-        const nextCountdown = String(Math.ceil(newInterval / 1000));
-        if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = nextCountdown;
-        const postWaveWarn = Number(nextCountdown) <= 3;
+        syncCrunchCountdownDisplay(now);
+        const postWaveWarn = Math.ceil(newInterval / 1000) <= 3;
         if (postWaveWarn !== crunchWarnRef.current) {
           crunchWarnRef.current = postWaveWarn;
           setCrunchWarn(postWaveWarn);
         }
       }
-    }, 1000);
+    }, 100);
 
     return () => {
       window.clearInterval(crunchTickRef.current);
       crunchTickRef.current = null;
       crunchLastCountdownCueRef.current = null;
+      window.clearTimeout(crunchTimerPulseTimerRef.current);
     };
   }, [started, gameMode, gameOver]);
 
@@ -2729,14 +2811,23 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchNextFrameAtRef.current = Date.now() + getCrunchFrameInterval(0);
     crunchCriticalEndsAtRef.current = null;
     crunchLastCountdownCueRef.current = null;
+    setCrunchTimeBonusBoard(null);
+    window.clearTimeout(crunchTimeBonusTimerRef.current);
+    window.clearTimeout(crunchTimerPulseTimerRef.current);
+    crunchCountdownDisplayRef.current?.classList.remove("is-crunch-time-bonus");
     if (crunchTimeDisplayRef.current) crunchTimeDisplayRef.current.textContent = '0:00';
-    if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = '10';
+    syncCrunchCountdownDisplay();
     return gameWithWall;
   }
 
-  function onClearedInCrunch(previousBoard, clearedIndices) {
-    const count = countCrunchClearedPoxels(previousBoard, clearedIndices);
+  function onClearedInCrunch(previousBoard, nextGame) {
+    if (gameMode !== 'crunch') {
+      return;
+    }
+
+    const count = countCrunchClearedPoxels(previousBoard, nextGame.cleared);
     if (count > 0) setCrunchPoxelsPopped((prev) => prev + count);
+    awardCrunchTimeBonus(nextGame.clearedLineCount ?? 0, nextGame.clearedWallCount ?? 0, nextGame.cleared);
   }
 
   function shiftTimestampsForPause(duration) {
@@ -2754,6 +2845,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchWallDepth,
     crunchTimeDisplayRef,
     crunchCountdownDisplayRef,
+    crunchTimeBonusBoard,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
     onClearedInCrunch,
@@ -2804,6 +2896,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [started, setStarted] = useState(false);
   const isPausedRef = useRef(false);
   const pauseStartedAtRef = useRef(null);
+  const [isDocumentHidden, setIsDocumentHidden] = useState(() => (
+    typeof document !== "undefined" ? document.visibilityState !== "visible" : false
+  ));
   const {
     crunchWarn,
     crunchCritical,
@@ -2813,6 +2908,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     crunchWallDepth,
     crunchTimeDisplayRef,
     crunchCountdownDisplayRef,
+    crunchTimeBonusBoard,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
     onClearedInCrunch,
@@ -2880,22 +2976,35 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     showRunModeSelect || runActionDialog ||
     leaderboardOpen || showMobileAuthPanel || showDesktopAuthPanel
   );
+  const shouldPauseCrunch = isModalOpen || isDocumentHidden;
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      setIsDocumentHidden(document.visibilityState !== "visible");
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   useEffect(() => {
     if (!started || game.gameOver || gameMode !== 'crunch') {
       isPausedRef.current = false;
       pauseStartedAtRef.current = null;
       return;
     }
-    if (isModalOpen) {
+    if (shouldPauseCrunch) {
+      if (!isPausedRef.current) {
+        pauseStartedAtRef.current = Date.now();
+      }
       isPausedRef.current = true;
-      pauseStartedAtRef.current = Date.now();
     } else if (pauseStartedAtRef.current !== null) {
       const duration = Date.now() - pauseStartedAtRef.current;
       pauseStartedAtRef.current = null;
       isPausedRef.current = false;
       shiftTimestampsForPause(duration);
     }
-  }, [isModalOpen, started, game.gameOver, gameMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shouldPauseCrunch, started, game.gameOver, gameMode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSeenVersion, setLastSeenVersion] = useState(() => loadLastSeenVersion());
   const [seenThemeUnlocks, setSeenThemeUnlocks] = useState(() => loadSeenThemeUnlocks());
   const [activeTheme, setActiveTheme] = useState(() => { try { return localStorage.getItem("gridpop-theme") ?? "classic"; } catch { return "classic"; } });
@@ -5020,7 +5129,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       }
 
       refreshCrunchCriticalAfterPlacement(nextGame);
-      onClearedInCrunch(game.board, nextGame.cleared);
+      onClearedInCrunch(game.board, nextGame);
       setGame(nextGame);
       return;
     }
@@ -5772,7 +5881,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
         setLockedPreview(null);
         refreshCrunchCriticalAfterPlacement(nextGame);
-        onClearedInCrunch(game.board, nextGame.cleared);
+        onClearedInCrunch(game.board, nextGame);
         setGame(nextGame);
       } else {
         setLockedPreview(null);
@@ -5802,7 +5911,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     refreshCrunchCriticalAfterPlacement(nextGame);
-    onClearedInCrunch(game.board, nextGame.cleared);
+    onClearedInCrunch(game.board, nextGame);
     setGame(nextGame);
     hoverBoardMetricsRef.current = null;
   }
@@ -6628,6 +6737,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               </div>
             </div>
             <div className="board-container">
+              {gameMode === 'crunch' && crunchTimeBonusBoard ? (
+                <div
+                  className="crunch-board-time-bonus"
+                  style={{ left: crunchTimeBonusBoard.left, top: crunchTimeBonusBoard.top }}
+                  aria-hidden="true"
+                >
+                  {crunchTimeBonusBoard.text}
+                </div>
+              ) : null}
               <Board
                 boardRef={boardRef}
                 lockedPreviewPath={lockedPreviewPath}
