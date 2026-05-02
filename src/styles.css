@@ -1637,6 +1637,23 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   z-index: 6;
 }
 
+.crunch-start-countdown {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(2.6rem, 16vw, 5.1rem);
+  line-height: 1;
+  color: #ffffff;
+  text-shadow:
+    0 0 20px color-mix(in srgb, var(--accent-secondary) 44%, transparent),
+    5px 5px 0 rgba(13, 27, 54, 0.58);
+  pointer-events: none;
+  animation: crunchStartCountdownPop 620ms ease forwards;
+  z-index: 7;
+}
+
 html[data-theme="tinted"] .crunch-board-time-bonus,
 html[data-theme="tinted-plus-plus"] .crunch-board-time-bonus {
   padding: 0.28rem 0.46rem;
@@ -1723,6 +1740,28 @@ html[data-theme="tinted-plus-plus"] .crunch-board-time-bonus {
   100% {
     opacity: 0;
     transform: translate(-50%, calc(-50% - 1.7rem)) scale(0.96);
+  }
+}
+
+@keyframes crunchStartCountdownPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 0.4rem)) scale(0.82);
+  }
+
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 0.75rem)) scale(0.96);
   }
 }
 
@@ -1898,15 +1937,15 @@ html[data-theme="tinted-plus-plus"] .crunch-board-time-bonus {
 /* Crunch warning — board border pulses urgently when ≤ 3 s remain (nice visual for standard play;
    color-only signal so supplemented by timer blink for WCAG 2.2 AA) */
 @keyframes crunchWarnBorderPulse {
-  0%, 100% { border-color: var(--accent); box-shadow: 5px 5px 0 var(--accent), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent); }
-  50%       { border-color: var(--accent); box-shadow: 5px 5px 0 var(--accent), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent) 70%, white); }
+  0%, 100% { border-color: var(--accent); box-shadow: 5px 5px 0 var(--accent), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent) 70%, white); }
+  38%      { border-color: var(--accent); box-shadow: 5px 5px 0 var(--accent), var(--shadow), inset 0 2px 8px color-mix(in srgb, var(--board-cell-depth) 12%, transparent); }
 }
 .board.is-crunch-warning {
-  animation: crunchWarnBorderPulse 0.55s ease-in-out infinite;
+  animation: crunchWarnBorderPulse var(--crunch-warning-pulse-duration, 0.55s) ease-in-out infinite;
 }
 
 .board.has-crunch-perimeter.is-crunch-warning::after {
-  animation: crunchPerimeterPulse 0.55s ease-in-out infinite;
+  animation: crunchPerimeterPulse var(--crunch-warning-pulse-duration, 0.55s) ease-in-out infinite;
 }
 
 .board.is-crunch-phase-shift {
@@ -1922,22 +1961,35 @@ html[data-theme="tinted-plus-plus"] .crunch-board-time-bonus {
 
 /* Timer blink — motion-based signal, satisfies WCAG 2.2 AA 1.4.1 (not color-only) */
 @keyframes crunchTimerBlink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0.15; }
+  0%, 16% { opacity: 1; }
+  48%, 84% { opacity: 0.15; }
+  100% { opacity: 1; }
 }
 .score-value.is-crunch-warning-value {
-  animation: crunchTimerBlink 0.55s step-start infinite;
+  animation: crunchTimerBlink var(--crunch-warning-pulse-duration, 0.55s) step-start infinite;
+}
+
+.board.warning-step-3,
+.score-value.warning-step-3,
+.board.warning-step-2,
+.score-value.warning-step-2 {
+  --crunch-warning-pulse-duration: 1s;
+}
+
+.board.warning-step-1,
+.score-value.warning-step-1 {
+  --crunch-warning-pulse-duration: 0.5s;
 }
 
 @keyframes crunchPerimeterPulse {
   0%, 100% {
     opacity: 1;
-    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 42%, transparent));
+    filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 70%, transparent));
   }
 
-  50% {
+  38% {
     opacity: 1;
-    filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 70%, transparent));
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 42%, transparent));
   }
 }
 

@@ -524,7 +524,7 @@ function TrophyIcon() {
   );
 }
 
-function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFrameInRef, poxelsPopped, warn, critical }) {
+function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFrameInRef, poxelsPopped, warn, critical, warningStep = 0 }) {
   if (mode === 'crunch') {
     return (
       <div className="score-panel">
@@ -534,7 +534,7 @@ function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFr
         </div>
         <div className="score-stat">
           <p className="section-label">{critical ? 'Critical' : 'Crunch Timer'}</p>
-          <strong className={`score-value${warn ? ' is-crunch-warning-value' : ''}`} ref={nextFrameInRef}>--</strong>
+          <strong className={`score-value${warn ? ` is-crunch-warning-value warning-step-${warningStep || 1}` : ''}`} ref={nextFrameInRef}>--</strong>
         </div>
         <div className="score-stat">
           <p className="section-label">Popped</p>
@@ -2009,6 +2009,7 @@ const Board = React.memo(function Board({
   showCrunchPerimeter,
   crunchWarn,
   crunchCritical,
+  crunchWarningStep,
   crunchPhaseShift,
   crunchCriticalSet,
   crunchPendingClearSet,
@@ -2032,7 +2033,7 @@ const Board = React.memo(function Board({
   return (
     <div
       ref={boardRef}
-      className={`board${showCrunchPerimeter ? " has-crunch-perimeter" : ""}${crunchWarn ? " is-crunch-warning" : ""}${crunchCritical ? " is-crunch-critical" : ""}${crunchPhaseShift ? " is-crunch-phase-shift" : ""}`}
+      className={`board${showCrunchPerimeter ? " has-crunch-perimeter" : ""}${crunchWarn ? ` is-crunch-warning warning-step-${crunchWarningStep || 1}` : ""}${crunchCritical ? " is-crunch-critical" : ""}${crunchPhaseShift ? " is-crunch-phase-shift" : ""}`}
       aria-label="Game board"
       onPointerMove={onBoardMove}
       onPointerLeave={onBoardLeave}
@@ -2104,6 +2105,7 @@ const Board = React.memo(function Board({
   prev.showCrunchPerimeter === next.showCrunchPerimeter &&
   prev.crunchWarn === next.crunchWarn &&
   prev.crunchCritical === next.crunchCritical &&
+  prev.crunchWarningStep === next.crunchWarningStep &&
   prev.crunchPhaseShift === next.crunchPhaseShift &&
   prev.crunchCriticalSet === next.crunchCriticalSet &&
   prev.crunchPendingClearSet === next.crunchPendingClearSet
@@ -2533,6 +2535,9 @@ const CRUNCH_CRITICAL_DURATION_MS = 5000;
 const CRUNCH_LINE_TIME_BONUS_MS = 1000;
 const CRUNCH_WALL_CELL_TIME_BONUS_MS = 100;
 const BOARD_BONUS_DISPLAY_DURATION_MS = 1450;
+const CRUNCH_START_COUNTDOWN_LEAD_IN_MS = 260;
+const CRUNCH_START_COUNTDOWN_STEP_MS = 650;
+const CRUNCH_START_COUNTDOWN_POST_ONE_BEAT_MS = 240;
 
 function formatCrunchCountdown(ms) {
   const safeMs = Math.max(0, ms);
@@ -2644,15 +2649,22 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   const crunchLastCountdownCueRef = useRef(null);
   const crunchCriticalRef = useRef(false);
   const crunchWarnRef = useRef(false);
+  const crunchWarningStepRef = useRef(0);
+  const crunchStartCountdownRef = useRef("");
+  const crunchStartSequenceActiveRef = useRef(false);
   const crunchTimeDisplayRef = useRef(null);
   const crunchCountdownDisplayRef = useRef(null);
   const crunchPendingClearTimerRef = useRef(null);
   const crunchTimeBonusTimerRef = useRef(null);
   const crunchTimerPulseTimerRef = useRef(null);
   const crunchPhaseCueTimerRef = useRef(null);
+  const crunchStartCountdownTimersRef = useRef([]);
   const [crunchTimeBonusBoard, setCrunchTimeBonusBoard] = useState(null);
   const [crunchPhaseCue, setCrunchPhaseCue] = useState("");
+  const [crunchStartCountdown, setCrunchStartCountdown] = useState("");
+  const [crunchWarningStep, setCrunchWarningStep] = useState(0);
   crunchCriticalRef.current = crunchCritical;
+  crunchStartCountdownRef.current = crunchStartCountdown;
 
   const syncCrunchPerimeterDisplay = useEffectEvent((now = Date.now()) => {
     if (!boardRef?.current) {
@@ -2705,6 +2717,10 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       crunchWarnRef.current = true;
       setCrunchWarn(true);
     }
+    if (crunchWarningStepRef.current !== 1) {
+      crunchWarningStepRef.current = 1;
+      setCrunchWarningStep(1);
+    }
     return true;
   });
 
@@ -2725,6 +2741,10 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       if (newWarn !== crunchWarnRef.current) {
         crunchWarnRef.current = newWarn;
         setCrunchWarn(newWarn);
+      }
+      if (crunchWarningStepRef.current !== 0) {
+        crunchWarningStepRef.current = 0;
+        setCrunchWarningStep(0);
       }
       return;
     }
@@ -2781,6 +2801,13 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
 
     crunchTickRef.current = window.setInterval(() => {
       if (isPausedRef.current) return;
+      if (
+        crunchStartSequenceActiveRef.current ||
+        crunchRunStartRef.current === null ||
+        crunchNextFrameAtRef.current === null
+      ) {
+        return;
+      }
       const now = Date.now();
       const elapsed = now - crunchRunStartRef.current;
       const stage = getCrunchEscalationStage(elapsed);
@@ -2811,6 +2838,8 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
             setCrunchCriticalCells(null);
             crunchCriticalEndsAtRef.current = null;
             crunchLastCountdownCueRef.current = null;
+            crunchWarningStepRef.current = 0;
+            setCrunchWarningStep(0);
           }
           setGame((current) => ({ ...current, gameOver: isGameOver }));
         }
@@ -2825,6 +2854,11 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       if (newWarn !== crunchWarnRef.current) {
         crunchWarnRef.current = newWarn;
         setCrunchWarn(newWarn);
+      }
+      const nextWarningStep = newWarn ? Math.max(1, Math.min(3, remaining)) : 0;
+      if (nextWarningStep !== crunchWarningStepRef.current) {
+        crunchWarningStepRef.current = nextWarningStep;
+        setCrunchWarningStep(nextWarningStep);
       }
 
       if (remaining >= 1 && remaining <= 3 && crunchLastCountdownCueRef.current !== remaining) {
@@ -2892,7 +2926,12 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     }
 
     const tick = () => {
-      if (!isPausedRef.current) {
+      if (
+        !isPausedRef.current &&
+        !crunchStartSequenceActiveRef.current &&
+        crunchRunStartRef.current !== null &&
+        crunchNextFrameAtRef.current !== null
+      ) {
         syncCrunchPerimeterDisplay(Date.now());
       }
       crunchPerimeterRafRef.current = window.requestAnimationFrame(tick);
@@ -2906,7 +2945,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
         crunchPerimeterRafRef.current = null;
       }
     };
-  }, [started, gameMode, gameOver, boardRef, isPausedRef, syncCrunchPerimeterDisplay]);
+  }, [started, gameMode, gameOver, boardRef, isPausedRef, syncCrunchPerimeterDisplay, crunchStartCountdown]);
 
   useEffect(() => {
     if (started && gameMode === 'crunch' && !gameOver) return;
@@ -2922,6 +2961,8 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
 
     setCrunchWarn(false);
     crunchWarnRef.current = false;
+    crunchWarningStepRef.current = 0;
+    setCrunchWarningStep(0);
     setCrunchCritical(false);
     setCrunchCriticalCells(null);
     crunchCriticalEndsAtRef.current = null;
@@ -2940,6 +2981,8 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
 
     setCrunchWarn(false);
     crunchWarnRef.current = false;
+    crunchWarningStepRef.current = 0;
+    setCrunchWarningStep(0);
     setCrunchCritical(false);
     setCrunchCriticalCells(null);
     crunchCriticalEndsAtRef.current = null;
@@ -2947,6 +2990,10 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     setCrunchPendingClears(null);
     setCrunchTimeBonusBoard(null);
     setCrunchPhaseCue("");
+    setCrunchStartCountdown("");
+    crunchStartSequenceActiveRef.current = false;
+    crunchStartCountdownTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    crunchStartCountdownTimersRef.current = [];
     window.clearTimeout(crunchPendingClearTimerRef.current);
     window.clearTimeout(crunchPhaseCueTimerRef.current);
     window.clearTimeout(crunchTimeBonusTimerRef.current);
@@ -2961,29 +3008,61 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
 
   function startCrunch(displayedBestScore) {
     const baseState = createGameState(displayedBestScore, { crunch: true });
-    const { game: gameWithWall } = applyCrunchWave(baseState, TONES[0]);
-    crunchWallDepthRef.current = 1;
-    setCrunchWallDepth(1);
+    crunchWallDepthRef.current = 0;
+    setCrunchWallDepth(0);
     setCrunchPoxelsPopped(0);
     setCrunchCritical(false);
     setCrunchCriticalCells(null);
     crunchWarnRef.current = false;
     setCrunchWarn(false);
-    crunchRunStartRef.current = Date.now();
+    crunchWarningStepRef.current = 0;
+    setCrunchWarningStep(0);
+    crunchStartSequenceActiveRef.current = true;
+    crunchRunStartRef.current = null;
     crunchCycleDurationRef.current = getCrunchFrameInterval(0);
-    crunchNextFrameAtRef.current = Date.now() + getCrunchFrameInterval(0);
+    crunchNextFrameAtRef.current = null;
     crunchEscalationStageRef.current = getCrunchEscalationStage(0);
     crunchCriticalEndsAtRef.current = null;
     crunchLastCountdownCueRef.current = null;
     setCrunchTimeBonusBoard(null);
     setCrunchPhaseCue("");
+    setCrunchStartCountdown("");
+    crunchStartCountdownTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    crunchStartCountdownTimersRef.current = [
+      window.setTimeout(() => {
+        setCrunchStartCountdown("3");
+        playCrunchCountdownSound(3);
+      }, CRUNCH_START_COUNTDOWN_LEAD_IN_MS),
+      window.setTimeout(() => {
+        setCrunchStartCountdown("2");
+        playCrunchCountdownSound(2);
+      }, CRUNCH_START_COUNTDOWN_LEAD_IN_MS + CRUNCH_START_COUNTDOWN_STEP_MS),
+      window.setTimeout(() => {
+        setCrunchStartCountdown("1");
+        playCrunchCountdownSound(1);
+      }, CRUNCH_START_COUNTDOWN_LEAD_IN_MS + CRUNCH_START_COUNTDOWN_STEP_MS * 2),
+      window.setTimeout(() => {
+        setCrunchStartCountdown("");
+        playCrunchWallSound();
+        const openingWave = applyCrunchWave(baseState, TONES[0], { advanceLeft: true, advanceRight: true });
+        crunchWallDepthRef.current = 1;
+        setCrunchWallDepth(1);
+        crunchStartSequenceActiveRef.current = false;
+        crunchRunStartRef.current = Date.now();
+        crunchNextFrameAtRef.current = Date.now() + getCrunchFrameInterval(0);
+        setGame(openingWave.game);
+        crunchStartCountdownTimersRef.current = [];
+        syncCrunchCountdownDisplay();
+      }, CRUNCH_START_COUNTDOWN_LEAD_IN_MS + CRUNCH_START_COUNTDOWN_STEP_MS * 3 + CRUNCH_START_COUNTDOWN_POST_ONE_BEAT_MS),
+    ];
     window.clearTimeout(crunchPhaseCueTimerRef.current);
     window.clearTimeout(crunchTimeBonusTimerRef.current);
     window.clearTimeout(crunchTimerPulseTimerRef.current);
     crunchCountdownDisplayRef.current?.classList.remove("is-crunch-time-bonus");
     if (crunchTimeDisplayRef.current) crunchTimeDisplayRef.current.textContent = '0:00';
-    syncCrunchCountdownDisplay();
-    return gameWithWall;
+    if (crunchCountdownDisplayRef.current) crunchCountdownDisplayRef.current.textContent = "--";
+    boardRef?.current?.style.setProperty("--crunch-perimeter-progress", "0");
+    return baseState;
   }
 
   function onClearedInCrunch(previousBoard, nextGame) {
@@ -3013,6 +3092,8 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchCountdownDisplayRef,
     crunchTimeBonusBoard,
     crunchPhaseCue,
+    crunchStartCountdown,
+    crunchWarningStep,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
     onClearedInCrunch,
@@ -3080,6 +3161,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     crunchCountdownDisplayRef,
     crunchTimeBonusBoard,
     crunchPhaseCue,
+    crunchStartCountdown,
+    crunchWarningStep,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
     onClearedInCrunch,
@@ -3536,7 +3619,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       resumedElsewhere ||
       runReconnectActive ||
       runReconnectActionRequired ||
-      resumePending
+      resumePending ||
+      (gameMode === "crunch" && (Boolean(crunchStartCountdown) || crunchRunStartRef.current === null))
     )
   );
   const runInteractionLocked = gameplayBlocked;
@@ -6901,6 +6985,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 poxelsPopped={crunchPoxelsPopped}
                 warn={crunchWarn}
                 critical={crunchCritical}
+                warningStep={crunchWarningStep}
               />
               {gameMode !== 'crunch' && <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />}
             </div>
@@ -6928,6 +7013,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               </div>
             </div>
             <div className="board-container">
+              {gameMode === 'crunch' && crunchStartCountdown ? (
+                <div key={crunchStartCountdown} className="crunch-start-countdown" aria-hidden="true">
+                  {crunchStartCountdown}
+                </div>
+              ) : null}
               {gameMode === 'crunch' && crunchPhaseCue ? (
                 <div className="crunch-phase-cue" aria-hidden="true">
                   {crunchPhaseCue}
@@ -6966,6 +7056,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 showCrunchPerimeter={gameMode === 'crunch'}
                 crunchWarn={gameMode === 'crunch' ? crunchWarn : false}
                 crunchCritical={gameMode === 'crunch' ? crunchCritical : false}
+                crunchWarningStep={gameMode === 'crunch' ? crunchWarningStep : 0}
                 crunchPhaseShift={gameMode === 'crunch' && Boolean(crunchPhaseCue)}
                 crunchCriticalSet={gameMode === 'crunch' ? crunchCriticalCells : null}
                 crunchPendingClearSet={gameMode === 'crunch' ? crunchPendingClears : null}
