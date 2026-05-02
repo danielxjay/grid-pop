@@ -577,3 +577,79 @@ export function playCrunchCriticalCountdownSound(count) {
     });
   }
 }
+
+// Crunch phase change — tactile warning thuds with a restrained rising glassy tail.
+export function playCrunchPhaseChangeSound(stage = "") {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+
+  const master = getMasterGain(ctx);
+  const isDouble = stage === "double-4";
+  const isMax = stage === "double-3";
+  const hitCount = isDouble ? 2 : 1;
+  const hitSpacing = 0.09;
+  const baseFreq = isMax ? 116 : isDouble ? 126 : 138;
+  const hitGain = isMax ? 0.36 : isDouble ? 0.31 : 0.27;
+
+  for (let hit = 0; hit < hitCount; hit += 1) {
+    const t = startAt + hit * hitSpacing;
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(baseFreq + hit * 6, t);
+    osc.frequency.exponentialRampToValueAtTime((baseFreq + hit * 6) * 0.56, t + 0.12);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(hitGain, t + 0.006);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+    osc.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t + 0.16);
+
+    playNoise(ctx, makeWhiteNoise(ctx, 0.05), {
+      lpf: 820,
+      bpf: 300 + hit * 70,
+      bpfQ: 1.5,
+      attack: 0.001,
+      decay: 0.045,
+      gain: isMax ? 0.18 : 0.14,
+      t,
+    });
+  }
+
+  const tailStart = startAt + (hitCount - 1) * hitSpacing + 0.03;
+  const tail = ctx.createOscillator();
+  tail.type = "sine";
+  tail.frequency.setValueAtTime(isMax ? 430 : isDouble ? 390 : 350, tailStart);
+  tail.frequency.exponentialRampToValueAtTime(isMax ? 660 : isDouble ? 590 : 520, tailStart + 0.18);
+
+  const tailFilter = ctx.createBiquadFilter();
+  tailFilter.type = "bandpass";
+  tailFilter.frequency.setValueAtTime(isMax ? 1150 : 1020, tailStart);
+  tailFilter.Q.value = 2.8;
+
+  const tailEnv = ctx.createGain();
+  tailEnv.gain.setValueAtTime(0.0001, tailStart);
+  tailEnv.gain.linearRampToValueAtTime(isMax ? 0.09 : 0.072, tailStart + 0.018);
+  tailEnv.gain.exponentialRampToValueAtTime(0.0001, tailStart + 0.25);
+
+  tail.connect(tailFilter);
+  tailFilter.connect(tailEnv);
+  tailEnv.connect(master);
+  tail.start(tailStart);
+  tail.stop(tailStart + 0.28);
+
+  playNoise(ctx, makeGranular(ctx, 0.06, 0.32), {
+    hpf: 1800,
+    bpf: isMax ? 3000 : 2600,
+    bpfQ: 2.2,
+    lpf: 4200,
+    attack: 0.001,
+    decay: 0.05,
+    gain: isMax ? 0.045 : 0.035,
+    t: tailStart + 0.008,
+  });
+}

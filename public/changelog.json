@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.5.3",
+    "date": "",
+    "changes": [
+      "Line clear scores now pop up on the board"
+    ]
+  },
+  {
     "version": "1.5.2",
     "date": "",
     "changes": [

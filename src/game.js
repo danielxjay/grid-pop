@@ -449,6 +449,7 @@ export function applyPlacement(game, pieceId, row, col) {
   ), 0);
   const comboMultiplier = Math.max(1, combo + 1);
   const burstScore = linesCleared * linesCleared * 180;
+  const clearBonusScore = burstScore * comboMultiplier;
   const moveScore = blocksPlaced * 15 + burstScore * comboMultiplier;
   const score = game.score + moveScore;
   const bestScore = Math.max(score, game.bestScore);
@@ -492,6 +493,7 @@ export function applyPlacement(game, pieceId, row, col) {
       clearedTones,
       clearedLineCount: linesCleared,
       clearedWallCount,
+      clearBonusScore,
     };
   }
 
@@ -519,6 +521,7 @@ export function applyPlacement(game, pieceId, row, col) {
     clearedTones,
     clearedLineCount: linesCleared,
     clearedWallCount,
+    clearBonusScore,
   };
 }
 
@@ -935,6 +938,40 @@ function findCrunchWaveAutoClears(board) {
     }
   }
 
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    let col = 0;
+
+    while (col < GRID_SIZE) {
+      const index = toIndex(row, col);
+      const cell = board[index];
+
+      if (cell === null || isCrunchWall(cell)) {
+        col += 1;
+        continue;
+      }
+
+      const startCol = col;
+      while (col < GRID_SIZE) {
+        const runCell = board[toIndex(row, col)];
+        if (runCell === null || isCrunchWall(runCell)) {
+          break;
+        }
+        col += 1;
+      }
+
+      const leftIndex = startCol - 1;
+      const rightIndex = col;
+      const leftCell = leftIndex >= 0 ? board[toIndex(row, leftIndex)] : null;
+      const rightCell = rightIndex < GRID_SIZE ? board[toIndex(row, rightIndex)] : null;
+
+      if (isCrunchWall(leftCell) && isCrunchWall(rightCell)) {
+        for (let trappedCol = startCol; trappedCol < col; trappedCol += 1) {
+          cleared.add(toIndex(row, trappedCol));
+        }
+      }
+    }
+  }
+
   return cleared;
 }
 
@@ -1176,9 +1213,10 @@ export function applyCrunchWave(game, tone, { advanceLeft = true, advanceRight =
     }
   }
 
-  // Collect any complete rows formed by walls + poxels after the wave.
+  // Collect any complete rows formed by walls + poxels after the wave,
+  // plus any horizontal poxel runs newly trapped between walls.
   // Walls are excluded — they only pop when the *user* deliberately completes a line.
-  // Poxels in that line still get the crunch → rumble → pop treatment.
+  // Poxels in those clears still get the crunch → rumble → pop treatment.
   const postWaveClears = findCrunchWaveAutoClears(board);
   const pendingClears = [...postWaveClears]
     .filter((idx) => !isCrunchWall(board[idx]))
@@ -1200,7 +1238,8 @@ export function applyCrunchWave(game, tone, { advanceLeft = true, advanceRight =
       clearedTones: clearedWaveTones,
     },
     crushedCount,
-    // Cells that completed a row/col this wave. Caller should show a brief rumble
+    // Cells that completed a row or trapped horizontal run this wave. Caller should show
+    // a brief rumble
     // animation on these cells before applying the actual clear.
     pendingClears,
   };
