@@ -2916,6 +2916,24 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   }, [started, gameMode, gameOver]);
 
   useEffect(() => {
+    if (!started || gameMode !== "crunch" || !gameOver) {
+      return;
+    }
+
+    setCrunchWarn(false);
+    crunchWarnRef.current = false;
+    setCrunchCritical(false);
+    setCrunchCriticalCells(null);
+    crunchCriticalEndsAtRef.current = null;
+    crunchLastCountdownCueRef.current = null;
+    setCrunchPhaseCue("");
+    window.clearTimeout(crunchPhaseCueTimerRef.current);
+    window.clearTimeout(crunchTimerPulseTimerRef.current);
+    crunchCountdownDisplayRef.current?.classList.remove("is-crunch-time-bonus");
+    boardRef?.current?.style.setProperty("--crunch-perimeter-progress", "0");
+  }, [started, gameMode, gameOver, boardRef]);
+
+  useEffect(() => {
     if (gameMode === 'crunch') {
       return;
     }
