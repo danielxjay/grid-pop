@@ -5,7 +5,9 @@ import {
   RUN_HISTORY_STORAGE_KEY,
   STORAGE_KEY,
   TONES,
+  loadCrunchRunHistory,
   loadRunHistory,
+  recordCrunchRunScore,
   recordRunScore,
   TRAY_SIZE,
   applyPlacement,
@@ -15,6 +17,7 @@ import {
   getCrunchTouchingWallCells,
   haveCrunchWallsJoined,
   isCrunchWall,
+  replayCrunchMoves,
   buildPreview,
   clearClearedCells,
   clearPreview,
@@ -1206,13 +1209,26 @@ function ScoreboardTrigger({ onClick }) {
   );
 }
 
+function formatCrunchRunMeta(run) {
+  const parts = [];
+  if (run?.survivalMs > 0) {
+    parts.push(formatCrunchTime(run.survivalMs));
+  }
+  if (Number.isFinite(run?.poxelsPopped) && run.poxelsPopped > 0) {
+    parts.push(`${run.poxelsPopped} popped`);
+  }
+  return parts.join(" • ");
+}
+
 function LeaderboardModal({
   activeTab,
   globalEnabled,
   globalError,
   globalLoading,
+  globalPlaceholderMessage,
   globalRuns,
   globalVisibleCount,
+  mode,
   personalError,
   personalLabel,
   personalLoading,
@@ -1236,6 +1252,15 @@ function LeaderboardModal({
   const globalTopRun = globalRuns[0] ?? null;
   const globalRemainingRuns = globalRuns.slice(1);
   const modalTitle = globalEnabled && activeTab === "global" ? "Leaderboard" : "Scores";
+  const isCrunch = mode === "crunch";
+  const personalBestEmptyText = isCrunch
+    ? "No Crunch runs on this device yet."
+    : (personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet.");
+  const personalRecentEmptyText = isCrunch
+    ? "Finish a Crunch run and it will show up here."
+    : (personalLabel === "My Runs"
+      ? "Finish a signed-in run and it will show up here."
+      : "Finish a run and it will show up here.");
 
   return (
     <div
@@ -1278,8 +1303,8 @@ function LeaderboardModal({
 
         {globalEnabled && activeTab === "global" ? (
           <div className="leaderboard-disclaimer">
-            <p>Only runs started whilst signed in count towards the global board.</p>
-            {!signedIn ? (
+            <p>{globalPlaceholderMessage || "Only runs started whilst signed in count towards the global board."}</p>
+            {!globalPlaceholderMessage && !signedIn ? (
               <button className="leaderboard-disclaimer-cta" type="button" onClick={onGuestSignIn}>
                 Don&apos;t miss out: create a profile
               </button>
@@ -1306,14 +1331,14 @@ function LeaderboardModal({
                         ).padStart(2, "0")}
                       </span>
                       <strong className="leaderboard-podium-score">{run.score}</strong>
-                      <span className="leaderboard-meta">{formatRunDate(run.createdAt)}</span>
+                      <span className="leaderboard-meta">
+                        {isCrunch ? formatCrunchRunMeta(run) || formatRunDate(run.createdAt) : formatRunDate(run.createdAt)}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="leaderboard-empty">
-                  {personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet."}
-                </p>
+                <p className="leaderboard-empty">{personalBestEmptyText}</p>
               )}
             </section>
 
@@ -1333,7 +1358,9 @@ function LeaderboardModal({
                           ).padStart(2, "0")}
                         </span>
                         <strong className="leaderboard-score">{run.score}</strong>
-                        <span className="leaderboard-meta leaderboard-date">{formatRunDate(run.createdAt)}</span>
+                        <span className="leaderboard-meta leaderboard-date">
+                          {isCrunch ? formatCrunchRunMeta(run) || formatRunDate(run.createdAt) : formatRunDate(run.createdAt)}
+                        </span>
                       </li>
                     ) : (
                       <li key={`personal-ghost-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
@@ -1346,11 +1373,7 @@ function LeaderboardModal({
                 </ol>
               ) : null}
               {!personalLoading && !personalError && personalRuns.length === 0 ? (
-                <p className="leaderboard-empty">
-                  {personalLabel === "My Runs"
-                    ? "Finish a signed-in run and it will show up here."
-                    : "Finish a run and it will show up here."}
-                </p>
+                <p className="leaderboard-empty">{personalRecentEmptyText}</p>
               ) : null}
             </section>
           </div>
@@ -1378,10 +1401,13 @@ function LeaderboardModal({
                   </span>
                   <strong className="leaderboard-best-score">{globalTopRun.score}</strong>
                   <span className="leaderboard-hero-name">{globalTopRun.displayName}</span>
+                  {isCrunch && formatCrunchRunMeta(globalTopRun) ? (
+                    <span className="leaderboard-meta leaderboard-date">{formatCrunchRunMeta(globalTopRun)}</span>
+                  ) : null}
                 </div>
               ) : null}
               {!globalLoading && !globalError && !globalTopRun ? (
-                <p className="leaderboard-empty">No global runs yet.</p>
+                <p className="leaderboard-empty">{globalPlaceholderMessage || "No global runs yet."}</p>
               ) : null}
             </section>
 
@@ -1406,12 +1432,16 @@ function LeaderboardModal({
                         <span className="leaderboard-rank">{String(index + 2).padStart(2, "0")}</span>
                         <strong className="leaderboard-score">{run.score}</strong>
                         <span className="leaderboard-name">{run.displayName}</span>
+                        {isCrunch && formatCrunchRunMeta(run) ? (
+                          <span className="leaderboard-meta leaderboard-date">{formatCrunchRunMeta(run)}</span>
+                        ) : null}
                       </li>
                     ) : (
                       <li key={`ghost-${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
                         <span className="leaderboard-rank">&nbsp;</span>
                         <span className="leaderboard-score">&nbsp;</span>
                         <span className="leaderboard-name">&nbsp;</span>
+                        {isCrunch ? <span className="leaderboard-meta leaderboard-date">&nbsp;</span> : null}
                       </li>
                     )
                   )}
@@ -2451,6 +2481,24 @@ function clearActiveRunSession(runId) {
   } catch {}
 }
 
+const CRUNCH_RUN_SAVE_KEY = "gridpop-crunch-run-save";
+
+function saveCrunchRunProgress(data) {
+  try { localStorage.setItem(CRUNCH_RUN_SAVE_KEY, JSON.stringify(data)); } catch {}
+}
+
+function loadCrunchRunProgress() {
+  try {
+    const raw = localStorage.getItem(CRUNCH_RUN_SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {}
+  return null;
+}
+
+function clearCrunchRunProgress() {
+  try { localStorage.removeItem(CRUNCH_RUN_SAVE_KEY); } catch {}
+}
+
 function storePendingRun(runId, moves, deviceToken = null) {
   try {
     localStorage.setItem(PENDING_RUN_KEY, JSON.stringify({
@@ -2486,28 +2534,38 @@ function getCrunchFrameInterval(elapsedMs) {
   return 3000;
 }
 
-function getCrunchWaveAdvance(elapsedMs, board) {
+function nextCrunchRngValue(rngState) {
+  const state = (rngState + 0x6d2b79f5) >>> 0;
+  let value = Math.imul(state ^ (state >>> 15), state | 1);
+  value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+  return { rngState: state, value: ((value ^ (value >>> 14)) >>> 0) / 4294967296 };
+}
+
+function getCrunchWaveAdvance(elapsedMs, board, wallRngState) {
   if (elapsedMs < 90000) {
-    const preferLeft = Math.random() < 0.5;
+    const roll = nextCrunchRngValue(wallRngState);
+    const preferLeft = roll.value < 0.5;
     const preferredSide = preferLeft ? 'left' : 'right';
     const fallbackSide = preferLeft ? 'right' : 'left';
 
     if (canCrunchWallAdvance(board, preferredSide)) {
-      return preferLeft
-        ? { advanceLeft: true, advanceRight: false }
-        : { advanceLeft: false, advanceRight: true };
+      return {
+        advance: preferLeft ? { advanceLeft: true, advanceRight: false } : { advanceLeft: false, advanceRight: true },
+        wallRngState: roll.rngState,
+      };
     }
 
     if (canCrunchWallAdvance(board, fallbackSide)) {
-      return preferLeft
-        ? { advanceLeft: false, advanceRight: true }
-        : { advanceLeft: true, advanceRight: false };
+      return {
+        advance: preferLeft ? { advanceLeft: false, advanceRight: true } : { advanceLeft: true, advanceRight: false },
+        wallRngState: roll.rngState,
+      };
     }
 
-    return { advanceLeft: false, advanceRight: false };
+    return { advance: { advanceLeft: false, advanceRight: false }, wallRngState: roll.rngState };
   }
 
-  return { advanceLeft: true, advanceRight: true };
+  return { advance: { advanceLeft: true, advanceRight: true }, wallRngState };
 }
 
 function getCrunchEscalationStage(elapsedMs) {
@@ -2639,8 +2697,10 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   // Cells completing a row/col this wave — shown with rumble animation before actual clear.
   const [crunchPendingClears, setCrunchPendingClears] = useState(null);
   const crunchWallDepthRef = useRef(1);
+  const crunchWallRngStateRef = useRef(0);
   const crunchRunStartRef = useRef(null);
   const crunchNextFrameAtRef = useRef(null);
+  const lastCrunchMoveAtMsRef = useRef(-1);
   const crunchCycleDurationRef = useRef(getCrunchFrameInterval(0));
   const crunchCriticalEndsAtRef = useRef(null);
   const crunchTickRef = useRef(null);
@@ -2733,8 +2793,16 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       setCrunchCriticalCells(null);
       crunchCriticalEndsAtRef.current = null;
       crunchLastCountdownCueRef.current = null;
-      const nextFrameAt = Date.now() + getCrunchFrameInterval(Date.now() - crunchRunStartRef.current);
-      crunchCycleDurationRef.current = getCrunchFrameInterval(Date.now() - crunchRunStartRef.current);
+      // Use the escape move's atMs (just set by recordVerifiedMove) as the base for
+      // the next wave — mirrors the server's applyCrunchPlacement which sets
+      // nextWaveAtMs = atMs + getCrunchFrameInterval(atMs). Using Date.now() here
+      // would diverge from the server since critical moves are all capped to the old
+      // wave time, making atMs << actualEscapeTime.
+      const escapeAtMs = lastCrunchMoveAtMsRef.current >= 0
+        ? lastCrunchMoveAtMsRef.current
+        : Math.max(0, Date.now() - crunchRunStartRef.current);
+      const nextFrameAt = crunchRunStartRef.current + escapeAtMs + getCrunchFrameInterval(escapeAtMs);
+      crunchCycleDurationRef.current = getCrunchFrameInterval(escapeAtMs);
       crunchNextFrameAtRef.current = nextFrameAt;
       syncCrunchCountdownDisplay();
       const newWarn = Math.ceil((nextFrameAt - Date.now()) / 1000) <= 3;
@@ -2797,7 +2865,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
 
   // Crunch frame timer — fires frequently so the pressure clock can show tenths smoothly.
   useEffect(() => {
-    if (!started || gameMode !== 'crunch' || latestGameRef.current.gameOver) return;
+    if (!started || gameMode !== 'crunch' || gameOver) return;
 
     crunchTickRef.current = window.setInterval(() => {
       if (isPausedRef.current) return;
@@ -2867,34 +2935,41 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       }
 
       if (now >= crunchNextFrameAtRef.current) {
+        const scheduledElapsed = crunchNextFrameAtRef.current - crunchRunStartRef.current;
         const depth = crunchWallDepthRef.current;
         const tone = TONES[depth % TONES.length];
-        const waveAdvance = getCrunchWaveAdvance(elapsed, latestGameRef.current.board);
+        const { advance: waveAdvance, wallRngState: nextWallRngState } = getCrunchWaveAdvance(scheduledElapsed, latestGameRef.current.board, crunchWallRngStateRef.current);
+        crunchWallRngStateRef.current = nextWallRngState;
         playCrunchWallSound();
 
         const { game: nextGame, pendingClears } = applyCrunchWave(latestGameRef.current, tone, waveAdvance);
         const enteredCritical = nextGame.gameOver && enterCrunchCritical(nextGame.board);
-        startTransition(() => {
-          setGame(enteredCritical ? { ...nextGame, gameOver: false } : nextGame);
-        });
+        const baseGame = enteredCritical ? { ...nextGame, gameOver: false } : nextGame;
+        // Apply pending clears immediately so latestGameRef and game state always match
+        // the server (which applies them synchronously). Deferring them causes the client's
+        // buildTray to see a different board than the server's → piece ID mismatch.
+        const clearedGame = pendingClears.length > 0 ? applyWavePendingClears(baseGame, pendingClears) : baseGame;
+        latestGameRef.current = clearedGame;
+        // Do NOT wrap in startTransition: a deferred setGame(clearedGame) can be
+        // committed AFTER an urgent placement setGame, overwriting the placement
+        // with the stale pre-placement wave state and erasing the move entirely.
+        // The interval fires infrequently enough that synchronous re-render is fine.
+        setGame(clearedGame);
 
         if (pendingClears.length > 0) {
           window.clearTimeout(crunchPendingClearTimerRef.current);
           setCrunchPendingClears(new Set(pendingClears.map((p) => p.idx)));
           crunchPendingClearTimerRef.current = window.setTimeout(() => {
             playClearSound();
-            startTransition(() => {
-              setGame((current) => applyWavePendingClears(current, pendingClears));
-            });
             setCrunchPendingClears(null);
             setCrunchPoxelsPopped((prev) => prev + pendingClears.length);
           }, 380);
         }
 
         crunchWallDepthRef.current = depth + 1;
-        const newInterval = getCrunchFrameInterval(elapsed);
+        const newInterval = getCrunchFrameInterval(scheduledElapsed);
         crunchCycleDurationRef.current = newInterval;
-        crunchNextFrameAtRef.current = now + newInterval;
+        crunchNextFrameAtRef.current = crunchNextFrameAtRef.current + newInterval;
         setCrunchWallDepth(depth + 1);
         syncCrunchCountdownDisplay(now);
         const postWaveWarn = Math.ceil(newInterval / 1000) <= 3;
@@ -3007,7 +3082,19 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   }, [gameMode]);
 
   function startCrunch(displayedBestScore) {
-    const baseState = createGameState(displayedBestScore, { crunch: true });
+    return startCrunchFromState(displayedBestScore, null);
+  }
+
+  function startCrunchFromState(displayedBestScore, rankedState = null) {
+    // For ranked runs: use the server-provided tray and board from the start so the
+    // countdown doesn't show a locally-generated random tray that then switches.
+    const baseState = rankedState?.board && Array.isArray(rankedState?.tray)
+      ? {
+          ...createGameState(displayedBestScore, { crunch: true, ranked: true, tray: rankedState.tray, trayRngState: rankedState.trayRngState ?? 0 }),
+          board: rankedState.board,
+          awaitingTray: false,
+        }
+      : createGameState(displayedBestScore, { crunch: true });
     crunchWallDepthRef.current = 0;
     setCrunchWallDepth(0);
     setCrunchPoxelsPopped(0);
@@ -3021,6 +3108,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchRunStartRef.current = null;
     crunchCycleDurationRef.current = getCrunchFrameInterval(0);
     crunchNextFrameAtRef.current = null;
+    lastCrunchMoveAtMsRef.current = -1;
     crunchEscalationStageRef.current = getCrunchEscalationStage(0);
     crunchCriticalEndsAtRef.current = null;
     crunchLastCountdownCueRef.current = null;
@@ -3044,13 +3132,53 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       window.setTimeout(() => {
         setCrunchStartCountdown("");
         playCrunchWallSound();
-        const openingWave = applyCrunchWave(baseState, TONES[0], { advanceLeft: true, advanceRight: true });
-        crunchWallDepthRef.current = 1;
-        setCrunchWallDepth(1);
+        let nextGame = null;
+        let nextWallDepth = 1;
+        let nextFrameAt = Date.now() + getCrunchFrameInterval(0);
+
+        if (rankedState?.board && Array.isArray(rankedState?.tray)) {
+          const rankedBase = createGameState(displayedBestScore, { crunch: true, ranked: true, tray: rankedState.tray, trayRngState: rankedState.trayRngState ?? 0 });
+          nextGame = {
+            ...rankedBase,
+            board: rankedState.board,
+            awaitingTray: false,
+          };
+          nextWallDepth = Number.isFinite(Number(rankedState.wallDepth)) ? Math.max(0, Number(rankedState.wallDepth)) : 1;
+          nextFrameAt = Date.now() + (
+            Number.isFinite(Number(rankedState.nextWaveAtMs))
+              ? Math.max(0, Number(rankedState.nextWaveAtMs))
+              : getCrunchFrameInterval(0)
+          );
+        } else {
+          const openingWave = applyCrunchWave(baseState, TONES[0], { advanceLeft: true, advanceRight: true });
+          nextGame = openingWave.game;
+        }
+
+        crunchWallDepthRef.current = nextWallDepth;
+        setCrunchWallDepth(nextWallDepth);
         crunchStartSequenceActiveRef.current = false;
-        crunchRunStartRef.current = Date.now();
-        crunchNextFrameAtRef.current = Date.now() + getCrunchFrameInterval(0);
-        setGame(openingWave.game);
+        // For resume: offset the run-start clock so move timestamps continue
+        // from where they left off, rather than restarting from 0.
+        const startOffsetMs = Number.isFinite(rankedState?.runStartOffsetMs)
+          ? rankedState.runStartOffsetMs : 0;
+        crunchRunStartRef.current = Date.now() - startOffsetMs;
+        lastCrunchMoveAtMsRef.current = startOffsetMs > 0 ? startOffsetMs : -1;
+        // Restore critical mode state if the run was mid-critical when it was saved.
+        const resumeCriticalUntilMs = rankedState?.criticalUntilMs != null &&
+          Number.isFinite(rankedState.criticalUntilMs) ? rankedState.criticalUntilMs : null;
+        if (resumeCriticalUntilMs !== null) {
+          crunchCriticalEndsAtRef.current = crunchRunStartRef.current + resumeCriticalUntilMs;
+          crunchNextFrameAtRef.current = crunchCriticalEndsAtRef.current; // placeholder
+          const touching = getCrunchTouchingWallCells(nextGame.board);
+          if (touching.length > 0) {
+            setCrunchCritical(true);
+            setCrunchCriticalCells(new Set(touching));
+          }
+        } else {
+          crunchNextFrameAtRef.current = nextFrameAt;
+        }
+        latestGameRef.current = nextGame;
+        setGame(nextGame);
         crunchStartCountdownTimersRef.current = [];
         syncCrunchCountdownDisplay();
       }, CRUNCH_START_COUNTDOWN_LEAD_IN_MS + CRUNCH_START_COUNTDOWN_STEP_MS * 3 + CRUNCH_START_COUNTDOWN_POST_ONE_BEAT_MS),
@@ -3096,17 +3224,25 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchWarningStep,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
+    startCrunchFromState,
     onClearedInCrunch,
     shiftTimestampsForPause,
     crunchRunStartRef,
+    crunchWallRngStateRef,
+    crunchNextFrameAtRef,
+    lastCrunchMoveAtMsRef,
   };
 }
 
 export default function App({ updateReady = false, onApplyUpdate = () => {}, onDismissUpdate = () => {} }) {
   const [game, setGame] = useState(() => createGameState(loadBestScore()));
   // Always-current ref so the crunch tick can read game state without stale closure issues.
+  // NOTE: Do NOT sync latestGameRef.current = game here (render-time). React 18 can commit
+  // a stale pending render AFTER the wave tick has written the post-wave state into the ref,
+  // which would silently revert it to a pre-wave board and cause server divergence.
+  // All board-mutating paths (wave tick, placement handlers, startCrunchFromState) update
+  // latestGameRef.current explicitly before calling setGame, so no render-time sync is needed.
   const latestGameRef = useRef(game);
-  latestGameRef.current = game;
   const [drag, setDrag] = useState(null);
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
   const [soundVolume, setSoundVolumeState] = useState(() => getSoundVolume());
@@ -3165,9 +3301,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     crunchWarningStep,
     refreshCrunchCriticalAfterPlacement,
     startCrunch,
+    startCrunchFromState,
     onClearedInCrunch,
     shiftTimestampsForPause,
     crunchRunStartRef,
+    crunchWallRngStateRef,
+    crunchNextFrameAtRef,
+    lastCrunchMoveAtMsRef,
   } = useCrunchMode({ latestGameRef, started, gameMode, gameOver: game.gameOver, setGame, isPausedRef, boardRef });
   const showBoardBonus = useEffectEvent((text, clearedIndices) => {
     const nextBonus = buildBoardBonusPayload(text, clearedIndices);
@@ -3211,6 +3351,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [localRuns, setLocalRuns] = useState(() => loadRunHistory());
+  const [crunchLocalRuns, setCrunchLocalRuns] = useState(() => loadCrunchRunHistory());
   const [accountRecentRuns, setAccountRecentRuns] = useState([]);
   const [accountTopRuns, setAccountTopRuns] = useState([]);
   const [accountRunNumbers, setAccountRunNumbers] = useState({});
@@ -3224,6 +3365,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [globalError, setGlobalError] = useState("");
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardTab, setLeaderboardTab] = useState("personal");
+  const [leaderboardMode, setLeaderboardMode] = useState("classic");
   const [showDesktopAuthPanel, setShowDesktopAuthPanel] = useState(false);
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
   const [authAutoFocus, setAuthAutoFocus] = useState(false);
@@ -3282,9 +3424,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
   });
   const [activeVerifiedRun, setActiveVerifiedRun] = useState(null);
+  const [activeCrunchVerifiedRun, setActiveCrunchVerifiedRun] = useState(null);
   const [activeRunDetected, setActiveRunDetected] = useState(null);
   const [activeRunCheckDone, setActiveRunCheckDone] = useState(false);
   const [activeRunCheckFailed, setActiveRunCheckFailed] = useState(false);
+  const [activeCrunchRunSave, setActiveCrunchRunSave] = useState(() => loadCrunchRunProgress());
+  const [activeCrunchRunCheckDone, setActiveCrunchRunCheckDone] = useState(false);
+  const [activeCrunchRunActive, setActiveCrunchRunActive] = useState(false);
+  const crunchRunSaveRef = useRef(null);
   const [resumedElsewhere, setResumedElsewhere] = useState(false);
   const [resumePending, setResumePending] = useState(false);
   const [resumeFailed, setResumeFailed] = useState("");
@@ -3324,6 +3471,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const fillIntervalRef = useRef(null);
   const prevBestScoreRef = useRef(game.bestScore);
   const prevCrunchBestRef = useRef(loadCrunchBestRating());
+  const pendingCrunchStartOptionsRef = useRef({ ranked: false, confirmAbandon: true });
   const dragBoardMetricsRef = useRef(null);
   const hoverBoardMetricsRef = useRef(null);
   const dragDismissVisibleRef = useRef(false);
@@ -3337,6 +3485,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const queuedDragMoveRef = useRef(null);
   const dragMoveFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
+  const activeCrunchVerifiedRunRef = useRef(activeCrunchVerifiedRun);
   const nextTrayFetchInFlightRef = useRef(false);
   const moveSyncStateRef = useRef({ runId: null, moveCount: 0 });
   const moveSyncInFlightRef = useRef(false);
@@ -3555,6 +3704,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     activeVerifiedRunRef.current = activeVerifiedRun;
   }, [activeVerifiedRun]);
 
+  useEffect(() => {
+    activeCrunchVerifiedRunRef.current = activeCrunchVerifiedRun;
+  }, [activeCrunchVerifiedRun]);
+
   const verifyActiveRunDeviceToken = useEffectEvent(async (runId) => {
     if (!runId || !deviceTokenRef.current || runDeviceCheckInFlightRef.current) {
       return;
@@ -3645,9 +3798,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 ? startBlockedMessage
                 : ""
       );
+  // If there's a saved crunch run, keep the spinner until the DB check finishes.
+  // Without this, the loading flags (e.g. feature flags) can clear while the DB
+  // query is still in flight, briefly showing "Start Game" — which the user may
+  // click before activeCrunchRunActive is set, starting a new run instead.
+  const crunchCheckPending = Boolean(activeCrunchRunSave && !activeCrunchRunCheckDone);
   const startOverlayPassiveMessage = autoResumeDetectedRun || pendingSameDeviceResume || resumePending
     ? "Reconnecting..."
-    : startPending || startAuthPending || startProfilePending || startAccountPending || startFeatureFlagsPending
+    : startPending || startAuthPending || startProfilePending || startAccountPending || startFeatureFlagsPending || crunchCheckPending
       ? "Starting your run..."
       : "";
   const showRunReconnectOverlay = Boolean(
@@ -3809,13 +3967,23 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setGlobalLoading(true);
     setGlobalError("");
 
-    const { data, error } = await supabase
-      .from("scores")
-      .select("id, user_id, score, created_at, profiles(display_name)")
-      .not("run_id", "is", null)
-      .order("score", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(GLOBAL_LEADERBOARD_LIMIT);
+    const isCrunchBoard = leaderboardMode === "crunch";
+    const query = isCrunchBoard
+      ? supabase
+        .from("crunch_scores")
+        .select("id, user_id, score, created_at, survival_ms, poxels_popped, profiles(display_name)")
+        .order("score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(GLOBAL_LEADERBOARD_LIMIT)
+      : supabase
+        .from("scores")
+        .select("id, user_id, score, created_at, profiles(display_name)")
+        .not("run_id", "is", null)
+        .order("score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(GLOBAL_LEADERBOARD_LIMIT);
+
+    const { data, error } = await query;
 
     setGlobalLoading(false);
     globalFetchInFlightRef.current = false;
@@ -3838,6 +4006,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         userId: run.user_id,
         score: run.score,
         createdAt: run.created_at,
+        survivalMs: isCrunchBoard ? (run.survival_ms ?? 0) : 0,
+        poxelsPopped: isCrunchBoard ? (run.poxels_popped ?? 0) : 0,
         displayName: normalizeProfileName(profileRecord?.display_name ?? "Player"),
       };
     });
@@ -3867,12 +4037,16 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   });
 
   useEffect(() => {
-    if (!GLOBAL_LEADERBOARD_ENABLED || !leaderboardOpen || leaderboardTab !== "global") {
+    if (
+      !GLOBAL_LEADERBOARD_ENABLED ||
+      !leaderboardOpen ||
+      leaderboardTab !== "global"
+    ) {
       return;
     }
 
     loadGlobalLeaderboard();
-  }, [leaderboardOpen, leaderboardTab]);
+  }, [leaderboardMode, leaderboardOpen, leaderboardTab]);
 
   useEffect(() => {
     if (!leaderboardOpen || leaderboardTab !== "global") {
@@ -3909,7 +4083,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     );
 
     return () => timers.forEach(clearTimeout);
-  }, [globalError, globalLoading, globalRuns, leaderboardOpen, leaderboardTab, soundEnabled]);
+  }, [globalError, globalLoading, globalRuns, leaderboardMode, leaderboardOpen, leaderboardTab, soundEnabled]);
 
   useEffect(() => {
     loadGlobalLeaderboard();
@@ -3952,6 +4126,53 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       checkForActiveRun();
     }
   }, [rankedReady, started, activeRunCheckDone]);
+
+  const checkForActiveCrunchRun = useEffectEvent(async () => {
+    const save = loadCrunchRunProgress();
+    if (!save?.runId || !save?.initialBoard) {
+      clearCrunchRunProgress();
+      setActiveCrunchRunSave(null);
+      setActiveCrunchRunCheckDone(true);
+      return;
+    }
+    setActiveCrunchRunSave(save);
+    if (!hasSupabaseConfig || !session?.user?.id) {
+      setActiveCrunchRunCheckDone(true);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("crunch_runs")
+        .select("id")
+        .eq("id", save.runId)
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.id) {
+        setActiveCrunchRunActive(true);
+      } else {
+        clearCrunchRunProgress();
+        setActiveCrunchRunSave(null);
+      }
+    } catch {
+      // Skip resume detection on error — don't block gameplay
+    }
+    setActiveCrunchRunCheckDone(true);
+  });
+
+  useEffect(() => {
+    if (authReady && !started && !activeCrunchRunCheckDone) {
+      checkForActiveCrunchRun();
+    }
+  }, [authReady, started, activeCrunchRunCheckDone]);
+
+  // Persist move list to localStorage after every crunch move so a page reload can resume.
+  useEffect(() => {
+    if (!activeCrunchVerifiedRun?.id || !crunchRunSaveRef.current) return;
+    if (crunchRunSaveRef.current.runId !== activeCrunchVerifiedRun.id) return;
+    saveCrunchRunProgress({ ...crunchRunSaveRef.current, moves: activeCrunchVerifiedRun.moves });
+  }, [activeCrunchVerifiedRun]);
 
   useEffect(() => {
     if (!activeRunDetected?.id) {
@@ -4374,6 +4595,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     started,
   ]);
 
+  // Crunch trays are now generated locally using the same deterministic RNG the server
+  // uses for verification — no mid-game server round-trip needed.
+  // The full move list is still verified by finish-crunch-run at submission.
+
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !game.gameOver || !activeVerifiedRun?.id) {
       return;
@@ -4461,6 +4686,73 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     leaderboardOpen,
     leaderboardTab,
     finishRunAttempt,
+  ]);
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || gameMode !== "crunch" || !game.gameOver || !activeCrunchVerifiedRun?.id) {
+      return;
+    }
+
+    const submittedRun = activeCrunchVerifiedRun;
+
+    if (runSubmissionInFlightRef.current.has(submittedRun.id)) {
+      return;
+    }
+
+    runSubmissionInFlightRef.current.add(submittedRun.id);
+    syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
+    setNextTrayReconnectPending(false);
+    setRunReconnectActionRequired("");
+    setRunSubmissionError("");
+
+    (async () => {
+      const error = await finishVerifiedCrunchRun(submittedRun);
+
+      runSubmissionInFlightRef.current.delete(submittedRun.id);
+      syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
+
+      const isSubmittedRunStillCurrent = () => activeCrunchVerifiedRunRef.current?.id === submittedRun.id;
+
+      if (error) {
+        if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+          const payload = await error.context.json().catch(() => ({}));
+          if (payload?.code === "resumed_elsewhere") {
+            if (isSubmittedRunStillCurrent()) {
+              setResumedElsewhere(true);
+            }
+            return;
+          }
+        }
+
+        if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+          if (isSubmittedRunStillCurrent()) {
+            resetClientSessionState();
+            setAuthError("Your session expired. Your Crunch score is saved locally. Sign in to submit it.");
+            setRunSubmissionError("Session expired. Sign in, then tap to retry.");
+            handleOpenAuthPrompt();
+          }
+          return;
+        }
+
+        if (isSubmittedRunStillCurrent()) {
+          setRunSubmissionError(await getFunctionErrorMessage(error, "Could not submit this Crunch score. Tap to retry."));
+        }
+        return;
+      }
+
+      if (isSubmittedRunStillCurrent()) {
+        resetRunRecoveryState();
+        clearCrunchRunProgress();
+        crunchRunSaveRef.current = null;
+      }
+      setActiveCrunchVerifiedRun((current) => (current?.id === submittedRun.id ? null : current));
+      loadGlobalLeaderboard();
+    })();
+  }, [
+    activeCrunchVerifiedRun,
+    finishRunAttempt,
+    game.gameOver,
+    gameMode,
   ]);
 
   useEffect(() => {
@@ -4668,6 +4960,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     if (gameMode === 'crunch') {
       const survivalMs = crunchRunStartRef.current ? Date.now() - crunchRunStartRef.current : 0;
       const rating = computeCrunchRating(survivalMs, crunchPoxelsPopped);
+      setCrunchLocalRuns(recordCrunchRunScore(rating, {
+        survivalMs,
+        poxelsPopped: crunchPoxelsPopped,
+      }));
       setCrunchFinalRating(rating);
       setCrunchFinalSurvivalMs(survivalMs);
       const newBestCrunch = rating > prevCrunchBestRef.current;
@@ -4948,6 +5244,35 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   } : null, [accountStats]);
 
   function recordVerifiedMove(pieceId, row, col) {
+    if (gameModeRef.current === "crunch") {
+      const now = Date.now();
+      const rawAtMs = crunchRunStartRef.current
+        ? Math.max(0, now - crunchRunStartRef.current)
+        : 0;
+      // Cap atMs to just before the next scheduled wave so the server doesn't
+      // fire a wave before we report this move (Case B race condition).
+      const nextWaveElapsed = crunchNextFrameAtRef.current !== null && crunchRunStartRef.current !== null
+        ? crunchNextFrameAtRef.current - crunchRunStartRef.current
+        : Infinity;
+      const cappedAtMs = rawAtMs >= nextWaveElapsed ? nextWaveElapsed - 1 : rawAtMs;
+      // Ensure timestamps never go backwards (e.g. due to capping multiple rapid moves
+      // to the same wave boundary value — server requires non-decreasing order).
+      const atMs = Math.max(cappedAtMs, lastCrunchMoveAtMsRef.current);
+      lastCrunchMoveAtMsRef.current = atMs;
+
+      setActiveCrunchVerifiedRun((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          moves: [...current.moves, { pieceId, row, col, atMs }],
+        };
+      });
+      return;
+    }
+
     setActiveVerifiedRun((current) => {
       if (!current) {
         return current;
@@ -4961,6 +5286,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   useEffect(() => {
+    if (gameMode === "crunch") {
+      return;
+    }
+
     if (activeVerifiedRun?.id && deviceTokenRef.current) {
       storeActiveRunSession(
         activeVerifiedRun.id,
@@ -4969,7 +5298,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         prevBestScoreRef.current,
       );
     }
-  }, [activeVerifiedRun]);
+  }, [activeVerifiedRun, gameMode]);
 
   const runPreviewAtPoint = useEffectEvent((clientX, clientY, activeDrag = null) => {
     if (!started || game.gameOver) {
@@ -5380,7 +5709,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         return;
       }
 
-      const nextGame = applyPlacement(game, pieceId, preview.row, preview.col);
+      // In crunch mode use latestGameRef so placement is validated against the
+      // most current board (post-wave + post-pendingClears), not stale React state.
+      const placementBase = gameMode === 'crunch' ? latestGameRef.current : game;
+      const nextGame = applyPlacement(placementBase, pieceId, preview.row, preview.col);
       primeSound();
       playPlaceSound();
 
@@ -5390,15 +5722,19 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }, 50);
       }
 
-      if (nextGame !== game) {
+      if (nextGame !== placementBase) {
         recordVerifiedMove(pieceId, preview.row, preview.col);
       }
 
       refreshCrunchCriticalAfterPlacement(nextGame);
-      onClearedInCrunch(game.board, nextGame);
+      onClearedInCrunch(placementBase.board, nextGame);
       if (gameMode !== 'crunch' && nextGame.clearBonusScore > 0) {
         showBoardBonus(`+${nextGame.clearBonusScore.toLocaleString()}`, nextGame.cleared);
       }
+      // Sync immediately so the wave tick doesn't read a stale pre-placement board
+      // if it fires before React re-renders (which would apply the wave to the wrong
+      // board and overwrite the placement with a no-placement wave result).
+      if (gameMode === 'crunch' && nextGame !== placementBase) latestGameRef.current = nextGame;
       setGame(nextGame);
       return;
     }
@@ -5560,6 +5896,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setNextTrayRetryTick(0);
     setMoveSyncRetryTick(0);
     setTrayRevealToken(0);
+    setActiveCrunchVerifiedRun(null);
 
     if (gameModeRef.current === 'crunch') {
       setGame(startCrunch(displayedBestScore));
@@ -5569,6 +5906,128 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     setStarted(true);
     if (soundEnabled) unlockAndTestSound();
+  }
+
+  async function beginNextCrunchGame(confirmAbandon = true) {
+    if (hasSupabaseConfig && !authReady) {
+      return;
+    }
+
+    if (session?.user?.id && profileLoading) {
+      return;
+    }
+
+    if (session?.user?.id && !accountRunsReadyRef.current) {
+      return;
+    }
+
+    if (session?.user?.id && featureFlagsLoading) {
+      return;
+    }
+
+    if (session?.user?.id && !profile?.display_name) {
+      setAuthError("Set a display name before starting.");
+      handleOpenAuthPrompt();
+      return;
+    }
+
+    prevBestScoreRef.current = displayedBestScore;
+    prevCrunchBestRef.current = crunchBestRating;
+    setGameOverPhase(null);
+    setFillCells([]);
+    setIsNewBest(false);
+    setLockedPreview(null);
+    setRunSubmitting(false);
+    setRunSubmissionError("");
+    setNextTrayPending(false);
+    setNextTrayError("");
+    setNextTrayRetryTick(0);
+    setTrayRevealToken(0);
+    setFinishRunAttempt(0);
+    setActiveCrunchVerifiedRun(null);
+    setResumedElsewhere(false);
+    setResumeFailed("");
+    setResumeRunGone(false);
+    deviceTokenRef.current = null;
+    setStartFailed(false);
+    setStarted(false);
+    nextTrayFetchInFlightRef.current = false;
+    moveSyncInFlightRef.current = false;
+    resetMoveSyncState(moveSyncStateRef);
+    resetRunRecoveryState();
+    setMoveSyncRetryTick(0);
+    clearActiveRunSession();
+    setGame(createGameState(displayedBestScore));
+
+    if (!rankedReady) {
+      startLocalGame();
+      return;
+    }
+
+    setStartPending(true);
+
+    let data = null;
+    let error = null;
+
+    for (let attempt = 0; attempt <= START_RUN_RETRY_DELAYS_MS.length; attempt += 1) {
+      ({ data, error } = await supabase.functions.invoke("start-crunch-run", {
+        body: { clientVersion: CLIENT_VERSION, confirmAbandon },
+      }));
+
+      if (!error && data?.runId && Array.isArray(data?.tray) && Array.isArray(data?.board)) {
+        break;
+      }
+
+      if (!isRetryableRunConnectionError(error) || attempt === START_RUN_RETRY_DELAYS_MS.length) {
+        break;
+      }
+
+      await sleep(START_RUN_RETRY_DELAYS_MS[attempt]);
+    }
+
+    setStartPending(false);
+
+    if (!error && data?.runId && Array.isArray(data?.tray) && Array.isArray(data?.board)) {
+      deviceTokenRef.current = data.deviceToken ?? null;
+      crunchWallRngStateRef.current = data.wallRngState ?? 0;
+      // Save initial run state so the run can be resumed if the page reloads.
+      const runSave = {
+        runId: data.runId,
+        initialBoard: data.board,
+        initialTray: data.tray,
+        initialWallDepth: data.wallDepth ?? 1,
+        initialNextWaveAtMs: data.nextWaveAtMs,
+        initialWallRngState: data.wallRngState ?? 0,
+        initialTrayRngState: data.trayRngState ?? 0,
+        deviceToken: data.deviceToken ?? null,
+        moves: [],
+      };
+      crunchRunSaveRef.current = runSave;
+      saveCrunchRunProgress(runSave);
+      setActiveCrunchRunSave(null);
+      setActiveCrunchRunActive(false);
+      setTrayRevealToken((token) => token + 1);
+      setGame(startCrunchFromState(displayedBestScore, {
+        board: data.board,
+        tray: data.tray,
+        wallDepth: data.wallDepth,
+        nextWaveAtMs: data.nextWaveAtMs,
+        trayRngState: data.trayRngState ?? 0,
+      }));
+      setActiveCrunchVerifiedRun({ id: data.runId, moves: [] });
+      setStarted(true);
+      if (soundEnabled) unlockAndTestSound();
+      return;
+    }
+
+    if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+      resetClientSessionState();
+      setAuthError("Your session expired. Sign in again.");
+      handleOpenAuthPrompt();
+      return;
+    }
+
+    setStartFailed(true);
   }
 
   function applyResumedRunState(data, options = {}) {
@@ -5671,6 +6130,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setTrayRevealToken(0);
     setFinishRunAttempt(0);
     setActiveVerifiedRun(null);
+    setActiveCrunchVerifiedRun(null);
     setActiveRunDetected(null);
     setActiveRunCheckDone(false);
     setActiveRunCheckFailed(false);
@@ -5758,17 +6218,27 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     beginNextGame(confirmAbandon);
   }
 
-  function launchCrunchGame() {
+  function launchCrunchGame(confirmAbandon = true) {
     gameModeRef.current = 'crunch';
     setGameMode('crunch');
     setShowModeSelect(false);
     setModeSelectIntent("start");
     setShowRunModeSelect(false);
     if (!hasSeenCrunchHowTo()) {
+      pendingCrunchStartOptionsRef.current = {
+        ranked: rankedReady,
+        confirmAbandon,
+      };
       setPendingCrunchHowToStart(true);
       setShowHowToPlay(true);
       return;
     }
+
+    if (rankedReady) {
+      void beginNextCrunchGame(confirmAbandon);
+      return;
+    }
+
     startLocalGame();
   }
 
@@ -5903,9 +6373,67 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     handleNewGame();
   }
 
+  function resumeCrunchRun() {
+    const save = activeCrunchRunSave;
+    if (!save?.runId || !Array.isArray(save.initialBoard) || !Array.isArray(save.initialTray)) return;
+
+    const moves = Array.isArray(save.moves) ? save.moves : [];
+    const replayResult = replayCrunchMoves({
+      board: save.initialBoard,
+      tray: save.initialTray,
+      trayRngState: save.initialTrayRngState ?? 0,
+      wallDepth: save.initialWallDepth ?? 1,
+      nextWaveAtMs: save.initialNextWaveAtMs ?? getCrunchFrameInterval(0),
+      wallRngState: save.initialWallRngState ?? 0,
+    }, moves);
+
+    deviceTokenRef.current = save.deviceToken ?? null;
+    crunchRunSaveRef.current = save;
+    crunchWallRngStateRef.current = replayResult.wallRngState;
+    setActiveCrunchRunSave(null);
+    setActiveCrunchRunActive(false);
+
+    prevCrunchBestRef.current = crunchBestRating;
+    setGameOverPhase(null);
+    setFillCells([]);
+    setIsNewBest(false);
+    setLockedPreview(null);
+    setRunSubmitting(false);
+    setRunSubmissionError("");
+    setFinishRunAttempt(0);
+    setResumedElsewhere(false);
+    setResumeFailed("");
+    setResumeRunGone(false);
+    setActiveCrunchVerifiedRun({ id: save.runId, moves });
+
+    // Remaining ms until the next wave fires (from the player's perspective right now).
+    const remainingWaveMs = replayResult.nextWaveAtMs !== null && replayResult.criticalUntilMs === null
+      ? Math.max(0, replayResult.nextWaveAtMs - replayResult.lastMoveAtMs)
+      : getCrunchFrameInterval(0); // fallback; unused when critical mode is active
+
+    setGame(startCrunchFromState(displayedBestScore, {
+      board: replayResult.game.board,
+      tray: replayResult.game.tray,
+      trayRngState: replayResult.game.rngState,
+      wallDepth: replayResult.wallDepth,
+      nextWaveAtMs: remainingWaveMs,
+      criticalUntilMs: replayResult.criticalUntilMs,
+      runStartOffsetMs: replayResult.lastMoveAtMs,
+    }));
+
+    setStarted(true);
+    if (soundEnabled) unlockAndTestSound();
+  }
+
+  function handleStartFreshCrunch() {
+    clearCrunchRunProgress();
+    setActiveCrunchRunSave(null);
+    setActiveCrunchRunActive(false);
+  }
+
   function selectMode(mode) {
     if (mode === 'crunch') {
-      launchCrunchGame();
+      launchCrunchGame(modeSelectIntent === "fresh");
       return;
     }
     startClassicGame(modeSelectIntent === "fresh");
@@ -6139,8 +6667,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     // Confirm-before-placing: any board tap commits the locked preview position
     if (lockedPreview) {
       if (lockedPreview.valid) {
-        const nextGame = applyPlacement(game, lockedPreview.pieceId, lockedPreview.row, lockedPreview.col);
-        if (nextGame !== game) {
+        const placementBase = gameMode === 'crunch' ? latestGameRef.current : game;
+        const nextGame = applyPlacement(placementBase, lockedPreview.pieceId, lockedPreview.row, lockedPreview.col);
+        if (nextGame !== placementBase) {
           primeSound();
           playPlaceSound();
           if (nextGame.cleared.length > 0) {
@@ -6150,10 +6679,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         }
         setLockedPreview(null);
         refreshCrunchCriticalAfterPlacement(nextGame);
-        onClearedInCrunch(game.board, nextGame);
+        onClearedInCrunch(placementBase.board, nextGame);
         if (gameMode !== 'crunch' && nextGame.clearBonusScore > 0) {
           showBoardBonus(`+${nextGame.clearBonusScore.toLocaleString()}`, nextGame.cleared);
         }
+        if (gameMode === 'crunch' && nextGame !== placementBase) latestGameRef.current = nextGame;
         setGame(nextGame);
       } else {
         setLockedPreview(null);
@@ -6167,9 +6697,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    const nextGame = applyPlacement(game, game.selectedPieceId, row, col);
+    const placementBase = gameMode === 'crunch' ? latestGameRef.current : game;
+    const nextGame = applyPlacement(placementBase, game.selectedPieceId, row, col);
 
-    if (nextGame !== game) {
+    if (nextGame !== placementBase) {
       primeSound();
       playPlaceSound();
 
@@ -6183,10 +6714,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     refreshCrunchCriticalAfterPlacement(nextGame);
-    onClearedInCrunch(game.board, nextGame);
+    onClearedInCrunch(placementBase.board, nextGame);
     if (gameMode !== 'crunch' && nextGame.clearBonusScore > 0) {
       showBoardBonus(`+${nextGame.clearBonusScore.toLocaleString()}`, nextGame.cleared);
     }
+    if (gameMode === 'crunch' && nextGame !== placementBase) latestGameRef.current = nextGame;
     setGame(nextGame);
     hoverBoardMetricsRef.current = null;
   }
@@ -6454,6 +6986,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     resetProfilePanelState();
     primeSound();
     playPlaceSound();
+    setLeaderboardMode(gameMode);
     if (tab === "personal") {
       setPersonalVisibleCount(0);
     }
@@ -6611,10 +7144,52 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   function finalizeCrunchRunLocally() {
     const survivalMs = crunchRunStartRef.current ? Date.now() - crunchRunStartRef.current : 0;
     const rating = computeCrunchRating(survivalMs, crunchPoxelsPopped);
+    setCrunchLocalRuns(recordCrunchRunScore(rating, {
+      survivalMs,
+      poxelsPopped: crunchPoxelsPopped,
+    }));
     if (rating > crunchBestRating) {
       saveCrunchBestRating(rating);
       setCrunchBestRating(rating);
     }
+  }
+
+  function getCrunchFinishedAtMs() {
+    return crunchRunStartRef.current ? Math.max(0, Date.now() - crunchRunStartRef.current) : 0;
+  }
+
+  async function finishVerifiedCrunchRun(run, { forceFinish = false } = {}) {
+    if (!run?.id || !hasSupabaseConfig) {
+      return null;
+    }
+
+    const finishedAtMs = getCrunchFinishedAtMs();
+    // Log moves on first attempt so we can correlate with server-side errors.
+    if (run.moves?.length > 0) {
+      console.log(`[crunch-submit] runId=${run.id} moveCount=${run.moves.length} finishedAtMs=${finishedAtMs} lastAtMs=${run.moves[run.moves.length - 1]?.atMs}`);
+    }
+
+    let error = null;
+
+    for (let attempt = 0; attempt <= FINISH_RUN_RETRY_DELAYS_MS.length; attempt += 1) {
+      ({ error } = await supabase.functions.invoke("finish-crunch-run", {
+        body: {
+          runId: run.id,
+          moves: run.moves,
+          deviceToken: deviceTokenRef.current,
+          finishedAtMs,
+          forceFinish,
+        },
+      }));
+
+      if (!error || !isRetryableRunConnectionError(error) || attempt === FINISH_RUN_RETRY_DELAYS_MS.length) {
+        break;
+      }
+
+      await sleep(FINISH_RUN_RETRY_DELAYS_MS[attempt]);
+    }
+
+    return error;
   }
 
   async function completeCurrentRunForModeSwitch(targetMode) {
@@ -6622,10 +7197,24 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     if (gameMode === 'crunch') {
       finalizeCrunchRunLocally();
+
+      if (activeCrunchVerifiedRun?.id && hasSupabaseConfig) {
+        const error = await finishVerifiedCrunchRun(activeCrunchVerifiedRun, { forceFinish: true });
+
+        if (error) {
+          setRunActionPending(false);
+          setRunActionError(await getFunctionErrorMessage(error, "Could not switch game mode right now."));
+          return;
+        }
+
+        setActiveCrunchVerifiedRun(null);
+        loadGlobalLeaderboard();
+      }
+
       setRunActionPending(false);
       setRunActionDialog(null);
       if (targetMode === 'crunch') {
-        launchCrunchGame();
+        launchCrunchGame(true);
       } else {
         startClassicGame();
       }
@@ -6709,7 +7298,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     if (pendingCrunchHowToStart) {
       markSeenCrunchHowTo();
       setPendingCrunchHowToStart(false);
-      startLocalGame();
+      if (pendingCrunchStartOptionsRef.current.ranked) {
+        void beginNextCrunchGame(pendingCrunchStartOptionsRef.current.confirmAbandon);
+      } else {
+        startLocalGame();
+      }
     }
   }
 
@@ -6826,6 +7419,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     ),
   };
   const accountBestScore = accountTopRuns[0]?.score ?? 0;
+  const leaderboardIsCrunch = leaderboardMode === "crunch";
   const localTopRuns = useMemo(
     () => session
       ? []
@@ -6842,20 +7436,45 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ),
     [localRuns, session]
   );
+  const crunchLocalTopRuns = useMemo(
+    () => [...crunchLocalRuns]
+      .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+      .slice(0, PERSONAL_TOP_RUN_LIMIT),
+    [crunchLocalRuns]
+  );
+  const crunchLocalRunNumbers = useMemo(
+    () => Object.fromEntries(
+      crunchLocalRuns.map((run, index) => [String(run.id), Math.max(1, crunchLocalRuns.length - index)])
+    ),
+    [crunchLocalRuns]
+  );
   const displayedBestScore = session
     ? Math.max(game.score, accountBestScore)
     : game.bestScore;
-  const personalRuns = useMemo(
-    () => session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT),
-    [accountRecentRuns, localRuns, session]
-  );
-  const personalTopRuns = session ? accountTopRuns : localTopRuns;
-  const personalRunNumbers = session ? accountRunNumbers : localRunNumbers;
-  const personalTopRunNumbers = session ? accountRunNumbers : localRunNumbers;
-  const personalLabel = session ? "My Runs" : "This Device";
-  const personalLoading = session ? accountRunsLoading : false;
-  const personalError = session ? accountRunsError : "";
-  const personalRunCount = session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length;
+  const personalRuns = useMemo(() => {
+    if (leaderboardIsCrunch) {
+      return crunchLocalRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
+    }
+    return session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
+  }, [accountRecentRuns, crunchLocalRuns, leaderboardIsCrunch, localRuns, session]);
+  const personalTopRuns = leaderboardIsCrunch
+    ? crunchLocalTopRuns
+    : (session ? accountTopRuns : localTopRuns);
+  const personalRunNumbers = leaderboardIsCrunch
+    ? crunchLocalRunNumbers
+    : (session ? accountRunNumbers : localRunNumbers);
+  const personalTopRunNumbers = personalRunNumbers;
+  const personalLabel = leaderboardIsCrunch ? "This Device" : (session ? "My Runs" : "This Device");
+  const personalLoading = leaderboardIsCrunch ? false : (session ? accountRunsLoading : false);
+  const personalError = leaderboardIsCrunch ? "" : (session ? accountRunsError : "");
+  const personalRunCount = leaderboardIsCrunch
+    ? crunchLocalRuns.length
+    : (session ? (accountStats?.gamesPlayed ?? personalRuns.length) : localRuns.length);
+  const leaderboardGlobalEnabled = leaderboardIsCrunch ? true : GLOBAL_LEADERBOARD_ENABLED;
+  const leaderboardGlobalLoading = globalLoading;
+  const leaderboardGlobalError = globalError;
+  const leaderboardGlobalRuns = globalRuns;
+  const leaderboardGlobalPlaceholderMessage = "";
   const showUpdatePrompt = updateReady && !updateDismissed && (!started || game.gameOver);
 
   useEffect(() => {
@@ -6894,8 +7513,6 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   ]);
 
   useEffect(() => {
-    const nextPersonalRuns = session ? accountRecentRuns : localRuns.slice(0, PERSONAL_RECENT_RUN_LIMIT);
-
     if (!leaderboardOpen || leaderboardTab !== "personal") {
       setPersonalVisibleCount(0);
       return;
@@ -6906,8 +7523,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    if (personalError || nextPersonalRuns.length === 0) {
-      setPersonalVisibleCount(nextPersonalRuns.length);
+    if (personalError || personalRuns.length === 0) {
+      setPersonalVisibleCount(personalRuns.length);
       return;
     }
 
@@ -6917,7 +7534,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       playFillCellSound();
     }
 
-    const timers = nextPersonalRuns.slice(1).map((_, index) =>
+    const timers = personalRuns.slice(1).map((_, index) =>
       setTimeout(() => {
         if (soundEnabled) {
           playFillCellSound();
@@ -6930,7 +7547,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     );
 
     return () => timers.forEach(clearTimeout);
-  }, [accountRecentRuns, leaderboardOpen, leaderboardTab, localRuns, personalError, personalLoading, session, soundEnabled]);
+  }, [leaderboardOpen, leaderboardMode, leaderboardTab, personalError, personalLoading, personalRuns, soundEnabled]);
 
   return (
     <>
@@ -6987,7 +7604,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 critical={crunchCritical}
                 warningStep={crunchWarningStep}
               />
-              {gameMode !== 'crunch' && <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />}
+              <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />
             </div>
             <div className="mobile-player-handle">
               {playerHandleMessage ? (
@@ -7084,6 +7701,17 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                       </button>
                       <button className="start-local-button" type="button" onClick={handleNewGame} disabled={resumePending || startBlocked}>
                         Start new
+                      </button>
+                    </>
+                  ) : activeCrunchRunActive && activeCrunchRunCheckDone ? (
+                    <>
+                      <p className="start-resume-msg">Resume your Crunch run?</p>
+                      <p className="start-resume-sub">{activeCrunchRunSave?.moves?.length ?? 0} moves played</p>
+                      <button className="start-button" type="button" onClick={resumeCrunchRun} disabled={startBlocked}>
+                        Continue
+                      </button>
+                      <button className="start-local-button" type="button" onClick={handleStartFreshCrunch} disabled={startBlocked}>
+                        Start fresh
                       </button>
                     </>
                   ) : showModeSelect && canUseCrunch ? (
@@ -7199,13 +7827,14 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                           className="leaderboard-empty run-submission-retry"
                           type="button"
                           onClick={() => {
-                            if (!activeVerifiedRun?.id) {
+                            const retryRun = gameMode === "crunch" ? activeCrunchVerifiedRun : activeVerifiedRun;
+                            if (!retryRun?.id) {
                               if (!session?.user?.id) {
                                 handleOpenAuthPrompt();
                               }
                               return;
                             }
-                            runSubmissionInFlightRef.current.delete(activeVerifiedRun.id);
+                            runSubmissionInFlightRef.current.delete(retryRun.id);
                             syncRunSubmittingState(runSubmissionInFlightRef.current, setRunSubmitting);
                             setRunSubmissionError("");
                             setFinishRunAttempt((n) => n + 1);
@@ -7510,11 +8139,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
       <LeaderboardModal
         activeTab={leaderboardTab}
-        globalEnabled={GLOBAL_LEADERBOARD_ENABLED}
-        globalError={globalError}
-        globalLoading={globalLoading}
-        globalRuns={globalRuns}
+        globalEnabled={leaderboardGlobalEnabled}
+        globalError={leaderboardGlobalError}
+        globalLoading={leaderboardGlobalLoading}
+        globalPlaceholderMessage={leaderboardGlobalPlaceholderMessage}
+        globalRuns={leaderboardGlobalRuns}
         globalVisibleCount={globalVisibleCount}
+        mode={leaderboardMode}
         personalError={personalError}
         personalLabel={personalLabel}
         personalLoading={personalLoading}

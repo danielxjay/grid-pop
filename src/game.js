@@ -2,6 +2,7 @@ export const GRID_SIZE = 8;
 export const TRAY_SIZE = 3;
 export const STORAGE_KEY = "gridpop-best-score";
 export const RUN_HISTORY_STORAGE_KEY = "gridpop-run-history";
+export const CRUNCH_RUN_HISTORY_STORAGE_KEY = "gridpop-crunch-run-history";
 export const LEGACY_STORAGE_KEY = [
   98, 108, 111, 99, 107, 45, 98, 108, 97, 115, 116, 101, 114, 45, 98, 101,
   115, 116, 45, 115, 99, 111, 114, 101,
@@ -63,6 +64,8 @@ function normalizeRunEntry(entry) {
   const bestMoveScore = Number.isFinite(Number(entry?.bestMoveScore)) ? Math.max(0, Number(entry.bestMoveScore)) : 0;
   const bestLinesCleared = Number.isFinite(Number(entry?.bestLinesCleared)) ? Math.max(0, Number(entry.bestLinesCleared)) : 0;
   const moveCount = Number.isFinite(Number(entry?.moveCount)) ? Math.max(0, Number(entry.moveCount)) : 0;
+  const survivalMs = Number.isFinite(Number(entry?.survivalMs)) ? Math.max(0, Number(entry.survivalMs)) : 0;
+  const poxelsPopped = Number.isFinite(Number(entry?.poxelsPopped)) ? Math.max(0, Number(entry.poxelsPopped)) : 0;
 
   return {
     id:
@@ -76,14 +79,76 @@ function normalizeRunEntry(entry) {
     bestMoveScore,
     bestLinesCleared,
     moveCount,
+    survivalMs,
+    poxelsPopped,
   };
 }
 
-function saveRunHistory(history) {
+function saveRunHistoryToKey(storageKey, history) {
   try {
-    localStorage.setItem(RUN_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    localStorage.setItem(storageKey, JSON.stringify(history));
   } catch {
     // Ignore storage failures in restricted contexts.
+  }
+}
+
+function saveRunHistory(history) {
+  saveRunHistoryToKey(RUN_HISTORY_STORAGE_KEY, history);
+}
+
+function loadRunHistoryFromKey(storageKey) {
+  try {
+    const rawValue = localStorage.getItem(storageKey);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const normalized = parsed
+      .map(normalizeRunEntry)
+      .filter(Boolean)
+      .slice(0, MAX_LOCAL_RUNS);
+
+    if (JSON.stringify(parsed.slice(0, normalized.length)) !== JSON.stringify(normalized)) {
+      saveRunHistoryToKey(storageKey, normalized);
+    }
+
+    return normalized;
+  } catch {
+    return [];
+  }
+}
+
+function recordRunScoreToKey(storageKey, score, stats = {}) {
+  const nextEntry = {
+    id: createRunId(score),
+    score: Number.parseInt(String(score ?? 0), 10),
+    createdAt: new Date().toISOString(),
+    synced: false,
+    bestCombo: Number.isFinite(stats.bestCombo) ? Math.max(0, stats.bestCombo) : 0,
+    bestMoveScore: Number.isFinite(stats.bestMoveScore) ? Math.max(0, stats.bestMoveScore) : 0,
+    bestLinesCleared: Number.isFinite(stats.bestLinesCleared) ? Math.max(0, stats.bestLinesCleared) : 0,
+    moveCount: Number.isFinite(stats.moveCount) ? Math.max(0, stats.moveCount) : 0,
+    survivalMs: Number.isFinite(stats.survivalMs) ? Math.max(0, stats.survivalMs) : 0,
+    poxelsPopped: Number.isFinite(stats.poxelsPopped) ? Math.max(0, stats.poxelsPopped) : 0,
+  };
+
+  if (!Number.isFinite(nextEntry.score) || nextEntry.score < 0) {
+    return loadRunHistoryFromKey(storageKey);
+  }
+
+  try {
+    const nextHistory = [nextEntry, ...loadRunHistoryFromKey(storageKey)].slice(0, MAX_LOCAL_RUNS);
+    saveRunHistoryToKey(storageKey, nextHistory);
+    return nextHistory;
+  } catch {
+    return loadRunHistoryFromKey(storageKey);
   }
 }
 
@@ -257,57 +322,19 @@ export function saveCrunchBestRating(rating) {
 }
 
 export function loadRunHistory() {
-  try {
-    const rawValue = localStorage.getItem(RUN_HISTORY_STORAGE_KEY);
+  return loadRunHistoryFromKey(RUN_HISTORY_STORAGE_KEY);
+}
 
-    if (!rawValue) {
-      return [];
-    }
-
-    const parsed = JSON.parse(rawValue);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    const normalized = parsed
-      .map(normalizeRunEntry)
-      .filter(Boolean)
-      .slice(0, MAX_LOCAL_RUNS);
-
-    if (JSON.stringify(parsed.slice(0, normalized.length)) !== JSON.stringify(normalized)) {
-      saveRunHistory(normalized);
-    }
-
-    return normalized;
-  } catch {
-    return [];
-  }
+export function loadCrunchRunHistory() {
+  return loadRunHistoryFromKey(CRUNCH_RUN_HISTORY_STORAGE_KEY);
 }
 
 export function recordRunScore(score, stats = {}) {
-  const nextEntry = {
-    id: createRunId(score),
-    score: Number.parseInt(String(score ?? 0), 10),
-    createdAt: new Date().toISOString(),
-    synced: false,
-    bestCombo: Number.isFinite(stats.bestCombo) ? Math.max(0, stats.bestCombo) : 0,
-    bestMoveScore: Number.isFinite(stats.bestMoveScore) ? Math.max(0, stats.bestMoveScore) : 0,
-    bestLinesCleared: Number.isFinite(stats.bestLinesCleared) ? Math.max(0, stats.bestLinesCleared) : 0,
-    moveCount: Number.isFinite(stats.moveCount) ? Math.max(0, stats.moveCount) : 0,
-  };
+  return recordRunScoreToKey(RUN_HISTORY_STORAGE_KEY, score, stats);
+}
 
-  if (!Number.isFinite(nextEntry.score) || nextEntry.score < 0) {
-    return loadRunHistory();
-  }
-
-  try {
-    const nextHistory = [nextEntry, ...loadRunHistory()].slice(0, MAX_LOCAL_RUNS);
-    saveRunHistory(nextHistory);
-    return nextHistory;
-  } catch {
-    return loadRunHistory();
-  }
+export function recordCrunchRunScore(score, stats = {}) {
+  return recordRunScoreToKey(CRUNCH_RUN_HISTORY_STORAGE_KEY, score, stats);
 }
 
 export function markRunsAsSynced(runIds) {
@@ -341,7 +368,9 @@ export function createGameState(bestScore = loadBestScore(), options = {}) {
     ? {
         tray: serverTray,
         nextPieceId: (serverTray.reduce((max, piece) => Math.max(max, piece?.id ?? 0), 0) || 0) + 1,
-        rngState: 0,
+        // Caller must supply trayRngState (the server's RNG position after building the
+        // initial tray) so locally-generated subsequent trays match the server's replay.
+        rngState: typeof options.trayRngState === 'number' ? options.trayRngState : 0,
       }
     : buildTray(board, 1, initialRngState, shapes);
 
@@ -463,14 +492,14 @@ export function applyPlacement(game, pieceId, row, col) {
   let rngState = game.rngState;
   const trayExhausted = tray.every((entry) => entry === null);
 
-  if (trayExhausted && !game.ranked) {
+  if (trayExhausted && (!game.ranked || game.crunch)) {
     const nextTrayState = buildTray(board, nextPieceId, game.rngState, game.crunch ? CRUNCH_SHAPES : SHAPES);
     tray = nextTrayState.tray;
     nextPieceId = nextTrayState.nextPieceId;
     rngState = nextTrayState.rngState;
   }
 
-  if (trayExhausted && game.ranked) {
+  if (trayExhausted && game.ranked && !game.crunch) {
     return {
       ...game,
       board,
@@ -1289,4 +1318,117 @@ export function applyWavePendingClears(game, pendingClears) {
     }
   }
   return { ...game, board, cleared: clearedWave, clearedTones: clearedWaveTones };
+}
+
+export const CRUNCH_CRITICAL_DURATION_MS = 5000;
+const CRUNCH_LINE_TIME_BONUS_MS = 1000;
+const CRUNCH_WALL_CELL_TIME_BONUS_MS = 100;
+
+export function getCrunchFrameInterval(elapsedMs) {
+  const s = elapsedMs / 1000;
+  if (s < 45) return 6000;
+  if (s < 90) return 5000;
+  if (s < 150) return 4000;
+  return 3000;
+}
+
+// Mirrors getCrunchWaveAdvance in App.jsx — determines which wall(s) advance this wave.
+function getCrunchWaveAdvanceForReplay(elapsedMs, board, wallRngState) {
+  if (elapsedMs < 90000) {
+    const roll = nextRandomValue(wallRngState);
+    const preferLeft = roll.value < 0.5;
+    const preferredSide = preferLeft ? 'left' : 'right';
+    const fallbackSide = preferLeft ? 'right' : 'left';
+    if (canCrunchWallAdvance(board, preferredSide)) {
+      return {
+        advance: preferLeft
+          ? { advanceLeft: true, advanceRight: false }
+          : { advanceLeft: false, advanceRight: true },
+        wallRngState: roll.rngState,
+      };
+    }
+    if (canCrunchWallAdvance(board, fallbackSide)) {
+      return {
+        advance: preferLeft
+          ? { advanceLeft: false, advanceRight: true }
+          : { advanceLeft: true, advanceRight: false },
+        wallRngState: roll.rngState,
+      };
+    }
+    return { advance: { advanceLeft: false, advanceRight: false }, wallRngState: roll.rngState };
+  }
+  return { advance: { advanceLeft: true, advanceRight: true }, wallRngState };
+}
+
+/**
+ * Replays a saved crunch run from its initial board/tray state, advancing wall
+ * waves between moves exactly as the live game does. Used to reconstruct board
+ * state after a page reload so the run can be resumed with the 3-2-1 countdown.
+ *
+ * initialState: { board, tray, trayRngState, wallDepth, nextWaveAtMs, wallRngState }
+ * moves: Array<{ pieceId, row, col, atMs }>
+ *
+ * Returns: { game, wallRngState, nextWaveAtMs, criticalUntilMs, wallDepth, lastMoveAtMs }
+ */
+export function replayCrunchMoves(initialState, moves) {
+  let game = createGameState(0, {
+    crunch: true,
+    ranked: true,
+    tray: initialState.tray,
+    trayRngState: initialState.trayRngState ?? 0,
+  });
+  game = { ...game, board: initialState.board };
+
+  let wallRngState = initialState.wallRngState ?? 0;
+  let nextWaveAtMs = initialState.nextWaveAtMs ?? getCrunchFrameInterval(0);
+  let criticalUntilMs = null;
+  let wallDepth = initialState.wallDepth ?? 1;
+  let lastMoveAtMs = 0;
+
+  for (const move of (Array.isArray(moves) ? moves : [])) {
+    const atMs = Number.isFinite(move?.atMs) ? move.atMs : 0;
+
+    // Fire any wall waves scheduled at or before this move's timestamp.
+    while (nextWaveAtMs !== null && atMs >= nextWaveAtMs) {
+      const waveAdv = getCrunchWaveAdvanceForReplay(nextWaveAtMs, game.board, wallRngState);
+      const tone = TONES[wallDepth % TONES.length];
+      const { game: waved, pendingClears } = applyCrunchWave(game, tone, waveAdv.advance);
+      game = applyWavePendingClears(waved, pendingClears);
+      wallRngState = waveAdv.wallRngState;
+      wallDepth += 1;
+
+      if (haveCrunchWallsJoined(game.board)) {
+        criticalUntilMs = nextWaveAtMs + CRUNCH_CRITICAL_DURATION_MS;
+        nextWaveAtMs = null;
+      } else {
+        nextWaveAtMs = nextWaveAtMs + getCrunchFrameInterval(nextWaveAtMs);
+      }
+    }
+
+    // Bail if critical expired (game over — shouldn't happen for a valid saved run).
+    if (criticalUntilMs !== null && atMs >= criticalUntilMs) break;
+
+    const next = applyPlacement(game, move.pieceId, move.row, move.col);
+    if (next === game) break; // invalid placement
+
+    // Handle critical escape: player cleared the wall join.
+    if (criticalUntilMs !== null && !haveCrunchWallsJoined(next.board)) {
+      criticalUntilMs = null;
+      nextWaveAtMs = atMs + getCrunchFrameInterval(atMs);
+    }
+
+    // Apply line-clear time bonuses.
+    const linesCleared = next.clearedLineCount ?? 0;
+    if (linesCleared > 0) {
+      const bonusMs = linesCleared * CRUNCH_LINE_TIME_BONUS_MS +
+        Math.max(0, next.clearedWallCount ?? 0) * CRUNCH_WALL_CELL_TIME_BONUS_MS;
+      if (criticalUntilMs !== null) criticalUntilMs += bonusMs;
+      else if (nextWaveAtMs !== null) nextWaveAtMs += bonusMs;
+    }
+
+    game = next;
+    lastMoveAtMs = atMs;
+  }
+
+  return { game, wallRngState, nextWaveAtMs, criticalUntilMs, wallDepth, lastMoveAtMs };
 }

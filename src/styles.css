@@ -1146,6 +1146,18 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   color: var(--fg-secondary);
 }
 
+/* Global list rows that include a crunch meta line */
+.leaderboard-list-global .leaderboard-row {
+  row-gap: 0.1rem;
+  align-items: start;
+}
+
+.leaderboard-list-global .leaderboard-row .leaderboard-meta {
+  grid-column: 2 / -1;
+  font-size: 0.6rem;
+  color: color-mix(in srgb, var(--fg-secondary) 75%, transparent);
+}
+
 .auth-panel {
   background: var(--menu-surface, var(--bg-surface));
   border: 2px solid var(--menu-stroke, var(--stroke));
@@ -3360,11 +3372,20 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
 }
 
 .start-resume-msg {
-  margin: 1.5rem 0 1.5rem;
+  margin: 1.5rem 0 0.5rem;
   font-family: "Press Start 2P", monospace;
   font-size: 0.5rem;
   letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+}
+
+.start-resume-sub {
+  margin: 0 0 1.5rem;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.38rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
   text-align: center;
 }
 
