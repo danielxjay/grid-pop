@@ -59,6 +59,18 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --board-size: min(38rem, calc(100dvh - 14rem - var(--safe-top) - var(--safe-bottom)), calc(100vw - 24rem));
   --board-gap: 0.2rem;
+
+  /* Leaderboard medal colours — hardcoded, never overridden by themes */
+  --medal-gold-hi: #fff8d0;
+  --medal-gold: #ffc820;
+  --medal-gold-lo: #c07800;
+  --medal-silver-hi: #f2f2f8;
+  --medal-silver: #b0b0cc;
+  --medal-silver-lo: #686890;
+  --medal-bronze-hi: #ffede0;
+  --medal-bronze: #c86c30;
+  --medal-bronze-lo: #882808;
+
   /* Scale the entire rem grid with the viewport so the layout grows proportionally
      on 1080p+/TV screens while remaining identical at 800×600 and below. */
   font-size: clamp(16px, 1.7vmin, 22px);
@@ -882,14 +894,51 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   transform: translate(-1px, -1px);
 }
 
-.leaderboard-tabs {
+/* Pill segmented control for My Runs / Global scope */
+.leaderboard-scope-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 0.65rem;
+  /* Use accent-secondary for the track so it's visible on both light and dark themes */
+  border: 1.5px solid color-mix(in srgb, var(--accent-secondary) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-secondary) 7%, transparent);
+}
+
+.leaderboard-scope-option {
+  min-height: 2rem;
+  border-radius: 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  font-size: 0.48rem;
+  letter-spacing: 0.05em;
+  transition: color 100ms ease, background 100ms ease;
+}
+
+.leaderboard-scope-option:hover,
+.leaderboard-scope-option:focus-visible {
+  color: var(--accent-secondary);
+}
+
+.leaderboard-scope-option.is-active {
+  background: color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+  color: var(--accent-secondary);
+  box-shadow:
+    0 1px 3px color-mix(in srgb, var(--accent-secondary) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.leaderboard-mode-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
-.leaderboard-tab {
-  min-height: 2.45rem;
+.leaderboard-mode-tab {
+  min-height: 2.6rem;
   border-radius: 0.55rem;
   border: 2px solid color-mix(in srgb, var(--stroke-muted) 50%, transparent);
   background: color-mix(in srgb, var(--bg-interactive) 75%, transparent);
@@ -898,20 +947,49 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   font-size: 0.54rem;
   letter-spacing: 0.05em;
   transition: transform 80ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
 }
 
-.leaderboard-tab:hover,
-.leaderboard-tab:focus-visible {
+.leaderboard-mode-tab:hover,
+.leaderboard-mode-tab:focus-visible {
   transform: translateY(-1px);
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
-.leaderboard-tab.is-active {
+.leaderboard-mode-tab-eyebrow {
+  font-size: 0.36rem;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+.leaderboard-mode-tab--classic.is-active {
+  background: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+}
+
+.leaderboard-mode-tab--crunch.is-active {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.leaderboard-mode-tab--classic:not(.is-active):hover,
+.leaderboard-mode-tab--classic:not(.is-active):focus-visible {
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+}
+
+.leaderboard-mode-tab--crunch:not(.is-active):hover,
+.leaderboard-mode-tab--crunch:not(.is-active):focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .leaderboard-panel {
@@ -1001,10 +1079,11 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   animation: leaderboard-row-pop 200ms ease-out both;
 }
 
+
 .leaderboard-best-score {
   font-size: clamp(1rem, 4vw, 1.45rem);
-  color: var(--accent);
-  text-shadow: 2px 2px 0 color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--fg);
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .leaderboard-podium {
@@ -1020,27 +1099,64 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   min-width: 0;
   justify-items: center;
   padding: 0.75rem 0.5rem;
-  border-radius: 0.6rem;
+  border-radius: 0.75rem;
   text-align: center;
-  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--stroke-muted) 28%, transparent);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--stroke-muted) 10%, transparent);
+  background: var(--board-cell-bg);
+  border: 1px solid var(--board-cell-border);
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, 0.45),
+    0 1px 3px color-mix(in srgb, var(--board-cell-depth) 10%, transparent);
+}
+
+/* Top 3 podium cards use hardcoded medal colours — same across all themes */
+.leaderboard-podium-card:nth-child(1),
+.leaderboard-podium-card:nth-child(2),
+.leaderboard-podium-card:nth-child(3) {
+  border: none;
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    0 2px 5px color-mix(in srgb, var(--board-cell-depth) 22%, transparent);
+}
+.leaderboard-podium-card:nth-child(1) {
+  background: radial-gradient(circle at 35% 28%, var(--medal-gold-hi), var(--medal-gold-lo) 85%);
+}
+.leaderboard-podium-card:nth-child(2) {
+  background: radial-gradient(circle at 35% 28%, var(--medal-silver-hi), var(--medal-silver-lo) 85%);
+}
+.leaderboard-podium-card:nth-child(3) {
+  background: radial-gradient(circle at 35% 28%, var(--medal-bronze-hi), var(--medal-bronze-lo) 85%);
 }
 
 .leaderboard-hero--global {
   width: 100%;
-  padding: 0.95rem 0.85rem;
+  padding: 1.1rem 0.85rem 1rem;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 85%, transparent), 3px 3px 0 color-mix(in srgb, var(--accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: radial-gradient(circle at 35% 28%, var(--medal-gold-hi), var(--medal-gold-lo) 85%);
+  border: none;
+  box-shadow:
+    inset 0 3px 8px rgba(255, 255, 255, 0.75),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.1),
+    0 3px 8px color-mix(in srgb, var(--board-cell-depth) 28%, transparent),
+    0 0 24px color-mix(in srgb, var(--medal-gold) 32%, transparent);
+}
+
+/*
+  Medal cards and global hero always have a light background (hardcoded medal palette).
+  Override text to dark so it stays readable regardless of which theme is active —
+  dark themes set --fg / --fg-secondary to light values which would be invisible here.
+*/
+.leaderboard-podium-card:is(:nth-child(1), :nth-child(2), :nth-child(3))
+  :is(.leaderboard-podium-rank, .leaderboard-podium-score, .leaderboard-meta, .leaderboard-crunch-stat),
+.leaderboard-hero--global
+  :is(.leaderboard-hero-rank, .leaderboard-best-score, .leaderboard-hero-score, .leaderboard-hero-name, .leaderboard-crunch-stat, .leaderboard-crunch-stat) {
+  color: rgba(20, 10, 35, 0.82);
 }
 
 .leaderboard-podium-rank {
   font-size: 0.46rem;
   letter-spacing: 0.08em;
-  color: var(--fg-link);
+  color: var(--fg-secondary);
 }
 
 .leaderboard-podium-score {
@@ -1077,18 +1193,18 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   align-items: center;
   justify-content: center;
   min-height: 1.2rem;
-  color: var(--accent);
+  color: var(--fg-secondary);
 }
 
 .leaderboard-hero-score {
   font-size: clamp(1.1rem, 4.4vw, 1.6rem);
-  color: var(--accent);
-  text-shadow: 2px 2px 0 color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--fg);
+  text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .leaderboard-hero-name {
   font-size: 0.72rem;
-  color: var(--fg);
+  color: var(--fg-secondary);
 }
 
 .leaderboard-list {
@@ -1102,27 +1218,75 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 2rem 4.5rem minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: 2rem minmax(0, 1fr) 4.5rem;
+  gap: 0.6rem;
   min-width: 0;
   align-items: center;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
-  border: 1px solid color-mix(in srgb, var(--stroke-muted) 25%, transparent);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--stroke-muted) 8%, transparent);
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--accent-secondary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.4),
+    0 1px 3px color-mix(in srgb, var(--board-cell-depth) 8%, transparent);
 }
 
 .leaderboard-rank {
   font-size: 0.42rem;
-  color: var(--fg-link);
+  color: var(--fg-secondary);
   letter-spacing: 0.08em;
+}
+
+.leaderboard-rank-poxel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 28%;
+  font-size: 0.38rem;
+  letter-spacing: 0.04em;
+  color: rgba(20, 10, 35, 0.62);
+  /* default tone — stands out against the neutral row background */
+  --rpox-hi: var(--tone-sky-hi);
+  --rpox-lo: var(--tone-sky-lo);
+  --rpox-fill: var(--tone-sky);
+  background: radial-gradient(circle at 35% 28%, var(--rpox-hi), var(--rpox-lo) 85%);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    0 2px 5px color-mix(in srgb, var(--board-cell-depth) 22%, transparent);
+}
+
+/* Medal colours only apply in the global list — personal run numbers are not rankings */
+.leaderboard-list-global .leaderboard-rank-poxel[data-rank="1"] {
+  --rpox-hi: var(--medal-gold-hi);
+  --rpox-lo: var(--medal-gold-lo);
+  --rpox-fill: var(--medal-gold);
+  color: rgba(100, 50, 0, 0.7);
+}
+.leaderboard-list-global .leaderboard-rank-poxel[data-rank="2"] {
+  --rpox-hi: var(--medal-silver-hi);
+  --rpox-lo: var(--medal-silver-lo);
+  --rpox-fill: var(--medal-silver);
+  color: rgba(40, 40, 70, 0.6);
+}
+.leaderboard-list-global .leaderboard-rank-poxel[data-rank="3"] {
+  --rpox-hi: var(--medal-bronze-hi);
+  --rpox-lo: var(--medal-bronze-lo);
+  --rpox-fill: var(--medal-bronze);
+  color: rgba(80, 25, 0, 0.6);
 }
 
 .leaderboard-score,
 .leaderboard-name {
   font-size: 0.74rem;
   color: var(--fg);
+}
+
+.leaderboard-score {
+  text-align: right;
 }
 
 .leaderboard-name {
@@ -1132,9 +1296,9 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 }
 
 .leaderboard-date {
-  text-align: right;
-  color: color-mix(in srgb, var(--fg-secondary) 50%, transparent);
+  color: var(--fg-secondary);
   white-space: nowrap;
+  font-size: 0.62rem;
 }
 
 .leaderboard-meta,
@@ -1146,16 +1310,74 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   color: var(--fg-secondary);
 }
 
-/* Global list rows that include a crunch meta line */
-.leaderboard-list-global .leaderboard-row {
+/* Crunch rows: two-line layout — stats stack under score on the right */
+.leaderboard-row.is-crunch {
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
   row-gap: 0.1rem;
   align-items: start;
 }
 
-.leaderboard-list-global .leaderboard-row .leaderboard-meta {
-  grid-column: 2 / -1;
-  font-size: 0.6rem;
-  color: color-mix(in srgb, var(--fg-secondary) 75%, transparent);
+/* Rank poxel and name/date both span both rows and center vertically */
+.leaderboard-row.is-crunch .leaderboard-rank-poxel {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.leaderboard-row.is-crunch .leaderboard-name,
+.leaderboard-row.is-crunch .leaderboard-date {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+/* Score stays top-right, chips appear below it */
+.leaderboard-row.is-crunch .leaderboard-score {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: end;
+}
+
+.leaderboard-crunch-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  grid-column: 3;
+  grid-row: 2;
+  justify-content: flex-end;
+}
+
+/* Inside the hero card and podium cards (centred contexts, not grid rows) */
+.leaderboard-hero .leaderboard-crunch-stats,
+.leaderboard-crunch-stats--podium {
+  grid-column: unset;
+  grid-row: unset;
+  justify-content: center;
+}
+
+.leaderboard-crunch-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.12rem 0.38rem;
+  border-radius: 0.28rem;
+  background: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-secondary) 24%, transparent);
+  font-size: 0.44rem;
+  color: var(--fg-secondary);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.leaderboard-crunch-stat-icon {
+  /* Render in system font so emoji/symbols use correct metrics and baseline */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.85em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .auth-panel {
@@ -5803,4 +6025,42 @@ html[data-theme="dmg"] .piece-cell.is-solid.tone-orchid {
   font-size: 0.5rem;
   color: var(--fg-secondary);
   line-height: 1.9;
+}
+
+/* ─── Rank poxel theme overrides ──────────────────────────────────────────── */
+/* fn-80z: flat fill + pixel bevel, no gradient, no radius */
+html[data-theme="fn-80z"] .leaderboard-rank-poxel {
+  border-radius: 0;
+  background: var(--rpox-fill);
+  box-shadow:
+    inset -3px -3px 0 color-mix(in srgb, var(--rpox-fill) 68%, black),
+    inset 2px 2px 0 color-mix(in srgb, var(--rpox-fill) 72%, white),
+    0 0 0.45rem color-mix(in srgb, var(--rpox-fill) 36%, transparent);
+}
+
+/* tinted: softer inset gloss, slightly tighter radius */
+html[data-theme="tinted"] .leaderboard-rank-poxel {
+  inset: 1px;
+  border-radius: 30%;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.18);
+}
+
+/* tinted++: outline ring + gloss */
+html[data-theme="tinted-plus-plus"] .leaderboard-rank-poxel {
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    inset 0 2px 5px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.12),
+    0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+/* dmg: flat fill + Game Boy bevel, no gradient, no radius */
+html[data-theme="dmg"] .leaderboard-rank-poxel {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--rpox-fill) 92%, #0f380f);
+  box-shadow:
+    inset 2px 2px 0 color-mix(in srgb, var(--rpox-fill) 50%, var(--board-bg)),
+    inset -2px -2px 0 color-mix(in srgb, var(--rpox-fill) 58%, #0f380f);
 }

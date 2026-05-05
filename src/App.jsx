@@ -1209,16 +1209,6 @@ function ScoreboardTrigger({ onClick }) {
   );
 }
 
-function formatCrunchRunMeta(run) {
-  const parts = [];
-  if (run?.survivalMs > 0) {
-    parts.push(formatCrunchTime(run.survivalMs));
-  }
-  if (Number.isFinite(run?.poxelsPopped) && run.poxelsPopped > 0) {
-    parts.push(`${run.poxelsPopped} popped`);
-  }
-  return parts.join(" • ");
-}
 
 function LeaderboardModal({
   activeTab,
@@ -1241,6 +1231,7 @@ function LeaderboardModal({
   signedIn,
   onClose,
   onGuestSignIn,
+  onModeChange,
   onTabChange,
   open,
 }) {
@@ -1251,46 +1242,63 @@ function LeaderboardModal({
   const bestPersonalRun = personalTopRuns[0] ?? null;
   const globalTopRun = globalRuns[0] ?? null;
   const globalRemainingRuns = globalRuns.slice(1);
-  const modalTitle = globalEnabled && activeTab === "global" ? "Leaderboard" : "Scores";
   const isCrunch = mode === "crunch";
-  const personalBestEmptyText = isCrunch
-    ? "No Crunch runs on this device yet."
-    : (personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet.");
-  const personalRecentEmptyText = isCrunch
-    ? "Finish a Crunch run and it will show up here."
-    : (personalLabel === "My Runs"
-      ? "Finish a signed-in run and it will show up here."
-      : "Finish a run and it will show up here.");
+  const personalBestEmptyText = personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet.";
+  const personalRecentEmptyText = personalLabel === "My Runs"
+    ? "Finish a signed-in run and it will show up here."
+    : "Finish a run and it will show up here.";
 
   return (
     <div
       className="leaderboard-modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={modalTitle}
+      aria-label="Leaderboard"
       onClick={onClose}
     >
       <div className="leaderboard-modal-wrap" onClick={(event) => event.stopPropagation()}>
-        <button className="leaderboard-close" type="button" onClick={onClose} aria-label={`Close ${modalTitle.toLowerCase()}`}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close leaderboard">
           Close
         </button>
         <section className="leaderboard-modal">
           <div className="leaderboard-colour-strip" aria-hidden="true" />
-          <h2>{modalTitle}</h2>
+          <h2>Leaderboard</h2>
 
-        <div className="leaderboard-tabs" role="tablist" aria-label="Score sections">
+        <div className="leaderboard-mode-tabs" role="tablist" aria-label="Game mode">
           <button
-            className={`leaderboard-tab${activeTab === "personal" ? " is-active" : ""}`}
+            className={`leaderboard-mode-tab leaderboard-mode-tab--classic${mode === "classic" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={activeTab === "personal"}
-            onClick={() => onTabChange("personal")}
+            aria-selected={mode === "classic"}
+            onClick={() => onModeChange("classic")}
           >
-            {personalLabel}
+            Classic
           </button>
-          {globalEnabled ? (
+          <button
+            className={`leaderboard-mode-tab leaderboard-mode-tab--crunch${mode === "crunch" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={mode === "crunch"}
+            onClick={() => onModeChange("crunch")}
+          >
+            <span className="leaderboard-mode-tab-eyebrow">Time Attack</span>
+            Crunch
+          </button>
+        </div>
+
+        {globalEnabled ? (
+          <div className="leaderboard-scope-toggle" role="tablist" aria-label="Score scope">
             <button
-              className={`leaderboard-tab${activeTab === "global" ? " is-active" : ""}`}
+              className={`leaderboard-scope-option${activeTab === "personal" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "personal"}
+              onClick={() => onTabChange("personal")}
+            >
+              {personalLabel}
+            </button>
+            <button
+              className={`leaderboard-scope-option${activeTab === "global" ? " is-active" : ""}`}
               type="button"
               role="tab"
               aria-selected={activeTab === "global"}
@@ -1298,10 +1306,10 @@ function LeaderboardModal({
             >
               Global Top 10
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
-        {globalEnabled && activeTab === "global" ? (
+        {globalEnabled && activeTab === "global" && (!signedIn || globalPlaceholderMessage) ? (
           <div className="leaderboard-disclaimer">
             <p>{globalPlaceholderMessage || "Only runs started whilst signed in count towards the global board."}</p>
             {!globalPlaceholderMessage && !signedIn ? (
@@ -1331,9 +1339,15 @@ function LeaderboardModal({
                         ).padStart(2, "0")}
                       </span>
                       <strong className="leaderboard-podium-score">{run.score}</strong>
-                      <span className="leaderboard-meta">
-                        {isCrunch ? formatCrunchRunMeta(run) || formatRunDate(run.createdAt) : formatRunDate(run.createdAt)}
-                      </span>
+                      {isCrunch ? (
+                        <div className="leaderboard-crunch-stats leaderboard-crunch-stats--podium">
+                          {run.survivalMs > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">⏱</span>{formatCrunchTime(run.survivalMs)}</span> : null}
+                          {Number.isFinite(run.poxelsPopped) && run.poxelsPopped > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">◆</span>{run.poxelsPopped}</span> : null}
+                          {!run.survivalMs && !run.poxelsPopped ? <span className="leaderboard-meta">{formatRunDate(run.createdAt)}</span> : null}
+                        </div>
+                      ) : (
+                        <span className="leaderboard-meta">{formatRunDate(run.createdAt)}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1348,28 +1362,34 @@ function LeaderboardModal({
               {!personalLoading && personalError ? <p className="leaderboard-empty">{personalError}</p> : null}
               {!personalLoading && !personalError && personalRuns.length > 0 ? (
                 <ol className="leaderboard-list leaderboard-list-local">
-                  {personalRuns.map((run, index) =>
-                    index < personalVisibleCount ? (
-                      <li key={`personal-visible-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--pop">
-                        <span className="leaderboard-rank">
-                          {String(
-                            personalRunNumbers[String(run.id)] ??
-                            Math.max(1, personalRunCount - index)
-                          ).padStart(2, "0")}
+                  {personalRuns.map((run, index) => {
+                    const runNum = personalRunNumbers[String(run.id)] ?? Math.max(1, personalRunCount - index);
+                    return index < personalVisibleCount ? (
+                      <li key={`personal-visible-${run.id ?? run.createdAt}-${run.score}-${index}`} className={`leaderboard-row leaderboard-row--pop${isCrunch ? " is-crunch" : ""}`}>
+                        <span className="leaderboard-rank-poxel" data-rank={String(runNum)}>
+                          {String(runNum).padStart(2, "0")}
+                        </span>
+                        <span className="leaderboard-date">
+                          {formatRunDate(run.createdAt)}
                         </span>
                         <strong className="leaderboard-score">{run.score}</strong>
-                        <span className="leaderboard-meta leaderboard-date">
-                          {isCrunch ? formatCrunchRunMeta(run) || formatRunDate(run.createdAt) : formatRunDate(run.createdAt)}
-                        </span>
+                        {isCrunch ? (
+                          <div className="leaderboard-crunch-stats">
+                            {run.survivalMs > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">⏱</span>{formatCrunchTime(run.survivalMs)}</span> : null}
+                            {Number.isFinite(run.poxelsPopped) && run.poxelsPopped > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">◆</span>{run.poxelsPopped}</span> : null}
+                          </div>
+                        ) : null}
                       </li>
                     ) : (
-                      <li key={`personal-ghost-${run.id ?? run.createdAt}-${run.score}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
-                        <span className="leaderboard-rank">&nbsp;</span>
+                      <li key={`personal-ghost-${run.id ?? run.createdAt}-${run.score}-${index}`} className={`leaderboard-row leaderboard-row--skeleton${isCrunch ? " is-crunch" : ""}`} aria-hidden="true">
+                        <span className="leaderboard-rank-poxel">&nbsp;</span>
+                        <span className="leaderboard-date">&nbsp;</span>
                         <span className="leaderboard-score">&nbsp;</span>
-                        <span className="leaderboard-meta leaderboard-date">&nbsp;</span>
+                        {isCrunch ? <div className="leaderboard-crunch-stats" /> : null}
                       </li>
-                    )
-                  )}
+                    );
+                  })}
+
                 </ol>
               ) : null}
               {!personalLoading && !personalError && personalRuns.length === 0 ? (
@@ -1400,10 +1420,13 @@ function LeaderboardModal({
                     <CrownIcon />
                   </span>
                   <strong className="leaderboard-best-score">{globalTopRun.score}</strong>
-                  <span className="leaderboard-hero-name">{globalTopRun.displayName}</span>
-                  {isCrunch && formatCrunchRunMeta(globalTopRun) ? (
-                    <span className="leaderboard-meta leaderboard-date">{formatCrunchRunMeta(globalTopRun)}</span>
+                  {isCrunch ? (
+                    <div className="leaderboard-crunch-stats">
+                      {globalTopRun.survivalMs > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">⏱</span>{formatCrunchTime(globalTopRun.survivalMs)}</span> : null}
+                      {Number.isFinite(globalTopRun.poxelsPopped) && globalTopRun.poxelsPopped > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">◆</span>{globalTopRun.poxelsPopped}</span> : null}
+                    </div>
                   ) : null}
+                  <span className="leaderboard-hero-name">{globalTopRun.displayName}</span>
                 </div>
               ) : null}
               {!globalLoading && !globalError && !globalTopRun ? (
@@ -1415,10 +1438,11 @@ function LeaderboardModal({
               {globalLoading ? (
                 <ol className="leaderboard-list leaderboard-list-global leaderboard-list--loading">
                   {GLOBAL_LEADERBOARD_PLACEHOLDER_INDICES.map((i) => (
-                    <li key={i} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
-                      <span className="leaderboard-rank">&nbsp;</span>
-                      <span className="leaderboard-score">&nbsp;</span>
+                    <li key={i} className={`leaderboard-row leaderboard-row--skeleton${isCrunch ? " is-crunch" : ""}`} aria-hidden="true">
+                      <span className="leaderboard-rank-poxel">&nbsp;</span>
                       <span className="leaderboard-name">&nbsp;</span>
+                      <span className="leaderboard-score">&nbsp;</span>
+                      {isCrunch ? <div className="leaderboard-crunch-stats" /> : null}
                     </li>
                   ))}
                 </ol>
@@ -1426,25 +1450,29 @@ function LeaderboardModal({
               {!globalLoading && globalError ? <p className="leaderboard-empty">{globalError}</p> : null}
               {!globalLoading && !globalError && globalRemainingRuns.length > 0 ? (
                 <ol className="leaderboard-list leaderboard-list-global">
-                  {globalRemainingRuns.map((run, index) =>
-                    index + 2 <= globalVisibleCount ? (
-                      <li key={`visible-${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--pop">
-                        <span className="leaderboard-rank">{String(index + 2).padStart(2, "0")}</span>
-                        <strong className="leaderboard-score">{run.score}</strong>
+                  {globalRemainingRuns.map((run, index) => {
+                    const rank = index + 2;
+                    return index + 2 <= globalVisibleCount ? (
+                      <li key={`visible-${run.id}-${run.createdAt}-${index}`} className={`leaderboard-row leaderboard-row--pop${isCrunch ? " is-crunch" : ""}`}>
+                        <span className="leaderboard-rank-poxel" data-rank={String(rank)}>{String(rank).padStart(2, "0")}</span>
                         <span className="leaderboard-name">{run.displayName}</span>
-                        {isCrunch && formatCrunchRunMeta(run) ? (
-                          <span className="leaderboard-meta leaderboard-date">{formatCrunchRunMeta(run)}</span>
+                        <strong className="leaderboard-score">{run.score}</strong>
+                        {isCrunch ? (
+                          <div className="leaderboard-crunch-stats">
+                            {run.survivalMs > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">⏱</span>{formatCrunchTime(run.survivalMs)}</span> : null}
+                            {Number.isFinite(run.poxelsPopped) && run.poxelsPopped > 0 ? <span className="leaderboard-crunch-stat"><span className="leaderboard-crunch-stat-icon" aria-hidden="true">◆</span>{run.poxelsPopped}</span> : null}
+                          </div>
                         ) : null}
                       </li>
                     ) : (
-                      <li key={`ghost-${run.id}-${run.createdAt}-${index}`} className="leaderboard-row leaderboard-row--skeleton" aria-hidden="true">
-                        <span className="leaderboard-rank">&nbsp;</span>
-                        <span className="leaderboard-score">&nbsp;</span>
+                      <li key={`ghost-${run.id}-${run.createdAt}-${index}`} className={`leaderboard-row leaderboard-row--skeleton${isCrunch ? " is-crunch" : ""}`} aria-hidden="true">
+                        <span className="leaderboard-rank-poxel">&nbsp;</span>
                         <span className="leaderboard-name">&nbsp;</span>
-                        {isCrunch ? <span className="leaderboard-meta leaderboard-date">&nbsp;</span> : null}
+                        <span className="leaderboard-score">&nbsp;</span>
+                        {isCrunch ? <div className="leaderboard-crunch-stats" /> : null}
                       </li>
-                    )
-                  )}
+                    );
+                  })}
                 </ol>
               ) : null}
             </section>
@@ -2321,25 +2349,58 @@ function getBoardCellMetrics(boardElement) {
     return null;
   }
 
-  // Measure actual rendered cell positions directly from the DOM instead of
-  // deriving them from board padding/border/gap formulas. CSS grid uses
-  // browser-internal floating-point that doesn't round-trip through computed
-  // styles, so any formula-based stepPx accumulates error across rows/cols.
+  // Measure the grid from layout coordinates, not painted rects. In Crunch mode
+  // wall cells briefly slide in with `transform`, which distorts
+  // getBoundingClientRect() enough to blow apart the drag ghost even though the
+  // underlying layout grid never changed.
   const allCells = boardElement.querySelectorAll(".board-cell");
   if (allCells.length < GRID_SIZE + 1) {
     return null;
   }
 
-  const r0 = allCells[0].getBoundingClientRect();
-  const r1 = allCells[1].getBoundingClientRect();
-  const rN = allCells[GRID_SIZE].getBoundingClientRect();
+  const c0 = allCells[0];
+  const c1 = allCells[1];
+  const cN = allCells[GRID_SIZE];
+  if (!c0 || !c1 || !cN) {
+    return null;
+  }
 
-  const gridLeft = r0.left;
-  const gridTop  = r0.top;
-  const stepX    = r1.left - r0.left;   // exact horizontal pitch
-  const stepY    = rN.top  - r0.top;    // exact vertical pitch
-  const cellW    = r0.width;
-  const gapX     = stepX - cellW;
+  const boardRect = boardElement.getBoundingClientRect();
+  const cellW = c0.offsetWidth;
+  const cellH = c0.offsetHeight;
+  const gridLeft = boardRect.left + c0.offsetLeft;
+  const gridTop = boardRect.top + c0.offsetTop;
+  const stepX = c1.offsetLeft - c0.offsetLeft;
+  const stepY = cN.offsetTop - c0.offsetTop;
+  const gapX = stepX - cellW;
+
+  if (!(stepX > 0) || !(stepY > 0) || !(cellW > 0) || !(cellH > 0)) {
+    const r0 = c0.getBoundingClientRect();
+    const r1 = c1.getBoundingClientRect();
+    const rN = cN.getBoundingClientRect();
+
+    return {
+      gridLeft: r0.left,
+      gridTop: r0.top,
+      gridRight: r0.left + (GRID_SIZE - 1) * (r1.left - r0.left) + r0.width,
+      gridBottom: r0.top + (GRID_SIZE - 1) * (rN.top - r0.top) + r0.height,
+      stepX: r1.left - r0.left,
+      stepY: rN.top - r0.top,
+      stepPx: r1.left - r0.left,
+      gapPx: (r1.left - r0.left) - r0.width,
+      cellSizePx: r0.width,
+      rootFontSize: Number.parseFloat(
+        window.getComputedStyle(document.documentElement).fontSize || "16"
+      ),
+      ghostLiftRem: getDragGhostLiftRem(),
+      cellSizeRem: r0.width / Number.parseFloat(
+        window.getComputedStyle(document.documentElement).fontSize || "16"
+      ),
+      gapRem: ((r1.left - r0.left) - r0.width) / Number.parseFloat(
+        window.getComputedStyle(document.documentElement).fontSize || "16"
+      ),
+    };
+  }
 
   const rootFontSize = Number.parseFloat(
     window.getComputedStyle(document.documentElement).fontSize || "16"
@@ -2349,7 +2410,7 @@ function getBoardCellMetrics(boardElement) {
     gridLeft,
     gridTop,
     gridRight:  gridLeft + (GRID_SIZE - 1) * stepX + cellW,
-    gridBottom: gridTop  + (GRID_SIZE - 1) * stepY + r0.height,
+    gridBottom: gridTop  + (GRID_SIZE - 1) * stepY + cellH,
     stepX,
     stepY,
     stepPx:     stepX,   // for slop/bounds checks — X ≈ Y on a square grid
@@ -7014,6 +7075,18 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setLeaderboardTab(nextTab);
   }
 
+  function handleLeaderboardModeChange(nextMode) {
+    if (nextMode === leaderboardMode) {
+      return;
+    }
+    primeSound();
+    playPlaceSound();
+    setGlobalRuns([]);
+    setGlobalVisibleCount(0);
+    setPersonalVisibleCount(0);
+    setLeaderboardMode(nextMode);
+  }
+
   function handleCloseLeaderboard() {
     primeSound();
     playPlaceSound();
@@ -7464,7 +7537,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     ? crunchLocalRunNumbers
     : (session ? accountRunNumbers : localRunNumbers);
   const personalTopRunNumbers = personalRunNumbers;
-  const personalLabel = leaderboardIsCrunch ? "This Device" : (session ? "My Runs" : "This Device");
+  const personalLabel = session ? "My Runs" : "This Device";
   const personalLoading = leaderboardIsCrunch ? false : (session ? accountRunsLoading : false);
   const personalError = leaderboardIsCrunch ? "" : (session ? accountRunsError : "");
   const personalRunCount = leaderboardIsCrunch
@@ -8158,6 +8231,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         signedIn={Boolean(session)}
         onClose={handleCloseLeaderboard}
         onGuestSignIn={() => handleOpenAuthPrompt({ autoFocus: true })}
+        onModeChange={handleLeaderboardModeChange}
         onTabChange={handleLeaderboardTabChange}
         open={leaderboardOpen}
       />
