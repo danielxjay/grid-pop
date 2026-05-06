@@ -61,10 +61,12 @@ function stringToBoard(s) {
   return s.split("").map(Number);
 }
 
+const INTRO_TARGETS = [2, 5, 6, 6, 8];
+
 export const POPOFF_LEVELS = GAME1.map((layout, index) => ({
   id: index + 1,
   board: stringToBoard(layout),
-  target: 8 + Math.floor(index / 5),
+  target: index < 5 ? INTRO_TARGETS[index] : 8 + Math.floor((index - 5) / 5),
 }));
 
 export const POPOFF_TOTAL = POPOFF_LEVELS.length;
