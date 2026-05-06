@@ -195,8 +195,8 @@ const GLOBAL_LEADERBOARD_LIMIT = 10;
 const PERSONAL_RECENT_RUN_LIMIT = 10;
 const PERSONAL_TOP_RUN_LIMIT = 3;
 const LEADERBOARD_CASCADE_STAGGER_MS = 55;
-const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.5";
-const CLIENT_VERSION = "gridpop-web-1.5.3";
+const PREVIOUS_CLIENT_VERSION = "gridpop-web-1.5.3";
+const CLIENT_VERSION = "gridpop-web-1.6";
 const TRAY_REVEAL_STAGGER_MS = 110;
 const NEXT_TRAY_RETRY_DELAYS_MS = [450, 1100];
 const MOVE_SYNC_RETRY_DELAYS_MS = [250, 750];
@@ -8731,7 +8731,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                         Continue
                       </button>
                       <button className="start-local-button" type="button" onClick={handleNewGame} disabled={resumePending || startBlocked}>
-                        Start new
+                        New game
                       </button>
                     </>
                   ) : activeCrunchRunActive && activeCrunchRunCheckDone ? (
@@ -8742,7 +8742,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                         {resumePending ? "Reconnecting..." : "Continue"}
                       </button>
                       <button className="start-local-button" type="button" onClick={handleStartFreshCrunch} disabled={resumePending || startBlocked}>
-                        Start fresh
+                        New game
                       </button>
                     </>
                   ) : showModeSelect ? (
@@ -8800,7 +8800,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     </button>
                   )}
                   <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
-                    Start new
+                    New game
                   </button>
                 </div>
               ) : null}
@@ -8814,7 +8814,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     </button>
                   ) : null}
                   <button className="start-local-button" type="button" onClick={handleStartFresh} disabled={resumePending}>
-                    Start new
+                    New game
                   </button>
                 </div>
               ) : null}
