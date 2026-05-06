@@ -579,7 +579,7 @@ function HowToPlayPopOffModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
               </div>
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">The board</strong>
-                <p>A 5×5 grid of poxels. Some are already dropped in. Pop them all in as few taps as you can.</p>
+                <p>A 5×5 grid of with a pattern of poxels. Pop them all in as few taps as you can.</p>
               </div>
             </div>
             <div className="how-to-play-step--popoff">
@@ -591,8 +591,8 @@ function HowToPlayPopOffModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
                 </div>
               </div>
               <div className="how-to-play-step-body">
-                <strong className="how-to-play-step-title">Tap to pop</strong>
-                <p>Tap any poxel to pop it and the four beside it in a cross pattern.</p>
+                <strong className="how-to-play-step-title">The pattern</strong>
+                <p>Tap any empty space to drop in a poxel cross pattern.</p>
               </div>
             </div>
             <div className="how-to-play-step--popoff">
@@ -604,8 +604,8 @@ function HowToPlayPopOffModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
                 </div>
               </div>
               <div className="how-to-play-step-body">
-                <strong className="how-to-play-step-title">They all flip</strong>
-                <p>Dropped in poxels get popped, and new poxels drop in. The whole cross flips.</p>
+                <strong className="how-to-play-step-title">Tap to pop</strong>
+                <p>Tapping a poxel will pop it along with any others in the cross pattern space. Be careful... poxels will appear in any of the empty spaces in the cross pattern.</p>
               </div>
             </div>
             <div className="how-to-play-step--popoff">
