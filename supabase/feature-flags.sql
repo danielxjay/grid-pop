@@ -30,7 +30,7 @@ to authenticated
 using (auth.uid() = user_id);
 
 insert into public.feature_flags (flag_key, enabled)
-values ('crunch_mode', false)
+values ('crunch_mode', true)
 on conflict (flag_key) do update
 set enabled = excluded.enabled,
     updated_at = now();

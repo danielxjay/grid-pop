@@ -1,4 +1,6 @@
 import React, { startTransition, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { toggleAt as popOffToggleAt, isSolved as popOffIsSolved } from "./popoff-logic.js";
+import { POPOFF_LEVELS, POPOFF_TOTAL } from "./popoff-levels.js";
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import {
   GRID_SIZE,
@@ -43,6 +45,9 @@ import {
   playCrunchPhaseChangeSound,
   playCrunchWallSound,
   playFillCellSound,
+  playPixelPopSound,
+  playPopOffDudSound,
+  playPopOffSolveSound,
   playPreviewMoveSound,
   playPickupSound,
   playPlaceSound,
@@ -216,6 +221,8 @@ const LAST_SEEN_VERSION_STORAGE_KEY = "gridpop-last-seen-version";
 const SEEN_THEME_UNLOCKS_STORAGE_KEY = "gridpop-seen-theme-unlocks";
 const CRUNCH_MODE_FLAG_KEY = "crunch_mode";
 const SEEN_CRUNCH_HOW_TO_KEY = "gridpop-seen-crunch-howto-v1";
+const POPOFF_MODE_FLAG_KEY = "popoff_mode";
+const SEEN_POPOFF_HOW_TO_KEY = "gridpop-seen-popoff-howto-v1";
 const CONTROL_CHARS_PATTERN = /[\u0000-\u001F\u007F-\u009F]/g;
 const ZERO_WIDTH_PATTERN = /[\u200B-\u200D\uFEFF]/g;
 const RETURNING_PLAYER_STORAGE_KEYS = [
@@ -458,11 +465,13 @@ function UserIcon() {
 function CrownIcon() {
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-      <path d="M2 16.5 L2 14 L1.5 7.5 L7 12 L10 4.5 L13 12 L18.5 7.5 L18 14 L18 16.5 Z" fill="#f5c518" />
-      <rect x="1.5" y="14" width="17" height="2.8" rx="0.5" fill="#f5c518" />
-      <circle cx="1.5" cy="7.5" r="1.2" fill="#f5c518" />
-      <circle cx="10" cy="4.5" r="1.2" fill="#f5c518" />
-      <circle cx="18.5" cy="7.5" r="1.2" fill="#f5c518" />
+      <g fill="#d99a00" stroke="#3b2100" strokeWidth="0.9" strokeLinejoin="round">
+        <path d="M2 16.5 L2 14 L1.5 7.5 L7 12 L10 4.5 L13 12 L18.5 7.5 L18 14 L18 16.5 Z" />
+        <rect x="1.5" y="14" width="17" height="2.8" rx="0.5" />
+        <circle cx="1.5" cy="7.5" r="1.2" />
+        <circle cx="10" cy="4.5" r="1.2" />
+        <circle cx="18.5" cy="7.5" r="1.2" />
+      </g>
     </svg>
   );
 }
@@ -527,7 +536,199 @@ function TrophyIcon() {
   );
 }
 
-function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFrameInRef, poxelsPopped, warn, critical, warningStep = 0 }) {
+// ─── PopOff components ────────────────────────────────────────────────────────
+
+function PopOffMiniGrid({ cells, cols = 5, tappedIndex = -1 }) {
+  return (
+    <div className={`popoff-mini-grid${cols === 3 ? " popoff-mini-grid--3col" : ""}`} aria-hidden="true">
+      {cells.map((lit, i) => (
+        <div key={i} className={`popoff-mini-cell${lit ? " is-lit" : ""}${i === tappedIndex ? " is-tapped" : ""}`} />
+      ))}
+    </div>
+  );
+}
+
+function HowToPlayPopOffModal({ onClose, onOpenChangelog, hasUnreadChangelog }) {
+  // "The board" — scattered puzzle-like starting state (full 5×5)
+  const boardDisplay = [0,0,0,0,0, 0,1,0,1,0, 0,0,0,0,0, 0,1,0,0,0, 0,0,1,0,0];
+
+  // "Tap any poxel" — 3×3 crop centred on tap target (all unlit, show ring at centre)
+  // Tapping centre flips all 5 cells of the plus
+  const tapBefore3 = [0,0,0, 0,0,0, 0,0,0]; // tappedIndex=4
+  const tapAfter3  = [0,1,0, 1,1,1, 0,1,0]; // full plus lit
+
+  // "Lit flips to unlit" — 3×3 crop: rows 1-3, cols 0-2 of the 5×5
+  // 5×5 before: [7,11,12] lit → 3×3: (0,2)=7→1, (1,1)=11→1(tapped), (1,2)=12→1
+  // 5×5 after:  [6,7,10,16]   → 3×3: (0,1)=6→1, (0,2)=7→1, (1,0)=10→1, (2,1)=16→1
+  const flipBefore3 = [0,0,1, 0,1,1, 0,0,0]; // tappedIndex=4
+  const flipAfter3  = [0,1,1, 1,0,0, 0,1,0];
+
+  return (
+    <div className="how-to-play-overlay" role="dialog" aria-modal="true" aria-label="How to Play PopOff" onClick={onClose}>
+      <div className="how-to-play-wrap" onClick={(e) => e.stopPropagation()}>
+        <button className="leaderboard-close" type="button" onClick={onClose} aria-label="Close how to play">
+          Close
+        </button>
+        <section className="how-to-play-modal">
+          <div className="leaderboard-colour-strip" aria-hidden="true" />
+          <h2>How to Play <span className="game-title-stamp game-title-stamp--popoff" style={{ fontSize: "0.7em", verticalAlign: "middle", position: "static", transform: "rotate(-4deg)", display: "inline-block" }}>PopOff!</span></h2>
+          <div className="how-to-play-steps how-to-play-steps--popoff">
+            <div className="how-to-play-step--popoff">
+              <div className="how-to-play-step-visual" aria-hidden="true">
+                <PopOffMiniGrid cells={boardDisplay} />
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">The board</strong>
+                <p>A 5×5 grid of poxels. Some are already dropped in. Pop them all in as few taps as you can.</p>
+              </div>
+            </div>
+            <div className="how-to-play-step--popoff">
+              <div className="how-to-play-step-visual" aria-hidden="true">
+                <div className="popoff-mini-pair">
+                  <PopOffMiniGrid cells={tapBefore3} cols={3} tappedIndex={4} />
+                  <span className="how-to-play-arrow">→</span>
+                  <PopOffMiniGrid cells={tapAfter3} cols={3} />
+                </div>
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Tap to pop</strong>
+                <p>Tap any poxel to pop it and the four beside it in a cross pattern.</p>
+              </div>
+            </div>
+            <div className="how-to-play-step--popoff">
+              <div className="how-to-play-step-visual" aria-hidden="true">
+                <div className="popoff-mini-pair">
+                  <PopOffMiniGrid cells={flipBefore3} cols={3} tappedIndex={4} />
+                  <span className="how-to-play-arrow">→</span>
+                  <PopOffMiniGrid cells={flipAfter3} cols={3} />
+                </div>
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">They all flip</strong>
+                <p>Dropped in poxels get popped, and new poxels drop in. The whole cross flips.</p>
+              </div>
+            </div>
+            <div className="how-to-play-step--popoff">
+              <div className="how-to-play-step-visual" aria-hidden="true">
+                <div className="how-to-play-combo-badges">
+                  <span className="how-to-play-badge">Moves</span>
+                  <span className="how-to-play-badge">Target</span>
+                  <span className="how-to-play-badge how-to-play-badge--hot">Best</span>
+                </div>
+              </div>
+              <div className="how-to-play-step-body">
+                <strong className="how-to-play-step-title">Target moves</strong>
+                <p>Each puzzle has a target move count. Solve it in that many or fewer. Your personal best is saved.</p>
+              </div>
+            </div>
+          </div>
+          <p className="how-to-play-footer">A puzzle is complete when all poxels are popped.</p>
+          <p className="how-to-play-credit">
+            Made by{" "}
+            <a
+              className="site-footer-link"
+              href="https://www.threads.com/@dxniel.jxy"
+              target="_blank"
+              rel="noreferrer"
+            >
+              @dxniel.jxy
+            </a>
+            {" · "}
+            <button
+              className="site-footer-version site-footer-version--button"
+              type="button"
+              onClick={onOpenChangelog}
+              aria-label={hasUnreadChangelog ? `View changelog for new in version ${CLIENT_VERSION.replace("gridpop-web-", "")}` : "View changelog"}
+            >
+              <span>{CLIENT_VERSION.replace("gridpop-web-", "v")}</span>
+              {hasUnreadChangelog ? <span className="ui-pill-badge">New!</span> : null}
+            </button>
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function PopOffBoard({ board, onCellClick, solved }) {
+  return (
+    <div className={`popoff-board${solved ? " is-solved" : ""}`} aria-label="PopOff puzzle board">
+      {board.map((cell, index) => {
+        const row = Math.floor(index / 5);
+        const col = index % 5;
+        return (
+          <button
+            key={index}
+            type="button"
+            className={`popoff-cell${cell ? " is-lit" : ""}${solved ? " is-celebrating" : ""}`}
+            style={solved ? { "--wave-delay": `${(row + col) * 50}ms` } : undefined}
+            onClick={() => onCellClick(index)}
+            disabled={solved}
+            aria-pressed={cell === 1}
+            aria-label={`Row ${row + 1} column ${col + 1}, ${cell ? "lit" : "unlit"}`}
+          />
+        );
+      })}
+      {solved ? (
+        <div className="popoff-board-overlay" aria-live="polite">
+          <span className="popoff-board-overlay-pill">Solved</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PopOffNav({ puzzleIndex, progress, solved, onPrev, onNext, onReset }) {
+  const best = progress.bestByPuzzle[puzzleIndex];
+  const completed = best !== null && !solved;
+  return (
+    <div className="popoff-nav">
+      <div className="popoff-nav-row">
+        <button className="popoff-nav-arrow" type="button" onClick={onPrev} disabled={puzzleIndex === 0} aria-label="Previous puzzle">
+          <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor" aria-hidden="true"><path d="M8 0L0 5L8 10Z"/></svg>
+        </button>
+        <div className="popoff-nav-counter-wrap">
+          <span className="popoff-nav-counter">
+            {puzzleIndex + 1} <span className="popoff-nav-sep">/</span> {POPOFF_TOTAL}
+          </span>
+        </div>
+        <button className="popoff-nav-arrow" type="button" onClick={onNext} disabled={puzzleIndex === POPOFF_TOTAL - 1} aria-label="Next puzzle">
+          <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor" aria-hidden="true"><path d="M0 0L8 5L0 10Z"/></svg>
+        </button>
+      </div>
+      {completed ? (
+        <span className="popoff-nav-solved-badge" aria-label={`Solved in ${best} moves`}>
+          Solved
+        </span>
+      ) : null}
+      <button className="popoff-nav-reset" type="button" onClick={onReset} aria-label="Reset puzzle">
+        Reset
+      </button>
+    </div>
+  );
+}
+
+// ─── End PopOff components ────────────────────────────────────────────────────
+
+function ScorePanel({ score, bestScore, combo, onClick, mode, runTimeRef, nextFrameInRef, poxelsPopped, warn, critical, warningStep = 0, popOffMoves, popOffTarget, popOffBest }) {
+  if (mode === 'popoff') {
+    return (
+      <div className="score-panel">
+        <div className="score-stat">
+          <p className="section-label">Moves</p>
+          <strong className="score-value">{popOffMoves}</strong>
+        </div>
+        <div className="score-stat">
+          <p className="section-label">Target</p>
+          <strong className="score-value">{popOffTarget}</strong>
+        </div>
+        <div className="score-stat">
+          <p className="section-label">Best</p>
+          <strong className="score-value">{popOffBest ?? "—"}</strong>
+        </div>
+      </div>
+    );
+  }
   if (mode === 'crunch') {
     return (
       <div className="score-panel">
@@ -940,7 +1141,7 @@ function HowToPlayCrunchModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
         </button>
         <section className="how-to-play-modal">
           <div className="leaderboard-colour-strip" aria-hidden="true" />
-          <h2>How to Play Crunch</h2>
+          <h2>How to Play <span className="game-title-stamp" style={{ fontSize: "0.7em", verticalAlign: "middle", position: "static", transform: "rotate(-4deg)", display: "inline-block" }}>{"{crunch}"}</span></h2>
           <div className="how-to-play-steps">
             <div className="how-to-play-step">
               <MiniBoard grid={placeGrid} />
@@ -1044,7 +1245,7 @@ function RunActionConfirmModal({
   );
 }
 
-function RunModeSelectModal({ currentMode, onSelectMode, onClose }) {
+function RunModeSelectModal({ currentMode, canUseCrunch, canUsePopOff, onSelectMode, onClose }) {
   return (
     <div
       className="leaderboard-modal-overlay"
@@ -1065,12 +1266,20 @@ function RunModeSelectModal({ currentMode, onSelectMode, onClose }) {
             <div className="mode-select run-action-mode-select">
               <button className="mode-card" type="button" onClick={() => onSelectMode('classic')}>
                 <span className="mode-card-name">Classic</span>
-                <span className="mode-card-blurb">{currentMode === 'classic' ? 'resume current run' : 'casual line popping'}</span>
+                <span className="mode-card-blurb">{currentMode === 'classic' ? 'resume current run' : 'casual drag & drop line popping.'}</span>
               </button>
-              <button className="mode-card mode-card--crunch" type="button" onClick={() => onSelectMode('crunch')}>
-                <span className="mode-card-name">Crunch</span>
-                <span className="mode-card-blurb">{currentMode === 'crunch' ? 'resume current run' : 'walls close in. time-based.'}</span>
-              </button>
+              {canUsePopOff ? (
+                <button className="mode-card mode-card--popoff" type="button" onClick={() => onSelectMode('popoff')}>
+                  <span className="mode-card-name">PopOff!</span>
+                  <span className="mode-card-blurb">{currentMode === 'popoff' ? 'current mode' : 'poxel popping puzzle mode.'}</span>
+                </button>
+              ) : null}
+              {canUseCrunch ? (
+                <button className="mode-card mode-card--crunch" type="button" onClick={() => onSelectMode('crunch')}>
+                  <span className="mode-card-name">{'{crunch}'}</span>
+                  <span className="mode-card-blurb">{currentMode === 'crunch' ? 'resume current run' : 'walls close in. fast-paced & time-based.'}</span>
+                </button>
+              ) : null}
             </div>
           </div>
         </section>
@@ -1212,6 +1421,8 @@ function ScoreboardTrigger({ onClick }) {
 
 function LeaderboardModal({
   activeTab,
+  canUseCrunch,
+  canUsePopOffLeaderboard,
   globalEnabled,
   globalError,
   globalLoading,
@@ -1228,6 +1439,9 @@ function LeaderboardModal({
   personalTopRuns,
   personalTopRunNumbers,
   personalVisibleCount,
+  popOffRows,
+  popOffLoading,
+  popOffError,
   signedIn,
   onClose,
   onGuestSignIn,
@@ -1242,7 +1456,7 @@ function LeaderboardModal({
   const bestPersonalRun = personalTopRuns[0] ?? null;
   const globalTopRun = globalRuns[0] ?? null;
   const globalRemainingRuns = globalRuns.slice(1);
-  const isCrunch = mode === "crunch";
+  const isCrunch = canUseCrunch && mode === "crunch";
   const personalBestEmptyText = personalLabel === "My Runs" ? "No account runs yet." : "No device runs yet.";
   const personalRecentEmptyText = personalLabel === "My Runs"
     ? "Finish a signed-in run and it will show up here."
@@ -1264,29 +1478,43 @@ function LeaderboardModal({
           <div className="leaderboard-colour-strip" aria-hidden="true" />
           <h2>Leaderboard</h2>
 
-        <div className="leaderboard-mode-tabs" role="tablist" aria-label="Game mode">
-          <button
-            className={`leaderboard-mode-tab leaderboard-mode-tab--classic${mode === "classic" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={mode === "classic"}
-            onClick={() => onModeChange("classic")}
-          >
-            Classic
-          </button>
-          <button
-            className={`leaderboard-mode-tab leaderboard-mode-tab--crunch${mode === "crunch" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={mode === "crunch"}
-            onClick={() => onModeChange("crunch")}
-          >
-            <span className="leaderboard-mode-tab-eyebrow">Time Attack</span>
-            Crunch
-          </button>
-        </div>
+        {(canUseCrunch || canUsePopOffLeaderboard) ? (
+          <div className="leaderboard-mode-tabs" role="tablist" aria-label="Game mode">
+            <button
+              className={`leaderboard-mode-tab leaderboard-mode-tab--classic${mode === "classic" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={mode === "classic"}
+              onClick={() => onModeChange("classic")}
+            >
+              Classic
+            </button>
+            {canUseCrunch ? (
+              <button
+                className={`leaderboard-mode-tab leaderboard-mode-tab--crunch${mode === "crunch" ? " is-active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={mode === "crunch"}
+                onClick={() => onModeChange("crunch")}
+              >
+                &#123;crunch&#125;
+              </button>
+            ) : null}
+            {canUsePopOffLeaderboard ? (
+              <button
+                className={`leaderboard-mode-tab leaderboard-mode-tab--popoff${mode === "popoff" ? " is-active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={mode === "popoff"}
+                onClick={() => onModeChange("popoff")}
+              >
+                PopOff!
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
-        {globalEnabled ? (
+        {globalEnabled && mode !== "popoff" ? (
           <div className="leaderboard-scope-toggle" role="tablist" aria-label="Score scope">
             <button
               className={`leaderboard-scope-option${activeTab === "personal" ? " is-active" : ""}`}
@@ -1309,7 +1537,78 @@ function LeaderboardModal({
           </div>
         ) : null}
 
-        {globalEnabled && activeTab === "global" && (!signedIn || globalPlaceholderMessage) ? (
+        {mode === "popoff" ? (
+          <div key="popoff-panel" className="leaderboard-panel">
+            {!signedIn ? (
+              <div className="leaderboard-disclaimer">
+                <p>Sign in to appear on the leaderboard.</p>
+                <button className="leaderboard-disclaimer-cta" type="button" onClick={onGuestSignIn}>
+                  Create a profile
+                </button>
+              </div>
+            ) : null}
+            <section className="leaderboard-section leaderboard-section--hero">
+              {popOffLoading ? (
+                <>
+                  <div className="leaderboard-hero leaderboard-hero--global leaderboard-hero--skeleton" aria-hidden="true">
+                    <span className="leaderboard-hero-rank">&nbsp;</span>
+                    <strong className="leaderboard-hero-score">&nbsp;</strong>
+                    <span className="leaderboard-hero-name">&nbsp;</span>
+                  </div>
+                  <div className="leaderboard-hero-spinner" aria-hidden="true">
+                    <span className="overlay-spinner-dot" />
+                    <span className="overlay-spinner-dot" />
+                    <span className="overlay-spinner-dot" />
+                  </div>
+                </>
+              ) : null}
+              {!popOffLoading && popOffRows.length > 0 ? (() => {
+                const top = popOffRows[0];
+                const topDeltaClass = top.delta < 0 ? "leaderboard-popoff-delta--under" : top.delta === 0 ? "leaderboard-popoff-delta--par" : "leaderboard-popoff-delta--over";
+                const topDeltaStr = top.delta >= 0 ? `+${top.delta}` : String(top.delta);
+                return (
+                  <div className="leaderboard-hero leaderboard-hero--global">
+                    <span className="leaderboard-hero-rank" aria-label="First place"><CrownIcon /></span>
+                    <strong className="leaderboard-best-score">{top.puzzlesCompleted}/50</strong>
+                    <span className={`leaderboard-popoff-delta ${topDeltaClass}`}>({topDeltaStr})</span>
+                    <span className="leaderboard-hero-name">{top.displayName}</span>
+                  </div>
+                );
+              })() : null}
+              {!popOffLoading && !popOffError && popOffRows.length === 0 ? (
+                <p className="leaderboard-empty">No scores yet — be the first!</p>
+              ) : null}
+            </section>
+            <section className="leaderboard-section leaderboard-section--global-list">
+              {!popOffLoading && popOffError ? (
+                <p className="leaderboard-empty">{popOffError}</p>
+              ) : !popOffLoading && popOffRows.length > 1 ? (
+                <ol className="leaderboard-list leaderboard-list-global">
+                  {popOffRows.slice(1).map((entry) => {
+                    const deltaClass = entry.delta < 0
+                      ? "leaderboard-popoff-delta--under"
+                      : entry.delta === 0
+                      ? "leaderboard-popoff-delta--par"
+                      : "leaderboard-popoff-delta--over";
+                    const deltaStr = entry.delta >= 0 ? `+${entry.delta}` : String(entry.delta);
+                    return (
+                      <li key={entry.displayName} className="leaderboard-row leaderboard-row--popoff leaderboard-row--pop">
+                        <span className="leaderboard-rank-poxel" data-rank={String(entry.rank)}>
+                          {String(entry.rank).padStart(2, "0")}
+                        </span>
+                        <span className="leaderboard-name">{entry.displayName}</span>
+                        <span className="leaderboard-popoff-puzzles">{entry.puzzlesCompleted}/50</span>
+                        <span className={`leaderboard-popoff-delta ${deltaClass}`}>({deltaStr})</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : null}
+            </section>
+          </div>
+        ) : null}
+
+        {mode !== "popoff" && globalEnabled && activeTab === "global" && (!signedIn || globalPlaceholderMessage) ? (
           <div className="leaderboard-disclaimer">
             <p>{globalPlaceholderMessage || "Only runs started whilst signed in count towards the global board."}</p>
             {!globalPlaceholderMessage && !signedIn ? (
@@ -1320,7 +1619,7 @@ function LeaderboardModal({
           </div>
         ) : null}
 
-        {!globalEnabled || activeTab === "personal" ? (
+        {mode !== "popoff" ? (!globalEnabled || activeTab === "personal") ? (
           <div key="personal-panel" className="leaderboard-panel">
             <section className="leaderboard-section">
               <p className="section-label">Best Runs</p>
@@ -1477,7 +1776,7 @@ function LeaderboardModal({
               ) : null}
             </section>
           </div>
-        )}
+        ) : null}
         </section>
       </div>
     </div>
@@ -1727,11 +2026,14 @@ function RunActionsPanel({
   disabled,
   onQuitRun,
   onSwitchMode,
+  gameMode = 'classic',
 }) {
+  const isPopOff = gameMode === 'popoff';
+  const heading = gameMode === 'crunch' ? '{crunch}' : gameMode === 'popoff' ? 'PopOff!' : 'Classic';
   return (
     <section className="settings-panel run-actions-panel" aria-label="Current run actions">
-      <h2>Current Run</h2>
-      <p className="run-actions-copy">End this run now or open mode select to choose what to play next.</p>
+      <h2>{heading}</h2>
+      {!isPopOff && <p className="run-actions-copy">End this run now or open mode select to choose what to play next.</p>}
       <div className="run-actions-buttons">
         {canSwitchMode ? (
           <button
@@ -1743,14 +2045,16 @@ function RunActionsPanel({
             Switch Game Mode
           </button>
         ) : null}
-        <button
-          className="auth-secondary-button run-actions-button run-actions-button--danger"
-          type="button"
-          onClick={onQuitRun}
-          disabled={disabled}
-        >
-          End Current Run
-        </button>
+        {onQuitRun ? (
+          <button
+            className="auth-secondary-button run-actions-button run-actions-button--danger"
+            type="button"
+            onClick={onQuitRun}
+            disabled={disabled}
+          >
+            End Current Run
+          </button>
+        ) : null}
       </div>
     </section>
   );
@@ -2543,6 +2847,36 @@ function clearActiveRunSession(runId) {
 }
 
 const CRUNCH_RUN_SAVE_KEY = "gridpop-crunch-run-save";
+const POPOFF_PROGRESS_KEY = "gridpop-popoff-progress";
+const POPOFF_RESUME_KEY = "gridpop-popoff-resume";
+
+function loadPopOffProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(POPOFF_PROGRESS_KEY) ?? "null");
+    if (Array.isArray(saved?.bestByPuzzle) && saved.bestByPuzzle.length === POPOFF_TOTAL) return saved;
+  } catch {}
+  return { bestByPuzzle: Array(POPOFF_TOTAL).fill(null) };
+}
+
+function savePopOffProgressLocal(progress) {
+  try { localStorage.setItem(POPOFF_PROGRESS_KEY, JSON.stringify(progress)); } catch {}
+}
+
+function loadPopOffResume() {
+  try {
+    const resume = JSON.parse(localStorage.getItem(POPOFF_RESUME_KEY) ?? "null");
+    if (resume && typeof resume.puzzleIndex === "number") return resume;
+  } catch {}
+  return null;
+}
+
+function savePopOffResume(puzzleIndex, board, moves, moveHistory) {
+  try { localStorage.setItem(POPOFF_RESUME_KEY, JSON.stringify({ puzzleIndex, board, moves, moveHistory: moveHistory ?? [] })); } catch {}
+}
+
+function clearPopOffResume() {
+  try { localStorage.removeItem(POPOFF_RESUME_KEY); } catch {}
+}
 
 function saveCrunchRunProgress(data) {
   try { localStorage.setItem(CRUNCH_RUN_SAVE_KEY, JSON.stringify(data)); } catch {}
@@ -2558,6 +2892,12 @@ function loadCrunchRunProgress() {
 
 function clearCrunchRunProgress() {
   try { localStorage.removeItem(CRUNCH_RUN_SAVE_KEY); } catch {}
+}
+
+function getTrayIdSignature(tray) {
+  return Array.isArray(tray)
+    ? tray.map((piece) => piece?.id ?? null).join(":")
+    : "";
 }
 
 function storePendingRun(runId, moves, deviceToken = null) {
@@ -2746,6 +3086,19 @@ function hasSeenCrunchHowTo() {
 function markSeenCrunchHowTo() {
   try {
     localStorage.setItem(SEEN_CRUNCH_HOW_TO_KEY, "true");
+  } catch {}
+}
+
+function hasSeenPopOffHowTo() {
+  try {
+    return localStorage.getItem(SEEN_POPOFF_HOW_TO_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+function markSeenPopOffHowTo() {
+  try {
+    localStorage.setItem(SEEN_POPOFF_HOW_TO_KEY, "true");
   } catch {}
 }
 
@@ -3158,7 +3511,11 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
       : createGameState(displayedBestScore, { crunch: true });
     crunchWallDepthRef.current = 0;
     setCrunchWallDepth(0);
-    setCrunchPoxelsPopped(0);
+    setCrunchPoxelsPopped(
+      Number.isFinite(Number(rankedState?.poxelsPopped))
+        ? Math.max(0, Number(rankedState.poxelsPopped))
+        : 0
+    );
     setCrunchCritical(false);
     setCrunchCriticalCells(null);
     crunchWarnRef.current = false;
@@ -3291,6 +3648,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
     crunchRunStartRef,
     crunchWallRngStateRef,
     crunchNextFrameAtRef,
+    crunchCriticalEndsAtRef,
     lastCrunchMoveAtMsRef,
   };
 }
@@ -3332,10 +3690,26 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [confirmPlacement, setConfirmPlacement] = useState(() => {
     try { return localStorage.getItem("gridpop-confirm-placement") === "true"; } catch { return false; }
   });
-  const [gameMode, setGameMode] = useState('classic'); // 'classic' | 'crunch'
+  const [gameMode, setGameMode] = useState('classic'); // 'classic' | 'crunch' | 'popoff'
+
+  // ─── PopOff state ───────────────────────────────────────────────────────────
+  const [popOffProgress, setPopOffProgress] = useState(loadPopOffProgress);
+  const [popOffPuzzleIndex, setPopOffPuzzleIndex] = useState(() => loadPopOffResume()?.puzzleIndex ?? 0);
+  const [popOffBoard, setPopOffBoard] = useState(() => {
+    const resume = loadPopOffResume();
+    if (resume && Array.isArray(resume.board) && resume.board.length === 25) return resume.board;
+    return POPOFF_LEVELS[resume?.puzzleIndex ?? 0]?.board ?? POPOFF_LEVELS[0].board;
+  });
+  const [popOffMoves, setPopOffMoves] = useState(() => loadPopOffResume()?.moves ?? 0);
+  const [popOffMoveHistory, setPopOffMoveHistory] = useState(() => {
+    const h = loadPopOffResume()?.moveHistory;
+    return Array.isArray(h) ? h : [];
+  });
+  const [popOffSolved, setPopOffSolved] = useState(false);
+  // ─── End PopOff state ───────────────────────────────────────────────────────
   const gameModeRef = useRef('classic');
   gameModeRef.current = gameMode;
-  const [showModeSelect, setShowModeSelect] = useState(false);
+  const [showModeSelect, setShowModeSelect] = useState(true);
   const [modeSelectIntent, setModeSelectIntent] = useState("start");
   const modeSelectRef = useRef(null);
   const [started, setStarted] = useState(false);
@@ -3368,6 +3742,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     crunchRunStartRef,
     crunchWallRngStateRef,
     crunchNextFrameAtRef,
+    crunchCriticalEndsAtRef,
     lastCrunchMoveAtMsRef,
   } = useCrunchMode({ latestGameRef, started, gameMode, gameOver: game.gameOver, setGame, isPausedRef, boardRef });
   const showBoardBonus = useEffectEvent((text, clearedIndices) => {
@@ -3427,11 +3802,15 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardTab, setLeaderboardTab] = useState("personal");
   const [leaderboardMode, setLeaderboardMode] = useState("classic");
+  const [popOffLeaderboardRows, setPopOffLeaderboardRows] = useState([]);
+  const [popOffLeaderboardLoading, setPopOffLeaderboardLoading] = useState(false);
+  const [popOffLeaderboardError, setPopOffLeaderboardError] = useState("");
   const [showDesktopAuthPanel, setShowDesktopAuthPanel] = useState(false);
   const [showMobileAuthPanel, setShowMobileAuthPanel] = useState(false);
   const [authAutoFocus, setAuthAutoFocus] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [pendingCrunchHowToStart, setPendingCrunchHowToStart] = useState(false);
+  const [pendingPopOffHowToStart, setPendingPopOffHowToStart] = useState(false);
   const [showRunModeSelect, setShowRunModeSelect] = useState(false);
   const [runActionDialog, setRunActionDialog] = useState(null);
   const [runActionPending, setRunActionPending] = useState(false);
@@ -3794,6 +4173,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     GLOBAL_LEADERBOARD_ENABLED && hasSupabaseConfig && session?.user?.id && profile?.display_name
   );
   const canUseCrunch = Boolean(session?.user?.id && featureFlags[CRUNCH_MODE_FLAG_KEY]);
+  const canUsePopOff = Boolean(session?.user?.id && featureFlags[POPOFF_MODE_FLAG_KEY]);
+  const canUsePopOffLeaderboard = canUsePopOff;
   const startAuthPending = Boolean(hasSupabaseConfig && !authReady);
   const startProfilePending = Boolean(session?.user?.id && profileLoading);
   const startAccountPending = Boolean(session?.user?.id && !accountRunsReadyRef.current);
@@ -4028,7 +4409,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setGlobalLoading(true);
     setGlobalError("");
 
-    const isCrunchBoard = leaderboardMode === "crunch";
+    const isCrunchBoard = canUseCrunch && leaderboardMode === "crunch";
     const query = isCrunchBoard
       ? supabase
         .from("crunch_scores")
@@ -4076,6 +4457,19 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setGlobalRuns(nextRuns);
   });
 
+  const loadPopOffLeaderboard = useEffectEvent(async () => {
+    if (!hasSupabaseConfig) return;
+    setPopOffLeaderboardLoading(true);
+    setPopOffLeaderboardError("");
+    const { data, error } = await supabase.functions.invoke("get-popoff-leaderboard");
+    setPopOffLeaderboardLoading(false);
+    if (error) {
+      setPopOffLeaderboardError("Could not load the leaderboard right now.");
+      return;
+    }
+    setPopOffLeaderboardRows(Array.isArray(data) ? data : []);
+  });
+
   const autoSubmitGuestRun = useEffectEvent((score) => {
     if (!session || activeVerifiedRun || !hasSupabaseConfig) {
       return;
@@ -4107,7 +4501,30 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     loadGlobalLeaderboard();
-  }, [leaderboardMode, leaderboardOpen, leaderboardTab]);
+  }, [canUseCrunch, leaderboardMode, leaderboardOpen, leaderboardTab]);
+
+  useEffect(() => {
+    if (!canUseCrunch && leaderboardMode === "crunch") {
+      setLeaderboardMode("classic");
+      setGlobalRuns([]);
+      setGlobalVisibleCount(0);
+      setPersonalVisibleCount(0);
+    }
+    if (!canUsePopOffLeaderboard && leaderboardMode === "popoff") {
+      setLeaderboardMode("classic");
+    }
+  }, [canUseCrunch, canUsePopOffLeaderboard, leaderboardMode]);
+
+  useEffect(() => {
+    if (!canUsePopOff && gameMode === "popoff") {
+      startClassicGame();
+    }
+  }, [canUsePopOff, gameMode]);
+
+  useEffect(() => {
+    if (!canUsePopOffLeaderboard || !leaderboardOpen || leaderboardMode !== "popoff") return;
+    loadPopOffLeaderboard();
+  }, [canUsePopOffLeaderboard, leaderboardOpen, leaderboardMode]);
 
   useEffect(() => {
     if (!leaderboardOpen || leaderboardTab !== "global") {
@@ -4190,34 +4607,65 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   const checkForActiveCrunchRun = useEffectEvent(async () => {
     const save = loadCrunchRunProgress();
-    if (!save?.runId || !save?.initialBoard) {
-      clearCrunchRunProgress();
+    if (save?.runId) {
+      setActiveCrunchRunSave(save);
+    } else {
       setActiveCrunchRunSave(null);
-      setActiveCrunchRunCheckDone(true);
-      return;
     }
-    setActiveCrunchRunSave(save);
+
     if (!hasSupabaseConfig || !session?.user?.id) {
+      if (save?.runId && Array.isArray(save.initialBoard) && Array.isArray(save.initialTray)) {
+        setActiveCrunchRunActive(true);
+      } else if (save?.runId) {
+        clearCrunchRunProgress();
+        setActiveCrunchRunSave(null);
+      }
       setActiveCrunchRunCheckDone(true);
       return;
     }
+
     try {
-      const { data, error } = await supabase
-        .from("crunch_runs")
-        .select("id")
-        .eq("id", save.runId)
-        .eq("user_id", session.user.id)
-        .eq("status", "active")
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke("resume-crunch-run", {
+        body: {
+          probe: true,
+          ...(save?.runId ? { runId: save.runId } : {}),
+        },
+      });
       if (error) throw error;
-      if (data?.id) {
+      if (data?.runId) {
         setActiveCrunchRunActive(true);
+        setActiveCrunchRunSave((current) => (
+          current?.runId === data.runId
+            ? current
+            : {
+                runId: data.runId,
+                moves: [],
+                remoteOnly: true,
+              }
+        ));
       } else {
         clearCrunchRunProgress();
         setActiveCrunchRunSave(null);
       }
-    } catch {
-      // Skip resume detection on error — don't block gameplay
+    } catch (error) {
+      if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
+        const payload = await error.context.json().catch(() => ({}));
+        if (payload?.error === "No active Crunch run found." || error.context?.status === 409) {
+          clearCrunchRunProgress();
+          setActiveCrunchRunSave(null);
+          setActiveCrunchRunActive(false);
+          setActiveCrunchRunCheckDone(true);
+          return;
+        }
+      }
+
+      // If we have a complete local replay baseline, still offer resume.
+      if (save?.runId && Array.isArray(save.initialBoard) && Array.isArray(save.initialTray)) {
+        setActiveCrunchRunActive(true);
+      } else if (save?.runId) {
+        clearCrunchRunProgress();
+        setActiveCrunchRunSave(null);
+      }
     }
     setActiveCrunchRunCheckDone(true);
   });
@@ -4228,12 +4676,92 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
   }, [authReady, started, activeCrunchRunCheckDone]);
 
-  // Persist move list to localStorage after every crunch move so a page reload can resume.
+  const persistCrunchRunSnapshot = useEffectEvent(() => {
+    const run = activeCrunchVerifiedRunRef.current;
+    const base = crunchRunSaveRef.current;
+
+    if (!run?.id || !base || base.runId !== run.id) {
+      return;
+    }
+
+    const moves = Array.isArray(run.moves) ? run.moves : [];
+    const latestGame = latestGameRef.current;
+
+    if (Number.isFinite(Number(latestGame.moveCount)) && Number(latestGame.moveCount) !== moves.length) {
+      return;
+    }
+
+    const startedAt = crunchRunStartRef.current;
+    const elapsedMs = startedAt !== null
+      ? Math.max(0, Date.now() - startedAt)
+      : Number.isFinite(Number(base.currentSurvivalMs))
+        ? Math.max(0, Number(base.currentSurvivalMs))
+        : 0;
+    const nextWaveAtMs = startedAt !== null && crunchNextFrameAtRef.current !== null
+      ? Math.max(0, crunchNextFrameAtRef.current - startedAt)
+      : base.currentNextWaveAtMs ?? null;
+    const criticalUntilMs = startedAt !== null && crunchCriticalEndsAtRef.current !== null
+      ? Math.max(0, crunchCriticalEndsAtRef.current - startedAt)
+      : base.currentCriticalUntilMs ?? null;
+    const nextSave = {
+      ...base,
+      moves,
+      currentBoard: latestGame.board,
+      currentTray: latestGame.tray,
+      currentTrayRngState: latestGame.rngState,
+      currentWallDepth: crunchWallDepth,
+      currentNextWaveAtMs: nextWaveAtMs,
+      currentCriticalUntilMs: criticalUntilMs,
+      currentWallRngState: crunchWallRngStateRef.current,
+      currentSurvivalMs: elapsedMs,
+      currentPoxelsPopped: crunchPoxelsPopped,
+      currentMoveCount: moves.length,
+      snapshotSavedAt: Date.now(),
+    };
+
+    crunchRunSaveRef.current = nextSave;
+    saveCrunchRunProgress(nextSave);
+  });
+
+  // Persist Crunch state beyond moves; wall-only time can change the board for minutes.
   useEffect(() => {
-    if (!activeCrunchVerifiedRun?.id || !crunchRunSaveRef.current) return;
-    if (crunchRunSaveRef.current.runId !== activeCrunchVerifiedRun.id) return;
-    saveCrunchRunProgress({ ...crunchRunSaveRef.current, moves: activeCrunchVerifiedRun.moves });
-  }, [activeCrunchVerifiedRun]);
+    persistCrunchRunSnapshot();
+  }, [activeCrunchVerifiedRun, crunchPoxelsPopped, crunchWallDepth, persistCrunchRunSnapshot]);
+
+  useEffect(() => {
+    if (!started || gameMode !== "crunch" || game.gameOver || !activeCrunchVerifiedRun?.id) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      persistCrunchRunSnapshot();
+    }, 1000);
+
+    function handlePageHide() {
+      persistCrunchRunSnapshot();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        persistCrunchRunSnapshot();
+      }
+    }
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    activeCrunchVerifiedRun?.id,
+    game.gameOver,
+    gameMode,
+    persistCrunchRunSnapshot,
+    started,
+  ]);
 
   useEffect(() => {
     if (!activeRunDetected?.id) {
@@ -4388,6 +4916,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, []);
 
   useEffect(() => {
+    if (gameMode === "crunch") {
+      return;
+    }
+
     const pendingRun = activeVerifiedRun;
 
     if (
@@ -4533,6 +5065,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }, [
     activeVerifiedRun,
     game.gameOver,
+    gameMode,
     moveSyncRetryTick,
     started,
   ]);
@@ -4658,7 +5191,133 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
   // Crunch trays are now generated locally using the same deterministic RNG the server
   // uses for verification — no mid-game server round-trip needed.
-  // The full move list is still verified by finish-crunch-run at submission.
+  // The full move list is still verified by finish-crunch-run at submission. We still
+  // sync moves opportunistically so a browser reload can resume from the last saved turn.
+  useEffect(() => {
+    const pendingRun = activeCrunchVerifiedRun;
+
+    if (
+      !GLOBAL_LEADERBOARD_ENABLED ||
+      !hasSupabaseConfig ||
+      gameMode !== "crunch" ||
+      !started ||
+      game.gameOver ||
+      !pendingRun?.id ||
+      !deviceTokenRef.current
+    ) {
+      if (gameMode === "crunch") {
+        setMoveSyncReconnectPending(false);
+        if (!pendingRun?.id) {
+          resetMoveSyncState(moveSyncStateRef);
+        }
+      }
+      return;
+    }
+
+    if (runSubmissionInFlightRef.current.has(pendingRun.id)) {
+      return;
+    }
+
+    if (moveSyncStateRef.current.runId !== pendingRun.id) {
+      moveSyncStateRef.current = { runId: pendingRun.id, moveCount: 0 };
+    }
+
+    if (
+      pendingRun.moves.length === 0 ||
+      pendingRun.moves.length <= moveSyncStateRef.current.moveCount ||
+      moveSyncInFlightRef.current
+    ) {
+      return;
+    }
+
+    if (moveSyncRetryTimerRef.current) {
+      window.clearTimeout(moveSyncRetryTimerRef.current);
+      moveSyncRetryTimerRef.current = 0;
+    }
+
+    const syncedRunId = pendingRun.id;
+    const syncedMoves = pendingRun.moves;
+    const syncedDeviceToken = deviceTokenRef.current;
+    moveSyncInFlightRef.current = true;
+
+    (async () => {
+      let error = null;
+
+      for (let attempt = 0; attempt <= MOVE_SYNC_RETRY_DELAYS_MS.length; attempt += 1) {
+        ({ error } = await supabase.functions.invoke("prepare-crunch-tray", {
+          body: {
+            runId: syncedRunId,
+            moves: syncedMoves,
+            deviceToken: syncedDeviceToken,
+          },
+        }));
+
+        if (!error || !isRetryableRunConnectionError(error) || attempt === MOVE_SYNC_RETRY_DELAYS_MS.length) {
+          break;
+        }
+
+        await sleep(MOVE_SYNC_RETRY_DELAYS_MS[attempt]);
+      }
+
+      moveSyncInFlightRef.current = false;
+
+      if (error) {
+        if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+          const payload = await error.context.json().catch(() => ({}));
+          if (payload?.code === "resumed_elsewhere") {
+            setMoveSyncReconnectPending(false);
+            setResumedElsewhere(true);
+            return;
+          }
+        }
+
+        if (isRetryableRunConnectionError(error)) {
+          setMoveSyncReconnectPending(false);
+
+          if (
+            activeCrunchVerifiedRunRef.current?.id === syncedRunId &&
+            !runSubmissionInFlightRef.current.has(syncedRunId)
+          ) {
+            moveSyncRetryTimerRef.current = window.setTimeout(() => {
+              moveSyncRetryTimerRef.current = 0;
+              setMoveSyncRetryTick((tick) => tick + 1);
+            }, 2500);
+          }
+          return;
+        }
+
+        if (activeCrunchVerifiedRunRef.current?.id === syncedRunId) {
+          setMoveSyncReconnectPending(false);
+          console.warn("Crunch move sync failed; continuing with local saved moves.", error);
+        }
+        return;
+      }
+
+      setMoveSyncReconnectPending(false);
+
+      if (moveSyncStateRef.current.runId === syncedRunId) {
+        moveSyncStateRef.current = {
+          runId: syncedRunId,
+          moveCount: Math.max(moveSyncStateRef.current.moveCount, syncedMoves.length),
+        };
+      }
+
+      const latestRun = activeCrunchVerifiedRunRef.current;
+      if (
+        latestRun?.id === syncedRunId &&
+        latestRun.moves.length > moveSyncStateRef.current.moveCount &&
+        !runSubmissionInFlightRef.current.has(syncedRunId)
+      ) {
+        setMoveSyncRetryTick((tick) => tick + 1);
+      }
+    })();
+  }, [
+    activeCrunchVerifiedRun,
+    game.gameOver,
+    gameMode,
+    moveSyncRetryTick,
+    started,
+  ]);
 
   useEffect(() => {
     if (!GLOBAL_LEADERBOARD_ENABLED || !hasSupabaseConfig || !game.gameOver || !activeVerifiedRun?.id) {
@@ -4984,7 +5643,29 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       }
     }
 
+    async function loadPopOffProgressFromDB() {
+      const { data } = await supabase
+        .from("popoff_progress")
+        .select("best_by_puzzle")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (!alive || !data) return;
+      if (Array.isArray(data.best_by_puzzle) && data.best_by_puzzle.length === POPOFF_TOTAL) {
+        // Merge for local display only — DB values are server-verified so take the best of each.
+        // Do not push local scores back; writes only happen via submit-popoff-solution.
+        const merged = { bestByPuzzle: data.best_by_puzzle.map((remote, i) => {
+          const local = popOffProgress.bestByPuzzle[i];
+          if (remote === null) return local;
+          if (local === null) return remote;
+          return Math.min(remote, local);
+        })};
+        setPopOffProgress(merged);
+        savePopOffProgressLocal(merged);
+      }
+    }
+
     loadProfile();
+    loadPopOffProgressFromDB();
 
     return () => {
       alive = false;
@@ -6081,6 +6762,20 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
+    if (error instanceof FunctionsHttpError && error.context?.status === 409) {
+      const payload = await error.context.json().catch(() => ({}));
+      if (payload?.code === "active_run_exists") {
+        setActiveCrunchRunSave({
+          runId: payload.runId ?? null,
+          moves: [],
+          remoteOnly: true,
+        });
+        setActiveCrunchRunActive(true);
+        setActiveCrunchRunCheckDone(true);
+        return;
+      }
+    }
+
     if (error instanceof FunctionsHttpError && error.context?.status === 401) {
       resetClientSessionState();
       setAuthError("Your session expired. Sign in again.");
@@ -6304,22 +6999,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleStartGame() {
-    if (canUseCrunch) {
-      setModeSelectIntent("start");
-      setShowModeSelect(true);
-      return;
-    }
-
-    startClassicGame();
+    setModeSelectIntent("start");
+    setShowModeSelect(true);
   }
 
   function handleNewGame() {
-    if (canUseCrunch) {
-      setModeSelectIntent("fresh");
-      setShowModeSelect(true);
-      return;
-    }
-    startClassicGame(true);
+    setModeSelectIntent("fresh");
+    setShowModeSelect(true);
   }
 
   const resumeRun = useEffectEvent(async ({ reclaim = false, preferredSession = null, clearStartOverlay = true } = {}) => {
@@ -6421,6 +7107,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleReconnectRun() {
+    if (gameModeRef.current === "crunch") {
+      setRunReconnectActionRequired("");
+      void resumeCrunchRun();
+      return;
+    }
+
     const preferredSession = activeVerifiedRun?.id ? loadActiveRunSession(activeVerifiedRun.id) : null;
     setRunReconnectActionRequired("");
     void resumeRun({ preferredSession, clearStartOverlay: false });
@@ -6434,23 +7126,178 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     handleNewGame();
   }
 
-  function resumeCrunchRun() {
-    const save = activeCrunchRunSave;
-    if (!save?.runId || !Array.isArray(save.initialBoard) || !Array.isArray(save.initialTray)) return;
+  async function resumeCrunchRun() {
+    let save = activeCrunchRunSave;
+    if (!save?.runId) return;
+
+    gameModeRef.current = "crunch";
+    setGameMode("crunch");
+    setShowModeSelect(false);
+    setModeSelectIntent("start");
+    setShowRunModeSelect(false);
+    setResumePending(true);
+    setResumeFailed("");
+    setRunReconnectActionRequired("");
+
+    if (hasSupabaseConfig && session?.user?.id) {
+      const localMoves = Array.isArray(save.moves) ? save.moves : [];
+      const body = {
+        runId: save.runId,
+        ...(save.deviceToken ? { deviceToken: save.deviceToken } : {}),
+        moves: localMoves,
+      };
+
+      let data = null;
+      let error = null;
+      let retriedWithoutLocalMoves = false;
+
+      for (let attempt = 0; attempt <= MOVE_SYNC_RETRY_DELAYS_MS.length; attempt += 1) {
+        ({ data, error } = await supabase.functions.invoke("resume-crunch-run", { body }));
+
+        if (
+          error instanceof FunctionsHttpError &&
+          (error.context?.status === 400 || error.context?.status === 409) &&
+          !retriedWithoutLocalMoves
+        ) {
+          retriedWithoutLocalMoves = true;
+          ({ data, error } = await supabase.functions.invoke("resume-crunch-run", {
+            body: { runId: save.runId },
+          }));
+        }
+
+        if (!error || !isRetryableRunConnectionError(error) || attempt === MOVE_SYNC_RETRY_DELAYS_MS.length) {
+          break;
+        }
+
+        await sleep(MOVE_SYNC_RETRY_DELAYS_MS[attempt]);
+      }
+
+      if (error) {
+        setResumePending(false);
+        if (error instanceof FunctionsHttpError && error.context?.status === 401) {
+          resetClientSessionState();
+          setAuthError("Your session expired. Sign in again to continue Crunch.");
+          handleOpenAuthPrompt();
+          return;
+        }
+        if (error instanceof FunctionsHttpError && (error.context?.status === 404 || error.context?.status === 409)) {
+          clearCrunchRunProgress();
+          setActiveCrunchRunSave(null);
+          setActiveCrunchRunActive(false);
+          setResumeFailed("Crunch run cannot be found.");
+          setResumeRunGone(true);
+          return;
+        }
+        setResumeFailed("Couldn't reach your Crunch run. Try again.");
+        return;
+      }
+
+      const serverMoves = Array.isArray(data.moves) ? data.moves : [];
+      const serverTraySignature = getTrayIdSignature(data.tray);
+      const localTraySignature = getTrayIdSignature(save.currentTray);
+      const canKeepLocalSnapshot =
+        Array.isArray(save.currentBoard) &&
+        Array.isArray(save.currentTray) &&
+        Number(save.currentMoveCount) === serverMoves.length &&
+        localTraySignature === serverTraySignature &&
+        Number(save.currentSurvivalMs) >= Number(data.survivalMs ?? 0);
+      const localSnapshot = canKeepLocalSnapshot
+        ? {
+            currentBoard: save.currentBoard,
+            currentTray: save.currentTray,
+            currentTrayRngState: save.currentTrayRngState,
+            currentWallDepth: save.currentWallDepth,
+            currentNextWaveAtMs: save.currentNextWaveAtMs,
+            currentCriticalUntilMs: save.currentCriticalUntilMs,
+            currentWallRngState: save.currentWallRngState,
+            currentSurvivalMs: save.currentSurvivalMs,
+            currentPoxelsPopped: save.currentPoxelsPopped,
+            currentMoveCount: save.currentMoveCount,
+            snapshotSavedAt: save.snapshotSavedAt,
+          }
+        : {};
+
+      save = {
+        runId: data.runId,
+        initialBoard: data.initialBoard,
+        initialTray: data.initialTray,
+        initialWallDepth: data.initialWallDepth ?? 1,
+        initialNextWaveAtMs: data.initialNextWaveAtMs,
+        initialWallRngState: data.initialWallRngState ?? 0,
+        initialTrayRngState: data.initialTrayRngState ?? 0,
+        deviceToken: data.deviceToken ?? null,
+        moves: serverMoves,
+        currentBoard: data.board,
+        currentTray: data.tray,
+        currentTrayRngState: data.trayRngState,
+        currentWallDepth: data.wallDepth,
+        currentNextWaveAtMs: data.nextWaveAtMs,
+        currentCriticalUntilMs: data.criticalUntilMs,
+        currentWallRngState: data.wallRngState,
+        currentSurvivalMs: data.survivalMs,
+        currentPoxelsPopped: data.poxelsPopped,
+        currentMoveCount: serverMoves.length,
+        ...localSnapshot,
+      };
+      saveCrunchRunProgress(save);
+    }
+
+    setResumePending(false);
+
+    if (!Array.isArray(save.initialBoard) || !Array.isArray(save.initialTray)) {
+      setResumeFailed("Crunch run cannot be restored on this device.");
+      return;
+    }
 
     const moves = Array.isArray(save.moves) ? save.moves : [];
-    const replayResult = replayCrunchMoves({
-      board: save.initialBoard,
-      tray: save.initialTray,
-      trayRngState: save.initialTrayRngState ?? 0,
-      wallDepth: save.initialWallDepth ?? 1,
-      nextWaveAtMs: save.initialNextWaveAtMs ?? getCrunchFrameInterval(0),
-      wallRngState: save.initialWallRngState ?? 0,
-    }, moves);
+    const hasServerResumeState =
+      Array.isArray(save.currentBoard) &&
+      Array.isArray(save.currentTray) &&
+      Number(save.currentMoveCount) === moves.length;
+    const replayResult = hasServerResumeState
+      ? null
+      : replayCrunchMoves({
+          board: save.initialBoard,
+          tray: save.initialTray,
+          trayRngState: save.initialTrayRngState ?? 0,
+          wallDepth: save.initialWallDepth ?? 1,
+          nextWaveAtMs: save.initialNextWaveAtMs ?? getCrunchFrameInterval(0),
+          wallRngState: save.initialWallRngState ?? 0,
+        }, moves);
+    if (!hasServerResumeState && !replayResult?.game) {
+      clearCrunchRunProgress();
+      setActiveCrunchRunSave(null);
+      setActiveCrunchRunActive(false);
+      setResumeFailed("Crunch run cannot be restored on this device.");
+      return;
+    }
+    const resumeState = hasServerResumeState
+      ? {
+          board: save.currentBoard,
+          tray: save.currentTray,
+          trayRngState: Number.isFinite(Number(save.currentTrayRngState)) ? Number(save.currentTrayRngState) : (save.initialTrayRngState ?? 0),
+          wallDepth: Number.isFinite(Number(save.currentWallDepth)) ? Math.max(0, Number(save.currentWallDepth)) : 1,
+          nextWaveAtMs: save.currentNextWaveAtMs ?? null,
+          criticalUntilMs: save.currentCriticalUntilMs ?? null,
+          wallRngState: Number.isFinite(Number(save.currentWallRngState)) ? Number(save.currentWallRngState) : (save.initialWallRngState ?? 0),
+          elapsedMs: Number.isFinite(Number(save.currentSurvivalMs)) ? Math.max(0, Number(save.currentSurvivalMs)) : 0,
+          poxelsPopped: Number.isFinite(Number(save.currentPoxelsPopped)) ? Math.max(0, Number(save.currentPoxelsPopped)) : 0,
+        }
+      : {
+          board: replayResult.game.board,
+          tray: replayResult.game.tray,
+          trayRngState: replayResult.game.rngState,
+          wallDepth: replayResult.wallDepth,
+          nextWaveAtMs: replayResult.nextWaveAtMs,
+          criticalUntilMs: replayResult.criticalUntilMs,
+          wallRngState: replayResult.wallRngState,
+          elapsedMs: replayResult.lastMoveAtMs,
+          poxelsPopped: replayResult.game.crunchPoxelsPopped ?? 0,
+        };
 
     deviceTokenRef.current = save.deviceToken ?? null;
     crunchRunSaveRef.current = save;
-    crunchWallRngStateRef.current = replayResult.wallRngState;
+    crunchWallRngStateRef.current = resumeState.wallRngState;
     setActiveCrunchRunSave(null);
     setActiveCrunchRunActive(false);
 
@@ -6465,21 +7312,24 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setResumedElsewhere(false);
     setResumeFailed("");
     setResumeRunGone(false);
+    setActiveVerifiedRun(null);
+    setActiveRunDetected(null);
     setActiveCrunchVerifiedRun({ id: save.runId, moves });
 
     // Remaining ms until the next wave fires (from the player's perspective right now).
-    const remainingWaveMs = replayResult.nextWaveAtMs !== null && replayResult.criticalUntilMs === null
-      ? Math.max(0, replayResult.nextWaveAtMs - replayResult.lastMoveAtMs)
+    const remainingWaveMs = resumeState.nextWaveAtMs !== null && resumeState.criticalUntilMs === null
+      ? Math.max(0, resumeState.nextWaveAtMs - resumeState.elapsedMs)
       : getCrunchFrameInterval(0); // fallback; unused when critical mode is active
 
     setGame(startCrunchFromState(displayedBestScore, {
-      board: replayResult.game.board,
-      tray: replayResult.game.tray,
-      trayRngState: replayResult.game.rngState,
-      wallDepth: replayResult.wallDepth,
+      board: resumeState.board,
+      tray: resumeState.tray,
+      trayRngState: resumeState.trayRngState,
+      wallDepth: resumeState.wallDepth,
       nextWaveAtMs: remainingWaveMs,
-      criticalUntilMs: replayResult.criticalUntilMs,
-      runStartOffsetMs: replayResult.lastMoveAtMs,
+      criticalUntilMs: resumeState.criticalUntilMs,
+      runStartOffsetMs: resumeState.elapsedMs,
+      poxelsPopped: resumeState.poxelsPopped,
     }));
 
     setStarted(true);
@@ -6490,6 +7340,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     clearCrunchRunProgress();
     setActiveCrunchRunSave(null);
     setActiveCrunchRunActive(false);
+    setModeSelectIntent("start");
+    setShowModeSelect(true);
   }
 
   function selectMode(mode) {
@@ -6497,14 +7349,86 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       launchCrunchGame(modeSelectIntent === "fresh");
       return;
     }
+    if (mode === 'popoff') {
+      if (!canUsePopOff) return;
+      setShowModeSelect(false);
+      if (!hasSeenPopOffHowTo()) {
+        setPendingPopOffHowToStart(true);
+        setShowHowToPlay(true);
+        return;
+      }
+      setGameMode('popoff');
+      return;
+    }
+    setGameMode('classic');
     startClassicGame(modeSelectIntent === "fresh");
   }
 
-  useEffect(() => {
-    if (!canUseCrunch && showModeSelect) {
-      setShowModeSelect(false);
+  // ─── PopOff handlers ────────────────────────────────────────────────────────
+
+  function handlePopOffCellClick(index) {
+    if (popOffSolved) return;
+    if (popOffBoard[index] === 1) {
+      playPixelPopSound();
+    } else {
+      playPopOffDudSound();
     }
-  }, [canUseCrunch, showModeSelect]);
+    const nextBoard = popOffToggleAt(popOffBoard, index);
+    const nextMoves = popOffMoves + 1;
+    const nextHistory = [...popOffMoveHistory, index];
+    setPopOffBoard(nextBoard);
+    setPopOffMoves(nextMoves);
+    setPopOffMoveHistory(nextHistory);
+
+    if (popOffIsSolved(nextBoard)) {
+      playPopOffSolveSound();
+      setPopOffSolved(true);
+      clearPopOffResume();
+      setPopOffProgress((prev) => {
+        const next = { bestByPuzzle: [...prev.bestByPuzzle] };
+        const existing = next.bestByPuzzle[popOffPuzzleIndex];
+        if (existing === null || nextMoves < existing) {
+          next.bestByPuzzle[popOffPuzzleIndex] = nextMoves;
+        }
+        savePopOffProgressLocal(next);
+        if (session?.user?.id) void submitPopOffSolution(popOffPuzzleIndex, nextHistory);
+        return next;
+      });
+    } else {
+      savePopOffResume(popOffPuzzleIndex, nextBoard, nextMoves, nextHistory);
+    }
+  }
+
+  function handlePopOffNavigate(newIndex) {
+    const newBoard = POPOFF_LEVELS[newIndex].board;
+    setPopOffPuzzleIndex(newIndex);
+    setPopOffBoard(newBoard);
+    setPopOffMoves(0);
+    setPopOffMoveHistory([]);
+    setPopOffSolved(false);
+    savePopOffResume(newIndex, newBoard, 0, []);
+  }
+
+  function handlePopOffReset() {
+    const original = POPOFF_LEVELS[popOffPuzzleIndex].board;
+    setPopOffBoard(original);
+    setPopOffMoves(0);
+    setPopOffMoveHistory([]);
+    setPopOffSolved(false);
+    savePopOffResume(popOffPuzzleIndex, original, 0, []);
+  }
+
+  async function submitPopOffSolution(puzzleIndex, moveHistory) {
+    try {
+      await supabase.functions.invoke("submit-popoff-solution", {
+        body: { puzzleIndex, moves: moveHistory },
+      });
+    } catch {}
+  }
+
+  // ─── End PopOff handlers ────────────────────────────────────────────────────
+
+  // (mode select no longer auto-closes — PopOff is always available)
 
   useEffect(() => {
     if (!showModeSelect) return;
@@ -6524,14 +7448,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setIsNewBest(false);
     setRunSubmitting(false);
     setRunSubmissionError("");
-    if (canUseCrunch) {
-      setStarted(false);
-      setModeSelectIntent("start");
-      setShowModeSelect(true);
-      return;
-    }
-
-    startClassicGame();
+    setStarted(false);
+    setModeSelectIntent("start");
+    setShowModeSelect(true);
   }
 
   function handleVolumeChange(value) {
@@ -7047,7 +7966,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     resetProfilePanelState();
     primeSound();
     playPlaceSound();
-    setLeaderboardMode(gameMode);
+    setLeaderboardMode(
+      canUsePopOffLeaderboard && gameMode === "popoff" ? "popoff"
+      : canUseCrunch && gameMode === "crunch" ? "crunch"
+      : "classic"
+    );
     if (tab === "personal") {
       setPersonalVisibleCount(0);
     }
@@ -7076,6 +7999,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   }
 
   function handleLeaderboardModeChange(nextMode) {
+    if (nextMode === "crunch" && !canUseCrunch) return;
+    if (nextMode === "popoff" && !canUsePopOffLeaderboard) return;
     if (nextMode === leaderboardMode) {
       return;
     }
@@ -7198,6 +8123,17 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     playPlaceSound();
     setShowRunModeSelect(false);
     setRunActionError("");
+
+    // PopOff has no run to finalize — switch directly
+    if (gameMode === 'popoff') {
+      if (mode === 'crunch') {
+        launchCrunchGame(true);
+      } else if (mode === 'classic') {
+        startClassicGame();
+      }
+      return;
+    }
+
     setRunActionDialog({ type: "switch", targetMode: mode });
   }
 
@@ -7288,6 +8224,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       setRunActionDialog(null);
       if (targetMode === 'crunch') {
         launchCrunchGame(true);
+      } else if (targetMode === 'popoff') {
+        selectMode('popoff');
       } else {
         startClassicGame();
       }
@@ -7336,6 +8274,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
     if (targetMode === 'crunch') {
       launchCrunchGame();
+    } else if (targetMode === 'popoff') {
+      selectMode('popoff');
     } else {
       startClassicGame();
     }
@@ -7376,6 +8316,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       } else {
         startLocalGame();
       }
+    }
+    if (pendingPopOffHowToStart) {
+      markSeenPopOffHowTo();
+      setPendingPopOffHowToStart(false);
+      setGameMode('popoff');
     }
   }
 
@@ -7492,7 +8437,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     ),
   };
   const accountBestScore = accountTopRuns[0]?.score ?? 0;
-  const leaderboardIsCrunch = leaderboardMode === "crunch";
+  const leaderboardIsCrunch = canUseCrunch && leaderboardMode === "crunch";
   const localTopRuns = useMemo(
     () => session
       ? []
@@ -7653,10 +8598,12 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
           >
             <SpeakerIcon on={soundEnabled && soundVolume > 0} />
           </button>
-          <h1 className="game-title" aria-label={gameMode === 'crunch' ? 'GridPop! Crunch' : 'GridPop!'}>
+          <h1 className="game-title" aria-label={gameMode === 'crunch' ? 'GridPop! Crunch' : gameMode === 'popoff' ? 'GridPop! PopOff' : 'GridPop!'}>
             <span className="game-title-wordmark">GridPop!</span>
             {gameMode === 'crunch' ? (
               <span className="game-title-stamp" aria-hidden="true">&#123;crunch&#125;</span>
+            ) : gameMode === 'popoff' ? (
+              <span className="game-title-stamp game-title-stamp--popoff" aria-hidden="true">PopOff!</span>
             ) : null}
           </h1>
         </header>
@@ -7676,6 +8623,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                 warn={crunchWarn}
                 critical={crunchCritical}
                 warningStep={crunchWarningStep}
+                popOffMoves={popOffMoves}
+                popOffTarget={POPOFF_LEVELS[popOffPuzzleIndex]?.target}
+                popOffBest={popOffProgress.bestByPuzzle[popOffPuzzleIndex]}
               />
               <ScoreboardTrigger onClick={() => handleOpenLeaderboard("global")} />
             </div>
@@ -7726,32 +8676,40 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                   {(gameMode === 'crunch' ? crunchTimeBonusBoard : boardBonus).text}
                 </div>
               ) : null}
-              <Board
-                boardRef={boardRef}
-                lockedPreviewPath={lockedPreviewPath}
-                board={displayBoard}
-                clearedSet={clearedSet}
-                clearedTones={game.clearedTones}
-                interactionLocked={runInteractionLocked}
-                isDragging={Boolean(drag)}
-                lockedPreviewSet={lockedPreviewSet}
-                lockedPreviewTone={lockedPreviewTone}
-                previewClearSet={previewClearSet}
-                previewTone={previewTone}
-                started={started}
-                onBoardMove={handleBoardMove}
-                onBoardLeave={handleBoardLeave}
-                onCellClick={handleCellClick}
-                onLockedPreviewPointerDown={lockedPreviewPiece ? (e) => handleLockedPreviewPointerDown(lockedPreviewPiece, e) : undefined}
-                showCrunchPerimeter={gameMode === 'crunch'}
-                crunchWarn={gameMode === 'crunch' ? crunchWarn : false}
-                crunchCritical={gameMode === 'crunch' ? crunchCritical : false}
-                crunchWarningStep={gameMode === 'crunch' ? crunchWarningStep : 0}
-                crunchPhaseShift={gameMode === 'crunch' && Boolean(crunchPhaseCue)}
-                crunchCriticalSet={gameMode === 'crunch' ? crunchCriticalCells : null}
-                crunchPendingClearSet={gameMode === 'crunch' ? crunchPendingClears : null}
-              />
-              {!started ? (
+              {gameMode === 'popoff' ? (
+                <PopOffBoard
+                  board={popOffBoard}
+                  onCellClick={handlePopOffCellClick}
+                  solved={popOffSolved}
+                />
+              ) : (
+                <Board
+                  boardRef={boardRef}
+                  lockedPreviewPath={lockedPreviewPath}
+                  board={displayBoard}
+                  clearedSet={clearedSet}
+                  clearedTones={game.clearedTones}
+                  interactionLocked={runInteractionLocked}
+                  isDragging={Boolean(drag)}
+                  lockedPreviewSet={lockedPreviewSet}
+                  lockedPreviewTone={lockedPreviewTone}
+                  previewClearSet={previewClearSet}
+                  previewTone={previewTone}
+                  started={started}
+                  onBoardMove={handleBoardMove}
+                  onBoardLeave={handleBoardLeave}
+                  onCellClick={handleCellClick}
+                  onLockedPreviewPointerDown={lockedPreviewPiece ? (e) => handleLockedPreviewPointerDown(lockedPreviewPiece, e) : undefined}
+                  showCrunchPerimeter={gameMode === 'crunch'}
+                  crunchWarn={gameMode === 'crunch' ? crunchWarn : false}
+                  crunchCritical={gameMode === 'crunch' ? crunchCritical : false}
+                  crunchWarningStep={gameMode === 'crunch' ? crunchWarningStep : 0}
+                  crunchPhaseShift={gameMode === 'crunch' && Boolean(crunchPhaseCue)}
+                  crunchCriticalSet={gameMode === 'crunch' ? crunchCriticalCells : null}
+                  crunchPendingClearSet={gameMode === 'crunch' ? crunchPendingClears : null}
+                />
+              )}
+              {!started && gameMode !== 'popoff' ? (
                 <div className="start-overlay" role="dialog" aria-modal="true" aria-label="Start game">
                   {startFailed ? (
                     <>
@@ -7780,23 +8738,46 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
                     <>
                       <p className="start-resume-msg">Resume your Crunch run?</p>
                       <p className="start-resume-sub">{activeCrunchRunSave?.moves?.length ?? 0} moves played</p>
-                      <button className="start-button" type="button" onClick={resumeCrunchRun} disabled={startBlocked}>
-                        Continue
+                      <button className="start-button" type="button" onClick={resumeCrunchRun} disabled={resumePending || startBlocked}>
+                        {resumePending ? "Reconnecting..." : "Continue"}
                       </button>
-                      <button className="start-local-button" type="button" onClick={handleStartFreshCrunch} disabled={startBlocked}>
+                      <button className="start-local-button" type="button" onClick={handleStartFreshCrunch} disabled={resumePending || startBlocked}>
                         Start fresh
                       </button>
                     </>
-                  ) : showModeSelect && canUseCrunch ? (
-                    <div className="mode-select" ref={modeSelectRef} tabIndex={-1} aria-label="Choose game mode">
-                      <button className="mode-card" type="button" onClick={() => selectMode('classic')}>
-                        <span className="mode-card-name">Classic</span>
-                        <span className="mode-card-blurb">casual line popping</span>
-                      </button>
-                      <button className="mode-card mode-card--crunch" type="button" onClick={() => selectMode('crunch')}>
-                        <span className="mode-card-name">Crunch</span>
-                        <span className="mode-card-blurb">walls close in. time-based.</span>
-                      </button>
+                  ) : showModeSelect ? (
+                    <div className="mode-select-group">
+                      <h2 className="mode-select-heading">Select a game mode</h2>
+                      <div className="mode-select" ref={modeSelectRef} tabIndex={-1} aria-label="Choose game mode">
+                        <button className="mode-card" type="button" onClick={() => selectMode('classic')}>
+                          <span className="mode-card-name">Classic</span>
+                          <span className="mode-card-blurb">casual drag & drop line popping.</span>
+                        </button>
+                        {canUsePopOff ? (
+                          <button className="mode-card mode-card--popoff" type="button" onClick={() => selectMode('popoff')}>
+                            <span className="mode-card-name">PopOff!</span>
+                            <span className="mode-card-blurb">poxel popping puzzle mode.</span>
+                          </button>
+                        ) : hasSupabaseConfig && !session ? (
+                          <button className="mode-card mode-card--popoff mode-card--locked" type="button" onClick={() => handleOpenAuthPrompt({ autoFocus: true })}>
+                            <span className="mode-card-name">PopOff!</span>
+                            <LockIcon />
+                            <span className="mode-card-blurb">sign in to unlock.</span>
+                          </button>
+                        ) : null}
+                        {canUseCrunch ? (
+                          <button className="mode-card mode-card--crunch" type="button" onClick={() => selectMode('crunch')}>
+                            <span className="mode-card-name">{'{crunch}'}</span>
+                            <span className="mode-card-blurb">walls close in. fast-paced & time-based.</span>
+                          </button>
+                        ) : hasSupabaseConfig && !session ? (
+                          <button className="mode-card mode-card--crunch mode-card--locked" type="button" onClick={() => handleOpenAuthPrompt({ autoFocus: true })}>
+                            <span className="mode-card-name">{'{crunch}'}</span>
+                            <LockIcon />
+                            <span className="mode-card-blurb">sign in to unlock.</span>
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -7939,30 +8920,41 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
             </div>
           </section>
 
-          <aside className={`sidebar${dragDismissVisible ? " is-drag-active" : ""}`}>
-            <Tray
-              tray={game.tray}
-              selectedPieceId={game.selectedPieceId}
-              draggedPieceId={drag?.armed ? drag.pieceId : null}
-              gameOver={game.gameOver}
-              interactionLocked={runInteractionLocked}
-              started={started}
-              awaitingTray={game.awaitingTray}
-              nextTrayPending={nextTrayPending}
-              nextTrayError={nextTrayError}
-              trayRevealToken={trayRevealToken}
-              soundEnabled={soundEnabled}
-              onTrayPieceReveal={handleTrayPieceReveal}
-              onRetryNextTray={() => {
-                if (!nextTrayPending) {
-                  setNextTrayError("");
-                  setNextTrayRetryTick((tick) => tick + 1);
-                }
-              }}
-              onSelectPiece={handleSelectPiece}
-              onStartDrag={handleStartDrag}
-            />
-            <div ref={dismissZoneRef} className="drag-dismiss-zone" aria-hidden="true">
+          <aside className={`sidebar${dragDismissVisible ? " is-drag-active" : ""}${gameMode === 'popoff' ? " sidebar--popoff" : ""}`}>
+            {gameMode === 'popoff' ? (
+              <PopOffNav
+                puzzleIndex={popOffPuzzleIndex}
+                progress={popOffProgress}
+                solved={popOffSolved}
+                onPrev={() => handlePopOffNavigate(popOffPuzzleIndex - 1)}
+                onNext={() => handlePopOffNavigate(popOffPuzzleIndex + 1)}
+                onReset={handlePopOffReset}
+              />
+            ) : (
+              <Tray
+                tray={game.tray}
+                selectedPieceId={game.selectedPieceId}
+                draggedPieceId={drag?.armed ? drag.pieceId : null}
+                gameOver={game.gameOver}
+                interactionLocked={runInteractionLocked}
+                started={started}
+                awaitingTray={game.awaitingTray}
+                nextTrayPending={nextTrayPending}
+                nextTrayError={nextTrayError}
+                trayRevealToken={trayRevealToken}
+                soundEnabled={soundEnabled}
+                onTrayPieceReveal={handleTrayPieceReveal}
+                onRetryNextTray={() => {
+                  if (!nextTrayPending) {
+                    setNextTrayError("");
+                    setNextTrayRetryTick((tick) => tick + 1);
+                  }
+                }}
+                onSelectPiece={handleSelectPiece}
+                onStartDrag={handleStartDrag}
+              />
+            )}
+            <div ref={dismissZoneRef} className={`drag-dismiss-zone${gameMode === 'popoff' ? " is-hidden" : ""}`} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
                 <path d="M9 14L4 9l5-5"/>
                 <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
@@ -8048,12 +9040,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               crtFilterLevel={crtFilterLevel}
               onCrtFilterLevelChange={handleCrtFilterLevelChange}
             />
-            {started && !game.gameOver ? (
+            {gameMode === 'popoff' || (started && !game.gameOver) ? (
               <RunActionsPanel
-                canSwitchMode={canUseCrunch}
+                canSwitchMode={gameMode === 'popoff' ? true : (canUseCrunch || canUsePopOff)}
                 disabled={runActionPending || runSubmitting || resumePending}
-                onQuitRun={handleOpenEndRunConfirm}
+                onQuitRun={gameMode === 'popoff' ? null : handleOpenEndRunConfirm}
                 onSwitchMode={handleOpenRunModeSelect}
+                gameMode={gameMode}
               />
             ) : null}
             <AuthPanel
@@ -8117,12 +9110,13 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
               crtFilterLevel={crtFilterLevel}
               onCrtFilterLevelChange={handleCrtFilterLevelChange}
             />
-            {started && !game.gameOver ? (
+            {gameMode === 'popoff' || (started && !game.gameOver) ? (
               <RunActionsPanel
-                canSwitchMode={canUseCrunch}
+                canSwitchMode={gameMode === 'popoff' ? true : (canUseCrunch || canUsePopOff)}
                 disabled={runActionPending || runSubmitting || resumePending}
-                onQuitRun={handleOpenEndRunConfirm}
+                onQuitRun={gameMode === 'popoff' ? null : handleOpenEndRunConfirm}
                 onSwitchMode={handleOpenRunModeSelect}
+                gameMode={gameMode}
               />
             ) : null}
             <AuthPanel
@@ -8159,6 +9153,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       {showRunModeSelect ? (
         <RunModeSelectModal
           currentMode={gameMode}
+          canUseCrunch={canUseCrunch}
+          canUsePopOff={canUsePopOff}
           onSelectMode={handleRunModeSelect}
           onClose={handleCloseRunModeSelect}
         />
@@ -8168,7 +9164,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         <RunActionConfirmModal
           title={
             runActionDialog.type === "switch"
-              ? `Switch to ${runActionDialog.targetMode === 'crunch' ? 'Crunch' : 'Classic'}`
+              ? `Switch to ${runActionDialog.targetMode === 'crunch' ? 'Crunch' : runActionDialog.targetMode === 'popoff' ? 'PopOff' : 'Classic'}`
               : "End Current Run"
           }
           message={
@@ -8187,7 +9183,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       {showHowToPlay ? (
         gameMode === 'crunch'
           ? <HowToPlayCrunchModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
-          : <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
+          : gameMode === 'popoff'
+            ? <HowToPlayPopOffModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
+            : <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
       ) : null}
       {showThemeModal ? (
         <ThemeModal
@@ -8212,6 +9210,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
 
       <LeaderboardModal
         activeTab={leaderboardTab}
+        canUseCrunch={canUseCrunch}
+        canUsePopOffLeaderboard={canUsePopOffLeaderboard}
         globalEnabled={leaderboardGlobalEnabled}
         globalError={leaderboardGlobalError}
         globalLoading={leaderboardGlobalLoading}
@@ -8228,6 +9228,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         personalTopRuns={personalTopRuns}
         personalTopRunNumbers={personalTopRunNumbers}
         personalVisibleCount={personalVisibleCount}
+        popOffRows={popOffLeaderboardRows}
+        popOffLoading={popOffLeaderboardLoading}
+        popOffError={popOffLeaderboardError}
         signedIn={Boolean(session)}
         onClose={handleCloseLeaderboard}
         onGuestSignIn={() => handleOpenAuthPrompt({ autoFocus: true })}

@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.6",
+    "date": "",
+    "changes": [
+      "Two new game modes: PopOff! and {crunch} for signed-in players",
+      "PopOff! is a poxel-popping puzzle mode with 50 puzzles reminiscent of a mid-90s handheld game",
+      "{crunch} is a fast-paced timed mode where the walls close in",
+      "Game mode picker now shows on launch",
+      "Bug fixes and UI tweaks"
+    ]
+  },
+  {
     "version": "1.5.3",
     "date": "",
     "changes": [

@@ -377,6 +377,114 @@ export function playPixelPopSound() {
   });
 }
 
+// Cascading singing-bowl tones — PopOff puzzle solved
+export function playPopOffSolveSound() {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+
+  const master = getMasterGain(ctx);
+
+  // Three bowl tones ripple in with offset timing (mirrors the visual wave)
+  const bowls = [
+    { freq: 294, delay: 0,    gainPeak: 0.26, decay: 1.55 },
+    { freq: 440, delay: 0.13, gainPeak: 0.17, decay: 1.25 },
+    { freq: 588, delay: 0.26, gainPeak: 0.11, decay: 0.98 },
+  ];
+
+  for (const { freq, delay, gainPeak, decay } of bowls) {
+    const t = startAt + delay;
+    const attack = 0.022;
+
+    // Fundamental — pure sine, slow fade in, long ring
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.993, t + decay); // slight drop — bowl resonance
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(gainPeak, t + attack);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+
+    osc.connect(env);
+    env.connect(master);
+    osc.start(t);
+    osc.stop(t + attack + decay + 0.06);
+
+    // Inharmonic shimmer — slightly detuned upper partial, fades faster
+    const shimOsc = ctx.createOscillator();
+    shimOsc.type = "sine";
+    shimOsc.frequency.setValueAtTime(freq * 2.756, t); // irrational ratio = bowl-like, not chord-like
+
+    const shimEnv = ctx.createGain();
+    shimEnv.gain.setValueAtTime(0.0001, t);
+    shimEnv.gain.linearRampToValueAtTime(gainPeak * 0.18, t + attack * 1.4);
+    shimEnv.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay * 0.45);
+
+    shimOsc.connect(shimEnv);
+    shimEnv.connect(master);
+    shimOsc.start(t);
+    shimOsc.stop(t + attack + decay * 0.5);
+  }
+
+  // Soft breath layer — low filtered noise swell, like air through reeds
+  playNoise(ctx, makeWhiteNoise(ctx, 0.9), {
+    bpf: 320,
+    bpfQ: 0.55,
+    lpf: 520,
+    attack: 0.07,
+    decay: 0.52,
+    gain: 0.09,
+    t: startAt,
+  });
+
+  // Faint high shimmer — very quiet airy texture sitting above everything
+  playNoise(ctx, makeGranular(ctx, 0.5, 0.22), {
+    hpf: 3800,
+    bpf: 5200,
+    bpfQ: 1.8,
+    lpf: 8000,
+    attack: 0.04,
+    decay: 0.44,
+    gain: 0.055,
+    t: startAt + 0.06,
+  });
+}
+
+// Dull empty thud — clicking an unlit PopOff cell (nothing to pop)
+export function playPopOffDudSound() {
+  if (!enabled) return;
+  const { context: ctx, startAt } = getPlayableContext();
+  if (!ctx) return;
+  const t = startAt;
+
+  // Very short low sine — heavy, muted, drops away fast
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(90, t);
+  osc.frequency.exponentialRampToValueAtTime(42, t + 0.07);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.linearRampToValueAtTime(0.28, t + 0.005);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+  osc.connect(env);
+  env.connect(getMasterGain(ctx));
+  osc.start(t);
+  osc.stop(t + 0.09);
+
+  // Muffled low rumble — boxy, hollow knock
+  playNoise(ctx, makeWhiteNoise(ctx, 0.06), {
+    lpf: 280,
+    bpf: 140,
+    bpfQ: 1.8,
+    attack: 0.003,
+    decay: 0.055,
+    gain: 0.14,
+    t,
+  });
+}
+
 // Mini sticker-crackle — dragged piece moving over board positions
 export function playPreviewMoveSound() {
   if (!enabled) return;

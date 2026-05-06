@@ -578,7 +578,8 @@ h2 {
 
   .how-to-play-modal h2,
   .leaderboard-modal h2,
-  .settings-panel h2 {
+  .settings-panel h2,
+  .mode-select-heading {
     animation: none;
   }
 }
@@ -933,25 +934,25 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 
 .leaderboard-mode-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
 .leaderboard-mode-tab {
-  min-height: 2.6rem;
-  border-radius: 0.55rem;
-  border: 2px solid color-mix(in srgb, var(--stroke-muted) 50%, transparent);
-  background: color-mix(in srgb, var(--bg-interactive) 75%, transparent);
+  min-height: 2rem;
+  border-radius: 0.28rem;
+  border: 2px solid color-mix(in srgb, var(--stroke-muted) 40%, transparent);
+  background: transparent;
   color: var(--fg-secondary);
   cursor: pointer;
-  font-size: 0.54rem;
-  letter-spacing: 0.05em;
-  transition: transform 80ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+  font-size: 0.52rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: transform 80ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.18rem;
+  padding: 0.3em 0.5em;
 }
 
 .leaderboard-mode-tab:hover,
@@ -967,17 +968,17 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 }
 
 .leaderboard-mode-tab--classic.is-active {
-  background: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
-  border-color: var(--accent-secondary);
-  color: var(--accent-secondary);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 18%, transparent);
+  background: color-mix(in srgb, var(--accent-secondary) 85%, #8ed7f1 15%);
+  border-color: color-mix(in srgb, var(--accent-secondary) 72%, #fff 28%);
+  color: #f8fdff;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .leaderboard-mode-tab--crunch.is-active {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent) 82%, #8ed7f1 18%);
+  border-color: color-mix(in srgb, var(--accent-secondary) 72%, #fff 28%);
+  color: #f8fdff;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--accent-secondary) 50%, transparent);
 }
 
 .leaderboard-mode-tab--classic:not(.is-active):hover,
@@ -991,6 +992,43 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.leaderboard-mode-tab--popoff.is-active {
+  background: color-mix(in srgb, var(--accent) 58%, var(--accent-secondary) 42%);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--accent-secondary) 60%);
+  color: #f8fdff;
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.leaderboard-mode-tab--popoff:not(.is-active):hover,
+.leaderboard-mode-tab--popoff:not(.is-active):focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--accent-secondary) 42%);
+  color: color-mix(in srgb, var(--accent) 58%, var(--accent-secondary) 42%);
+}
+
+.leaderboard-row.leaderboard-row--popoff {
+  grid-template-columns: 2rem minmax(0, 1fr) 2.8rem 2.8rem;
+}
+
+.leaderboard-popoff-puzzles {
+  font-size: 0.56rem;
+  color: var(--fg-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.leaderboard-popoff-delta {
+  font-size: 0.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.leaderboard-popoff-delta--under { color: #4ade80; }
+.leaderboard-popoff-delta--par   { color: #4ade80; }
+.leaderboard-popoff-delta--over  { color: #f87171; }
 
 .leaderboard-panel {
   display: grid;
@@ -1194,6 +1232,10 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
   justify-content: center;
   min-height: 1.2rem;
   color: var(--fg-secondary);
+}
+
+.leaderboard-hero-rank svg {
+  filter: drop-shadow(0 1px 0 rgba(255, 248, 210, 0.75)) drop-shadow(0 0 0.16rem rgba(48, 24, 0, 0.42));
 }
 
 .leaderboard-hero-score {
@@ -1606,6 +1648,7 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 
 .run-action-panel {
   gap: 1rem;
+  overflow: visible;
 }
 
 .run-action-confirm {
@@ -1615,6 +1658,10 @@ html[data-theme="classic"][data-crt-filter] .player-handle {
 .run-action-modal-buttons {
   width: min(100%, 16rem);
   margin: 0 auto;
+}
+
+.leaderboard-modal:not(.run-action-modal) {
+  min-height: min(32rem, calc(100dvh - 6rem));
 }
 
 .run-action-modal .leaderboard-empty {
@@ -2790,7 +2837,8 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   letter-spacing: 0.04em;
 }
 
-.how-to-play-step p {
+.how-to-play-step p,
+.how-to-play-step--popoff p {
   font-size: 0.5rem;
   color: var(--fg);
   line-height: 1.7;
@@ -2818,6 +2866,30 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   color: color-mix(in srgb, var(--fg) 40%, transparent);
   text-align: center;
   letter-spacing: 0.02em;
+}
+
+/* PopOff how-to — consistent two-column grid layout for all steps */
+.how-to-play-steps--popoff {
+  gap: 0;
+}
+
+.how-to-play-step--popoff {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+.how-to-play-step--popoff:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.how-to-play-step-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .stats-modal .stats-list {
@@ -3698,6 +3770,20 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   opacity: 0.75;
 }
 
+.mode-select-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mode-select-heading {
+  color: #fff;
+  text-align: center;
+  text-shadow: 2px 2px 0 var(--accent);
+  animation: modalHeaderGlow 2600ms ease-in-out infinite;
+}
+
 .mode-select {
   display: flex;
   gap: 1.1rem;
@@ -3759,6 +3845,16 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent-secondary) 35%, black);
 }
 
+.mode-card--locked {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.mode-card--locked svg {
+  font-size: 1.4rem;
+  opacity: 0.8;
+}
+
 .mode-card-name {
   font-family: "Press Start 2P", monospace;
   font-size: 0.6rem;
@@ -3774,6 +3870,7 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   line-height: 1.5;
   text-align: center;
 }
+
 
 .mode-toggle-button {
   cursor: pointer;
@@ -4661,6 +4758,134 @@ html[data-theme="tinted-plus-plus"] .board-cell.is-locked-preview::after {
   --tone-orchid: #c8b8e8;
   --tone-orchid-hi: #e0d8f4;
   --tone-orchid-lo: #a890d0;
+}
+
+/* Lo-Fi — free: pixelated pixel-gem classic */
+[data-theme="lo-fi"] {
+  color-scheme: light;
+  --page-top: #e2d0f8;
+  --page-bottom: #c8daf4;
+  --bg-surface: rgba(245, 238, 255, 0.88);
+  --stroke: rgba(100, 80, 150, 0.45);
+  --fg: #3a1268;
+  --stroke-muted: #8060a8;
+  --accent: #c84ea0;
+  --accent-secondary: #4888b8;
+  --gold: #d8a820;
+  --fg-secondary: #7050a0;
+  --bg-interactive: rgba(245, 238, 255, 0.88);
+  --fg-link: #4888b8;
+  --shadow: 0 4px 0 rgba(58, 18, 104, 0.18);
+  --bg-bloom-a: rgba(200, 120, 180, 0.20);
+  --bg-bloom-b: rgba(90, 160, 220, 0.20);
+  --board-bg: #dcd4f0;
+  --board-cell-bg: rgba(100, 60, 170, 0.12);
+  --board-cell-border: rgba(80, 40, 150, 0.28);
+  --board-cell-depth: #2a0a58;
+  --board-filled-bg: rgba(60, 100, 160, 0.14);
+  --bg-modal: linear-gradient(150deg, #ece5ff 0%, #ddeeff 100%);
+  --bg-overlay: rgba(20, 4, 55, 0.55);
+
+  /* Muted pixel palette — classic hues, slightly desaturated */
+  --tone-coral:  #e8a0ba;  --tone-coral-hi:  #f8dce8;  --tone-coral-lo:  #cc7a9c;
+  --tone-gold:   #e8c855;  --tone-gold-hi:   #f5e8a8;  --tone-gold-lo:   #c8a82c;
+  --tone-mint:   #78ccb4;  --tone-mint-hi:   #c4eee0;  --tone-mint-lo:   #54b09a;
+  --tone-sky:    #74c4dc;  --tone-sky-hi:    #bee8f4;  --tone-sky-lo:    #4ea8c0;
+  --tone-orchid: #cec6bc;  --tone-orchid-hi: #eae6e0;  --tone-orchid-lo: #b0a89c;
+}
+
+/* Chunky square shape — override the global 28% rounded bubble */
+html[data-theme="lo-fi"] .board-cell.is-filled::before {
+  border-radius: 10%;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.55),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.18),
+    0 2px 0 color-mix(in srgb, var(--board-cell-depth) 20%, transparent);
+}
+
+html[data-theme="lo-fi"] .piece-cell.is-solid {
+  border-radius: 10%;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.55),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.18),
+    2px 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* Pixel-gem stepped gradients — hard color bands, no smooth blend */
+html[data-theme="lo-fi"] .board-cell.is-filled.tone-coral::before,
+html[data-theme="lo-fi"] .piece-cell.is-solid.tone-coral {
+  background: radial-gradient(circle at 42% 32%,
+    color-mix(in srgb, var(--tone-coral-hi) 60%, white) 0% 14%,
+    var(--tone-coral-hi) 14% 30%,
+    var(--tone-coral) 30% 54%,
+    var(--tone-coral-lo) 54% 74%,
+    color-mix(in srgb, var(--tone-coral-lo) 75%, #2a0a58) 74%
+  );
+}
+html[data-theme="lo-fi"] .board-cell.is-filled.tone-gold::before,
+html[data-theme="lo-fi"] .piece-cell.is-solid.tone-gold {
+  background: radial-gradient(circle at 42% 32%,
+    color-mix(in srgb, var(--tone-gold-hi) 60%, white) 0% 14%,
+    var(--tone-gold-hi) 14% 30%,
+    var(--tone-gold) 30% 54%,
+    var(--tone-gold-lo) 54% 74%,
+    color-mix(in srgb, var(--tone-gold-lo) 75%, #2a0a58) 74%
+  );
+}
+html[data-theme="lo-fi"] .board-cell.is-filled.tone-mint::before,
+html[data-theme="lo-fi"] .piece-cell.is-solid.tone-mint {
+  background: radial-gradient(circle at 42% 32%,
+    color-mix(in srgb, var(--tone-mint-hi) 60%, white) 0% 14%,
+    var(--tone-mint-hi) 14% 30%,
+    var(--tone-mint) 30% 54%,
+    var(--tone-mint-lo) 54% 74%,
+    color-mix(in srgb, var(--tone-mint-lo) 75%, #2a0a58) 74%
+  );
+}
+html[data-theme="lo-fi"] .board-cell.is-filled.tone-sky::before,
+html[data-theme="lo-fi"] .piece-cell.is-solid.tone-sky {
+  background: radial-gradient(circle at 42% 32%,
+    color-mix(in srgb, var(--tone-sky-hi) 60%, white) 0% 14%,
+    var(--tone-sky-hi) 14% 30%,
+    var(--tone-sky) 30% 54%,
+    var(--tone-sky-lo) 54% 74%,
+    color-mix(in srgb, var(--tone-sky-lo) 75%, #2a0a58) 74%
+  );
+}
+html[data-theme="lo-fi"] .board-cell.is-filled.tone-orchid::before,
+html[data-theme="lo-fi"] .piece-cell.is-solid.tone-orchid {
+  background: radial-gradient(circle at 42% 32%,
+    color-mix(in srgb, var(--tone-orchid-hi) 60%, white) 0% 14%,
+    var(--tone-orchid-hi) 14% 30%,
+    var(--tone-orchid) 30% 54%,
+    var(--tone-orchid-lo) 54% 74%,
+    color-mix(in srgb, var(--tone-orchid-lo) 75%, #2a0a58) 74%
+  );
+}
+
+/* Theme preview — override --cell-bg to stepped gradient */
+.theme-preview-board[data-theme="lo-fi"] .tone-coral  {
+  --cell-bg: radial-gradient(circle at 42% 32%, color-mix(in srgb, var(--tone-coral-hi) 60%, white) 0% 14%, var(--tone-coral-hi) 14% 30%, var(--tone-coral) 30% 54%, var(--tone-coral-lo) 54% 74%, color-mix(in srgb, var(--tone-coral-lo) 75%, #2a0a58) 74%);
+}
+.theme-preview-board[data-theme="lo-fi"] .tone-gold   {
+  --cell-bg: radial-gradient(circle at 42% 32%, color-mix(in srgb, var(--tone-gold-hi) 60%, white) 0% 14%, var(--tone-gold-hi) 14% 30%, var(--tone-gold) 30% 54%, var(--tone-gold-lo) 54% 74%, color-mix(in srgb, var(--tone-gold-lo) 75%, #2a0a58) 74%);
+}
+.theme-preview-board[data-theme="lo-fi"] .tone-mint   {
+  --cell-bg: radial-gradient(circle at 42% 32%, color-mix(in srgb, var(--tone-mint-hi) 60%, white) 0% 14%, var(--tone-mint-hi) 14% 30%, var(--tone-mint) 30% 54%, var(--tone-mint-lo) 54% 74%, color-mix(in srgb, var(--tone-mint-lo) 75%, #2a0a58) 74%);
+}
+.theme-preview-board[data-theme="lo-fi"] .tone-sky    {
+  --cell-bg: radial-gradient(circle at 42% 32%, color-mix(in srgb, var(--tone-sky-hi) 60%, white) 0% 14%, var(--tone-sky-hi) 14% 30%, var(--tone-sky) 30% 54%, var(--tone-sky-lo) 54% 74%, color-mix(in srgb, var(--tone-sky-lo) 75%, #2a0a58) 74%);
+}
+.theme-preview-board[data-theme="lo-fi"] .tone-orchid {
+  --cell-bg: radial-gradient(circle at 42% 32%, color-mix(in srgb, var(--tone-orchid-hi) 60%, white) 0% 14%, var(--tone-orchid-hi) 14% 30%, var(--tone-orchid) 30% 54%, var(--tone-orchid-lo) 54% 74%, color-mix(in srgb, var(--tone-orchid-lo) 75%, #2a0a58) 74%);
+}
+
+/* Square preview cells */
+.theme-preview-board[data-theme="lo-fi"] .theme-preview-cell--empty {
+  border-radius: 0.15rem;
+}
+.theme-preview-board[data-theme="lo-fi"] .theme-preview-cell--filled {
+  border-radius: 10%;
 }
 
 /* FN 80Z — unlock: score 80,000+ */
@@ -6063,4 +6288,372 @@ html[data-theme="dmg"] .leaderboard-rank-poxel {
   box-shadow:
     inset 2px 2px 0 color-mix(in srgb, var(--rpox-fill) 50%, var(--board-bg)),
     inset -2px -2px 0 color-mix(in srgb, var(--rpox-fill) 58%, #0f380f);
+}
+
+/* ─── PopOff poxel theme overrides ───────────────────────────────────────── */
+
+/* fn-80z: square cells + flat pixel-bevel bubble */
+html[data-theme="fn-80z"] .popoff-cell {
+  border-radius: 0;
+  background: rgba(10, 8, 28, 0.82);
+  border-color: var(--board-cell-border);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.75);
+}
+
+html[data-theme="fn-80z"] .popoff-cell::before {
+  border-radius: 0;
+}
+
+html[data-theme="fn-80z"] .popoff-cell.is-lit::before {
+  background: var(--accent);
+  box-shadow:
+    inset -3px -3px 0 color-mix(in srgb, var(--accent) 68%, black),
+    inset 2px 2px 0 color-mix(in srgb, var(--accent) 72%, white),
+    0 0 0.45rem color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+/* dmg: square cells + Game Boy picture-frame bubble */
+html[data-theme="dmg"] .popoff-cell {
+  border-radius: 0;
+}
+
+html[data-theme="dmg"] .popoff-cell::before {
+  border-radius: 0;
+}
+
+html[data-theme="dmg"] .popoff-cell.is-lit::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--accent) 42%, var(--board-bg)),
+      color-mix(in srgb, var(--accent) 58%, var(--board-bg))
+    ) center / calc(100% - 12px) calc(100% - 12px) no-repeat,
+    color-mix(in srgb, var(--accent) 92%, #0f380f);
+  box-shadow:
+    inset 2px 2px 0 color-mix(in srgb, var(--accent) 50%, var(--board-bg)),
+    inset -2px -2px 0 color-mix(in srgb, var(--accent) 58%, #0f380f);
+}
+
+/* tinted++: outline ring + circle symbol on lit poxels */
+html[data-theme="tinted-plus-plus"] .popoff-cell.is-lit::before {
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    inset 0 2px 5px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.12),
+    0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme="tinted-plus-plus"] .popoff-cell.is-lit::after {
+  content: "●";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--tone-symbol-font);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--tone-symbol-ink);
+  transform: translateY(var(--tone-symbol-offset-y));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ─── PopOff mode ─────────────────────────────────────────────────────────── */
+
+@keyframes popoff-wave {
+  0%   { filter: brightness(0.7); }
+  40%  { filter: brightness(2.2) saturate(2); }
+  100% { filter: brightness(0.7); }
+}
+
+@keyframes popoff-overlay-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.popoff-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--board-bg);
+  border-radius: 0.75rem;
+  padding: 10px;
+  border: 2px solid var(--stroke);
+  box-shadow: var(--shadow);
+  align-self: center;
+}
+
+.popoff-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 0.15rem;
+  background: var(--board-cell-bg);
+  border: 1px solid var(--board-cell-border);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, var(--board-cell-depth) 22%, transparent),
+    inset 0 1px 2px color-mix(in srgb, var(--board-cell-depth) 12%, transparent);
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.popoff-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 28%;
+  background: radial-gradient(circle at 35% 28%,
+    color-mix(in srgb, var(--board-cell-depth) 5%, var(--board-cell-bg)),
+    color-mix(in srgb, var(--board-cell-depth) 20%, var(--board-cell-bg)) 85%
+  );
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, 0.25),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.08);
+  opacity: 0.6;
+  pointer-events: none;
+  transition: background 120ms ease, opacity 120ms ease, box-shadow 120ms ease, transform 80ms ease;
+}
+
+.popoff-cell.is-lit::before {
+  background: radial-gradient(circle at 35% 28%,
+    color-mix(in srgb, var(--accent) 45%, white),
+    color-mix(in srgb, var(--accent) 88%, black) 85%
+  );
+  opacity: 1;
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.12),
+    0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popoff-cell.is-lit:not(:disabled):hover::before {
+    transform: scale(1.08);
+  }
+}
+
+.popoff-cell:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.popoff-board.is-solved .popoff-cell::before {
+  opacity: 0.35;
+}
+
+.popoff-cell.is-celebrating::before {
+  animation: popoff-wave 620ms ease-in-out var(--wave-delay, 0ms) both;
+  pointer-events: none;
+}
+
+.popoff-board-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+  animation: popoff-overlay-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1) 320ms both;
+}
+
+.popoff-board-overlay-pill {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 999px;
+  padding: 5px 16px;
+  box-shadow:
+    0 2px 12px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+/* Nav bar — replaces tray in sidebar */
+.sidebar--popoff {
+  justify-content: center;
+  align-items: center;
+}
+
+.popoff-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+  width: 100%;
+}
+
+.popoff-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+.popoff-nav-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  line-height: 1;
+  border-radius: 0.5rem;
+  border: 1px solid var(--stroke);
+  background: var(--bg-interactive);
+  color: var(--fg);
+  cursor: pointer;
+  transition: opacity 120ms ease, transform 80ms ease;
+}
+
+.popoff-nav-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.popoff-nav-arrow:not(:disabled):hover {
+  transform: scale(1.08);
+}
+
+.popoff-nav-counter-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.popoff-nav-counter {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--fg);
+  text-align: center;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.popoff-nav-sep {
+  color: var(--fg-secondary);
+  font-weight: 400;
+  margin: 0 2px;
+}
+
+.popoff-nav-solved-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.popoff-nav-reset {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+  background: none;
+  border: 1px solid var(--stroke-muted);
+  border-radius: 0.4rem;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.popoff-nav-reset:hover {
+  opacity: 0.7;
+}
+
+
+/* PopOff stamp — solid, readable, distinct from crunch */
+.game-title-stamp--popoff {
+  background: color-mix(in srgb, var(--accent) 58%, var(--accent-secondary) 42%);
+  color: #f8fdff;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--accent-secondary) 60%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fff 18%, transparent),
+    2px 2px 0 color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Mode select card — solid purple/mauve distinct from classic (pink) and crunch (cyan) */
+.mode-card--popoff {
+  background: color-mix(in srgb, var(--accent) 55%, var(--accent-secondary) 45%);
+  box-shadow: 5px 5px 0 color-mix(in srgb, color-mix(in srgb, var(--accent) 55%, var(--accent-secondary) 45%) 35%, black);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mode-card--popoff:hover {
+    box-shadow: 7px 7px 0 color-mix(in srgb, color-mix(in srgb, var(--accent) 55%, var(--accent-secondary) 45%) 35%, black);
+  }
+}
+
+.mode-card--popoff:focus-visible {
+  box-shadow: 7px 7px 0 color-mix(in srgb, color-mix(in srgb, var(--accent) 55%, var(--accent-secondary) 45%) 35%, black);
+}
+
+.mode-card--popoff:active {
+  box-shadow: 3px 3px 0 color-mix(in srgb, color-mix(in srgb, var(--accent) 55%, var(--accent-secondary) 45%) 35%, black);
+}
+
+/* How-to mini grids for PopOff */
+.popoff-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  width: 3rem;
+  flex-shrink: 0;
+}
+
+.popoff-mini-grid--3col {
+  grid-template-columns: repeat(3, 1fr);
+  width: 1.9rem;
+}
+
+.popoff-mini-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--board-cell-bg);
+  border: 1px solid var(--board-cell-border);
+}
+
+.popoff-mini-cell.is-lit {
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, black);
+}
+
+.popoff-mini-cell.is-tapped {
+  box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.popoff-mini-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.how-to-play-arrow {
+  color: var(--fg-secondary);
+  font-size: 1rem;
+}
+
+/* hide drag-dismiss in popoff mode */
+.drag-dismiss-zone.is-hidden {
+  display: none;
 }
