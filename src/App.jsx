@@ -579,7 +579,7 @@ function HowToPlayPopOffModal({ onClose, onOpenChangelog, hasUnreadChangelog }) 
               </div>
               <div className="how-to-play-step-body">
                 <strong className="how-to-play-step-title">The board</strong>
-                <p>A 5×5 grid of with a pattern of poxels. Pop them all in as few taps as you can.</p>
+                <p>A 5×5 grid with a pattern of poxels. Pop them all in as few taps as you can.</p>
               </div>
             </div>
             <div className="how-to-play-step--popoff">

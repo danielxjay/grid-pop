@@ -1,11 +1,16 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const BOARD_SIZE = 5;
-const PUZZLE_COUNT = 50;
+const PUZZLE_COUNT = 55;
 const MAX_MOVES = 500; // sanity ceiling — no legitimate solution needs this many
 
 // Canonical puzzle starting states — mirrors GAME1 in src/popoff-levels.js
 const PUZZLES: string[] = [
+  "0000000100011100010000000",
+  "1101110001000001000111011",
+  "0111010101110111010101110",
+  "0000010101101011010100000",
+  "1010110001011101000110101",
   "0000000000101010000000000",
   "1010110101000001010110101",
   "0101011011110111101101010",
@@ -208,7 +213,7 @@ Deno.serve(async (req) => {
       ? (existing.best_by_puzzle as (number | null)[])
       : [];
 
-    // Ensure the array is long enough
+    // Ensure the array is long enough (also handles old 50-entry arrays from before the intro puzzles were added)
     while (currentBests.length < PUZZLE_COUNT) currentBests.push(null);
 
     const currentBest = currentBests[puzzleIndex];
