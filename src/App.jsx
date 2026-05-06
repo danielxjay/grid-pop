@@ -9181,9 +9181,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ) : null}
 
       {showHowToPlay ? (
-        gameMode === 'crunch'
+        (gameMode === 'crunch' || pendingCrunchHowToStart)
           ? <HowToPlayCrunchModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
-          : gameMode === 'popoff'
+          : (gameMode === 'popoff' || pendingPopOffHowToStart)
             ? <HowToPlayPopOffModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
             : <HowToPlayModal onClose={handleCloseHowToPlay} onOpenChangelog={handleOpenChangelog} hasUnreadChangelog={hasUnreadChangelog} />
       ) : null}
