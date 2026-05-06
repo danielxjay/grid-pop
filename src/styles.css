@@ -433,9 +433,9 @@ button {
   gap: 0.65rem;
   padding: 0.8rem 0.9rem;
   border-radius: 0.75rem;
-  border: 2px solid color-mix(in srgb, var(--accent-secondary) 30%, transparent);
-  background: color-mix(in srgb, var(--bg-modal) 94%, var(--bg-surface));
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent-secondary) 12%, transparent), var(--shadow);
+  border: 2px solid var(--accent-secondary);
+  background: var(--bg-modal);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent-secondary) 30%, transparent), var(--shadow);
 }
 
 .update-toast-copy {

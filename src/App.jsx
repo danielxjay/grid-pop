@@ -2849,6 +2849,7 @@ function clearActiveRunSession(runId) {
 const CRUNCH_RUN_SAVE_KEY = "gridpop-crunch-run-save";
 const POPOFF_PROGRESS_KEY = "gridpop-popoff-progress";
 const POPOFF_RESUME_KEY = "gridpop-popoff-resume";
+const POPOFF_RESUME_VERSION = 2; // bump when puzzle list order changes
 
 function loadPopOffProgress() {
   try {
@@ -2865,13 +2866,13 @@ function savePopOffProgressLocal(progress) {
 function loadPopOffResume() {
   try {
     const resume = JSON.parse(localStorage.getItem(POPOFF_RESUME_KEY) ?? "null");
-    if (resume && typeof resume.puzzleIndex === "number") return resume;
+    if (resume && typeof resume.puzzleIndex === "number" && resume.schemaVersion === POPOFF_RESUME_VERSION) return resume;
   } catch {}
   return null;
 }
 
 function savePopOffResume(puzzleIndex, board, moves, moveHistory) {
-  try { localStorage.setItem(POPOFF_RESUME_KEY, JSON.stringify({ puzzleIndex, board, moves, moveHistory: moveHistory ?? [] })); } catch {}
+  try { localStorage.setItem(POPOFF_RESUME_KEY, JSON.stringify({ schemaVersion: POPOFF_RESUME_VERSION, puzzleIndex, board, moves, moveHistory: moveHistory ?? [] })); } catch {}
 }
 
 function clearPopOffResume() {
