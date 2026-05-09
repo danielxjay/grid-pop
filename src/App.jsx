@@ -52,6 +52,7 @@ import {
   playPickupSound,
   playPlaceSound,
   primeSound,
+  resetAudioContext,
   setSoundEnabled,
   setSoundVolume,
   unlockAndTestSound,
@@ -3501,6 +3502,7 @@ function useCrunchMode({ latestGameRef, started, gameMode, gameOver, setGame, is
   }
 
   function startCrunchFromState(displayedBestScore, rankedState = null) {
+    resetAudioContext();
     // For ranked runs: use the server-provided tray and board from the start so the
     // countdown doesn't show a locally-generated random tray that then switches.
     const baseState = rankedState?.board && Array.isArray(rankedState?.tray)

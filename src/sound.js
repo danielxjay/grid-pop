@@ -6,6 +6,8 @@ const clearSoundBufferBanks = new WeakMap();
 const CLEAR_SOUND_BANK_SIZE = 10;
 const previewMoveBufferBanks = new WeakMap();
 const PREVIEW_MOVE_BANK_SIZE = 12;
+const transientBufferBanks = new WeakMap();
+const TRANSIENT_BANK_SIZE = 8;
 
 let volume = (() => {
   try {
@@ -115,6 +117,30 @@ function getPreviewMoveBuffers(ctx) {
   return buffers;
 }
 
+function getTransientBuffers(ctx) {
+  let banks = transientBufferBanks.get(ctx);
+  if (!banks) {
+    banks = {
+      pickup:  Array.from({ length: TRANSIENT_BANK_SIZE }, () => makeWhiteNoise(ctx, 0.1)),
+      place:   Array.from({ length: TRANSIENT_BANK_SIZE }, () => makeWhiteNoise(ctx, 0.12)),
+      fill:    Array.from({ length: TRANSIENT_BANK_SIZE }, () => makeWhiteNoise(ctx, 0.04)),
+      wallLow: Array.from({ length: TRANSIENT_BANK_SIZE }, () => makeGranular(ctx, 0.18, 0.34)),
+      wallMid: Array.from({ length: TRANSIENT_BANK_SIZE }, () => makeGranular(ctx, 0.09, 0.52)),
+    };
+    transientBufferBanks.set(ctx, banks);
+  }
+  return banks;
+}
+
+// Schedules disconnection of oscillator-driven chains when the source node stops.
+// Call after osc.stop() — pass the oscillator first, then all downstream nodes.
+function scheduleOscCleanup(osc, ...nodes) {
+  osc.addEventListener('ended', () => {
+    osc.disconnect();
+    nodes.forEach(n => n.disconnect());
+  });
+}
+
 // --- Core noise player ---
 // Routes buffer through optional HPF → BPF → LPF → gain envelope → master gain
 
@@ -157,6 +183,7 @@ function playNoise(ctx, buffer, { hpf, bpf, bpfQ = 1, lpf, attack, decay, gain, 
 
   src.start(t);
   src.stop(t + attack + decay + 0.02);
+  src.addEventListener('ended', () => { chain.forEach(n => n.disconnect()); });
 }
 
 // --- Exports ---
@@ -169,6 +196,7 @@ export function primeSound() {
   const gain = context.createGain();
   getClearSoundBuffers(context);
   getPreviewMoveBuffers(context);
+  getTransientBuffers(context);
   osc.frequency.value = 220;
   gain.gain.setValueAtTime(0.00001, now);
   gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.03);
@@ -176,6 +204,7 @@ export function primeSound() {
   gain.connect(getMasterGain(context));
   osc.start(now);
   osc.stop(now + 0.03);
+  scheduleOscCleanup(osc, gain);
   warmedUp = true;
 }
 
@@ -230,9 +259,10 @@ export function playPickupSound() {
   env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.14);
+  scheduleOscCleanup(osc, env);
 
   // Muffled low noise — soft padded texture
-  playNoise(ctx, makeWhiteNoise(ctx, 0.1), {
+  playNoise(ctx, pickBuffer(getTransientBuffers(ctx).pickup), {
     lpf: 380,
     bpf: 210,
     bpfQ: 0.7,
@@ -263,9 +293,10 @@ export function playPlaceSound() {
   env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.18);
+  scheduleOscCleanup(osc, env);
 
   // Muffled low noise — same padded texture, slightly denser
-  playNoise(ctx, makeWhiteNoise(ctx, 0.12), {
+  playNoise(ctx, pickBuffer(getTransientBuffers(ctx).place), {
     lpf: 420,
     bpf: 200,
     bpfQ: 0.7,
@@ -411,6 +442,7 @@ export function playPopOffSolveSound() {
     env.connect(master);
     osc.start(t);
     osc.stop(t + attack + decay + 0.06);
+    scheduleOscCleanup(osc, env);
 
     // Inharmonic shimmer — slightly detuned upper partial, fades faster
     const shimOsc = ctx.createOscillator();
@@ -426,6 +458,7 @@ export function playPopOffSolveSound() {
     shimEnv.connect(master);
     shimOsc.start(t);
     shimOsc.stop(t + attack + decay * 0.5);
+    scheduleOscCleanup(shimOsc, shimEnv);
   }
 
   // Soft breath layer — low filtered noise swell, like air through reeds
@@ -472,6 +505,7 @@ export function playPopOffDudSound() {
   env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.09);
+  scheduleOscCleanup(osc, env);
 
   // Muffled low rumble — boxy, hollow knock
   playNoise(ctx, makeWhiteNoise(ctx, 0.06), {
@@ -526,9 +560,10 @@ export function playFillCellSound() {
   env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + 0.055);
+  scheduleOscCleanup(osc, env);
 
   // Small woody knock to give it a clunky block-dropping character
-  playNoise(ctx, makeWhiteNoise(ctx, 0.04), {
+  playNoise(ctx, pickBuffer(getTransientBuffers(ctx).fill), {
     lpf: 700,
     bpf: 320,
     bpfQ: 2.2,
@@ -575,9 +610,11 @@ export function playCrunchWallSound() {
   bodyEnv.connect(master);
   body.start(t);
   body.stop(t + 0.25);
+  scheduleOscCleanup(body, drive, bodyFilter, bodyEnv);
 
   // Crushed grit layer gives the "chunk sliding in" texture without reading as a drum hit.
-  playNoise(ctx, makeGranular(ctx, 0.18, 0.34), {
+  const tb = getTransientBuffers(ctx);
+  playNoise(ctx, pickBuffer(tb.wallLow), {
     hpf: 75,
     bpf: 270 + Math.random() * 60,
     bpfQ: 0.85,
@@ -588,7 +625,7 @@ export function playCrunchWallSound() {
     t: t + 0.006,
   });
 
-  playNoise(ctx, makeGranular(ctx, 0.09, 0.52), {
+  playNoise(ctx, pickBuffer(tb.wallMid), {
     hpf: 420,
     bpf: 760 + Math.random() * 180,
     bpfQ: 1.4,
@@ -629,6 +666,7 @@ export function playCrunchCountdownSound(count) {
   env.connect(getMasterGain(ctx));
   osc.start(t);
   osc.stop(t + duration + 0.02);
+  scheduleOscCleanup(osc, tone, env);
 
   playNoise(ctx, makeWhiteNoise(ctx, 0.025), {
     hpf: 1200,
@@ -673,6 +711,7 @@ export function playCrunchCriticalCountdownSound(count) {
     env.connect(master);
     osc.start(t);
     osc.stop(t + 0.1);
+    scheduleOscCleanup(osc, tone, env);
 
     playNoise(ctx, makeWhiteNoise(ctx, 0.02), {
       hpf: 1500,
@@ -716,6 +755,7 @@ export function playCrunchPhaseChangeSound(stage = "") {
     env.connect(master);
     osc.start(t);
     osc.stop(t + 0.16);
+    scheduleOscCleanup(osc, env);
 
     playNoise(ctx, makeWhiteNoise(ctx, 0.05), {
       lpf: 820,
@@ -749,6 +789,7 @@ export function playCrunchPhaseChangeSound(stage = "") {
   tailEnv.connect(master);
   tail.start(tailStart);
   tail.stop(tailStart + 0.28);
+  scheduleOscCleanup(tail, tailFilter, tailEnv);
 
   playNoise(ctx, makeGranular(ctx, 0.06, 0.32), {
     hpf: 1800,
@@ -760,4 +801,16 @@ export function playCrunchPhaseChangeSound(stage = "") {
     gain: isMax ? 0.045 : 0.035,
     t: tailStart + 0.008,
   });
+}
+
+// Closes and discards the current AudioContext, flushing the entire audio graph.
+// Call at natural pause points (e.g. between rounds) to release any accumulated nodes.
+// The next sound call will create a fresh context automatically.
+export function resetAudioContext() {
+  if (audioContext) {
+    audioContext.close().catch(() => {});
+    audioContext = null;
+  }
+  masterGainNode = null;
+  warmedUp = false;
 }
