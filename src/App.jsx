@@ -3929,6 +3929,8 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
   const dragMoveFrameRef = useRef(0);
   const activeVerifiedRunRef = useRef(activeVerifiedRun);
   const activeCrunchVerifiedRunRef = useRef(activeCrunchVerifiedRun);
+  const activeCrunchMovesRef = useRef([]);
+  const crunchMoveSessionOffsetRef = useRef(0); // moves that existed at session start (resume offset)
   const nextTrayFetchInFlightRef = useRef(false);
   const moveSyncStateRef = useRef({ runId: null, moveCount: 0 });
   const moveSyncInFlightRef = useRef(false);
@@ -4687,10 +4689,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return;
     }
 
-    const moves = Array.isArray(run.moves) ? run.moves : [];
+    const moves = activeCrunchMovesRef.current;
     const latestGame = latestGameRef.current;
 
-    if (Number.isFinite(Number(latestGame.moveCount)) && Number(latestGame.moveCount) !== moves.length) {
+    if (Number.isFinite(Number(latestGame.moveCount)) && Number(latestGame.moveCount) !== moves.length - crunchMoveSessionOffsetRef.current) {
       return;
     }
 
@@ -4726,10 +4728,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     saveCrunchRunProgress(nextSave);
   });
 
-  // Persist Crunch state beyond moves; wall-only time can change the board for minutes.
+  // Persist Crunch state when wall depth or poxels change. Moves are stored in a ref
+  // and written on the 1-second interval below, so they don't need to be deps here.
   useEffect(() => {
     persistCrunchRunSnapshot();
-  }, [activeCrunchVerifiedRun, crunchPoxelsPopped, crunchWallDepth, persistCrunchRunSnapshot]);
+  }, [crunchPoxelsPopped, crunchWallDepth, persistCrunchRunSnapshot]);
 
   useEffect(() => {
     if (!started || gameMode !== "crunch" || game.gameOver || !activeCrunchVerifiedRun?.id) {
@@ -5225,9 +5228,10 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       moveSyncStateRef.current = { runId: pendingRun.id, moveCount: 0 };
     }
 
+    const currentCrunchMoves = activeCrunchMovesRef.current;
     if (
-      pendingRun.moves.length === 0 ||
-      pendingRun.moves.length <= moveSyncStateRef.current.moveCount ||
+      currentCrunchMoves.length === 0 ||
+      currentCrunchMoves.length <= moveSyncStateRef.current.moveCount ||
       moveSyncInFlightRef.current
     ) {
       return;
@@ -5239,7 +5243,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     }
 
     const syncedRunId = pendingRun.id;
-    const syncedMoves = pendingRun.moves;
+    const syncedMoves = currentCrunchMoves.slice();
     const syncedDeviceToken = deviceTokenRef.current;
     moveSyncInFlightRef.current = true;
 
@@ -5308,7 +5312,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       const latestRun = activeCrunchVerifiedRunRef.current;
       if (
         latestRun?.id === syncedRunId &&
-        latestRun.moves.length > moveSyncStateRef.current.moveCount &&
+        activeCrunchMovesRef.current.length > moveSyncStateRef.current.moveCount &&
         !runSubmissionInFlightRef.current.has(syncedRunId)
       ) {
         setMoveSyncRetryTick((tick) => tick + 1);
@@ -6005,16 +6009,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       const atMs = Math.max(cappedAtMs, lastCrunchMoveAtMsRef.current);
       lastCrunchMoveAtMsRef.current = atMs;
 
-      setActiveCrunchVerifiedRun((current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          moves: [...current.moves, { pieceId, row, col, atMs }],
-        };
-      });
+      if (activeCrunchVerifiedRunRef.current) {
+        activeCrunchMovesRef.current.push({ pieceId, row, col, atMs });
+      }
       return;
     }
 
@@ -6759,7 +6756,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
         nextWaveAtMs: data.nextWaveAtMs,
         trayRngState: data.trayRngState ?? 0,
       }));
-      setActiveCrunchVerifiedRun({ id: data.runId, moves: [] });
+      activeCrunchMovesRef.current = [];
+      crunchMoveSessionOffsetRef.current = 0;
+      setActiveCrunchVerifiedRun({ id: data.runId });
       setStarted(true);
       if (soundEnabled) unlockAndTestSound();
       return;
@@ -7317,7 +7316,9 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
     setResumeRunGone(false);
     setActiveVerifiedRun(null);
     setActiveRunDetected(null);
-    setActiveCrunchVerifiedRun({ id: save.runId, moves });
+    activeCrunchMovesRef.current = Array.isArray(moves) ? moves : [];
+    crunchMoveSessionOffsetRef.current = activeCrunchMovesRef.current.length;
+    setActiveCrunchVerifiedRun({ id: save.runId });
 
     // Remaining ms until the next wave fires (from the player's perspective right now).
     const remainingWaveMs = resumeState.nextWaveAtMs !== null && resumeState.criticalUntilMs === null
@@ -8175,10 +8176,11 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       return null;
     }
 
+    const moves = activeCrunchMovesRef.current;
     const finishedAtMs = getCrunchFinishedAtMs();
     // Log moves on first attempt so we can correlate with server-side errors.
-    if (run.moves?.length > 0) {
-      console.log(`[crunch-submit] runId=${run.id} moveCount=${run.moves.length} finishedAtMs=${finishedAtMs} lastAtMs=${run.moves[run.moves.length - 1]?.atMs}`);
+    if (moves.length > 0) {
+      console.log(`[crunch-submit] runId=${run.id} moveCount=${moves.length} finishedAtMs=${finishedAtMs} lastAtMs=${moves[moves.length - 1]?.atMs}`);
     }
 
     let error = null;
@@ -8187,7 +8189,7 @@ export default function App({ updateReady = false, onApplyUpdate = () => {}, onD
       ({ error } = await supabase.functions.invoke("finish-crunch-run", {
         body: {
           runId: run.id,
-          moves: run.moves,
+          moves,
           deviceToken: deviceTokenRef.current,
           finishedAtMs,
           forceFinish,
